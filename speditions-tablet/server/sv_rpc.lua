@@ -56,7 +56,7 @@ end
 function RPC.PushToRole(role, event, data)
     for _, playerId in ipairs(GetPlayers()) do
         local src = tonumber(playerId)
-        local emp = Employees.GetCached(src)
+        local emp = Employees.GetLoggedIn(src)
         if emp and emp.role == role then
             RPC.Push(src, event, data)
         end

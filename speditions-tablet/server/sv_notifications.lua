@@ -15,7 +15,7 @@ function Notifications.Send(recipientRole, recipientEmployeeId, title, message, 
     if recipientEmployeeId then
         for _, playerId in ipairs(GetPlayers()) do
             local target = tonumber(playerId)
-            local cached = Employees.GetCached(target)
+            local cached = Employees.GetLoggedIn(target)
             if cached and cached.id == recipientEmployeeId then
                 RPC.Push(target, 'notifications:new', { id = id, title = title, message = message })
             end

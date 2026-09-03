@@ -1,11 +1,13 @@
 -- =========================================================
 -- Client: Lenk-/Ruhezeiten-Tracker
 --
--- Läuft unabhängig davon, ob das Tablet geöffnet ist. Ein Fahrer "fährt"
--- im Sinne des Systems, solange er auf dem Fahrersitz eines Fahrzeugs
--- sitzt, dessen Kennzeichen mit dem in der Spedition zugewiesenen
--- Firmenfahrzeug übereinstimmt (SetVehicleNumberPlateText muss vom
--- jeweiligen Fahrzeug-/Garagen-Skript entsprechend gesetzt werden).
+-- Läuft unabhängig davon, ob das Tablet gerade GEÖFFNET ist - erfordert aber,
+-- dass sich der Spieler in dieser Verbindung mindestens einmal am Tablet
+-- ANGEMELDET hat (Benutzername/Passwort), da die Rolle erst dadurch bekannt
+-- ist. Ein Fahrer "fährt" im Sinne des Systems, solange er auf dem
+-- Fahrersitz eines Fahrzeugs sitzt, dessen Kennzeichen mit dem in der
+-- Spedition zugewiesenen Firmenfahrzeug übereinstimmt (SetVehicleNumberPlateText
+-- muss vom jeweiligen Fahrzeug-/Garagen-Skript entsprechend gesetzt werden).
 -- =========================================================
 
 local myRole = nil
@@ -18,8 +20,8 @@ local function normalizePlate(plate)
 end
 
 local function refreshContext()
-    ServerCall('session:init', nil, function(res)
-        if res and res.ok and res.result and res.result.ok then
+    ServerCall('session:whoami', nil, function(res)
+        if res and res.ok and res.result and res.result.loggedIn then
             myRole = res.result.employee.role
         else
             myRole = nil

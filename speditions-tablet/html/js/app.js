@@ -34,8 +34,12 @@ function nuiPost(name, payload) {
 }
 
 const ERROR_MESSAGES = {
-    not_employee: 'Du bist kein Mitarbeiter der Spedition.',
-    employee_inactive: 'Dein Mitarbeiterkonto ist inaktiv.',
+    not_logged_in: 'Du bist nicht angemeldet.',
+    invalid_credentials: 'Benutzername oder Passwort ist falsch.',
+    username_taken: 'Dieser Benutzername ist bereits vergeben.',
+    password_too_short: 'Das Passwort muss mindestens 4 Zeichen lang sein.',
+    wrong_password: 'Das aktuelle Passwort ist falsch.',
+    employee_inactive: 'Dieses Mitarbeiterkonto ist deaktiviert.',
     forbidden_role: 'Keine Berechtigung für diese Aktion.',
     insufficient_balance: 'Nicht genügend Guthaben für diese Auszahlung.',
     invalid_amount: 'Ungültiger Betrag.',
@@ -54,8 +58,6 @@ const ERROR_MESSAGES = {
     order_already_closed: 'Auftrag ist bereits abgeschlossen.',
     not_your_order: 'Das ist nicht dein Auftrag.',
     driver_missing_permission: 'Dieser Fahrer besitzt nicht die für den Auftrag erforderliche Berechtigung (z.B. Gefahrgut).',
-    already_employee: 'Spieler ist bereits Mitarbeiter.',
-    target_not_found: 'Zielspieler nicht gefunden (offline?).',
     last_management_account: 'Es muss mindestens eine aktive Geschäftsführung geben.',
     invalid_status_transition: 'Ungültiger Statuswechsel.',
     invalid_status: 'Ungültiger Status.',
@@ -231,7 +233,7 @@ const NAV = {
         { id: 'gf-drivers', label: 'Fahrerakten', icon: '🪪' },
         { id: 'gf-fleet', label: 'Fuhrpark', icon: '🚛' },
         { id: 'gf-finance', label: 'Finanzen', icon: '💰' },
-        { id: 'gf-payouts', label: 'Auszahlungen', icon: '🏦' },
+        { id: 'gf-payouts', label: 'Ein-/Auszahlungen', icon: '🏦' },
         { id: 'gf-orders', label: 'Aufträge', icon: '📦' },
         { id: 'gf-log', label: 'Protokoll', icon: '📜' },
     ],
@@ -292,21 +294,27 @@ function requestClose() {
     nuiPost('close', {});
 }
 
-function showDenied(reason) {
+function hideAllScreens() {
+    document.getElementById('lock-screen').classList.add('hidden');
     document.getElementById('boot-screen').classList.add('hidden');
+    document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('main-ui').classList.add('hidden');
-    document.getElementById('denied-screen').classList.remove('hidden');
-    document.getElementById('denied-text').textContent = translateError(reason) || 'Du hast keinen Zugriff auf das Speditions-Tablet.';
+}
+
+function showLogin() {
+    hideAllScreens();
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('login-username').value = '';
+    document.getElementById('login-password').value = '';
+    setTimeout(() => document.getElementById('login-username').focus(), 50);
 }
 
 function handleOpen(companyName) {
     State.companyName = companyName || 'Speditions-Tablet';
     document.getElementById('lock-company-name').textContent = State.companyName;
     document.getElementById('app').classList.remove('hidden');
+    hideAllScreens();
     document.getElementById('lock-screen').classList.remove('hidden');
-    document.getElementById('boot-screen').classList.add('hidden');
-    document.getElementById('denied-screen').classList.add('hidden');
-    document.getElementById('main-ui').classList.add('hidden');
     startClock();
 }
 
@@ -319,17 +327,68 @@ async function unlockTablet() {
     document.getElementById('boot-screen').classList.remove('hidden');
     document.getElementById('boot-logo').textContent = (State.companyName || 'SPEDITIONS-TABLET').toUpperCase();
 
-    const res = await rpc('session:init');
+    const res = await rpc('session:whoami');
     unlocking = false;
-    if (!res || !res.ok) { showDenied('server_error'); return; }
-    const data = res.result;
-    if (!data || !data.ok) { showDenied(data && data.reason); return; }
 
+    if (res && res.ok && res.result && res.result.loggedIn) {
+        const data = res.result;
+        State.employee = data.employee;
+        State.role = data.employee.role;
+        State.config = data;
+        boot(data);
+    } else {
+        showLogin();
+    }
+}
+
+async function submitLogin() {
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    if (!username || !password) {
+        toast('Fehler', 'Bitte Benutzername und Passwort eingeben.', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('login-submit');
+    btn.disabled = true;
+    const res = await rpc('session:login', { username, password });
+    btn.disabled = false;
+
+    if (!res || !res.ok) {
+        toast('Anmeldung fehlgeschlagen', translateError(res && res.error), 'error');
+        return;
+    }
+
+    const data = res.result;
     State.employee = data.employee;
     State.role = data.employee.role;
     State.config = data;
+    hideAllScreens();
+    document.getElementById('boot-screen').classList.remove('hidden');
     boot(data);
 }
+
+document.getElementById('login-submit').addEventListener('click', submitLogin);
+document.getElementById('login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitLogin(); });
+document.getElementById('login-username').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('login-password').focus(); });
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+    await rpc('session:logout');
+    toast('Abgemeldet', '', 'info');
+    showLogin();
+});
+
+document.getElementById('account-btn').addEventListener('click', () => {
+    openModal('Passwort ändern', State.employee ? State.employee.name : '', `
+        <label>Aktuelles Passwort</label>
+        <input id="account-old-password" type="password" autocomplete="off" />
+        <label>Neues Passwort</label>
+        <input id="account-new-password" type="password" autocomplete="off" />
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmChangePassword()">Speichern</button>
+    `);
+});
 
 function handleClose() {
     document.getElementById('app').classList.add('hidden');
@@ -735,6 +794,7 @@ VIEWS['gf-employees'] = async (root) => {
     const rows = d.employees.map((e) => `<tr>
         <td>#${e.id}</td>
         <td>${escapeHtml(e.name)}</td>
+        <td>${escapeHtml(e.username || '-')}</td>
         <td>
             <select onchange="Actions.changeRole(${e.id}, this.value)">
                 <option value="fahrer" ${e.role === 'fahrer' ? 'selected' : ''}>LKW-Fahrer</option>
@@ -744,14 +804,17 @@ VIEWS['gf-employees'] = async (root) => {
         </td>
         <td>${badge(EMPLOYMENT_STATUS_META[e.status])}</td>
         <td>${formatDate(e.hired_at)}</td>
-        <td><button class="btn btn-sm ${e.status === 'aktiv' ? 'btn-danger' : 'btn-primary'}" onclick="Actions.toggleEmployeeStatus(${e.id}, '${e.status === 'aktiv' ? 'inaktiv' : 'aktiv'}')">${e.status === 'aktiv' ? 'Deaktivieren' : 'Aktivieren'}</button></td>
+        <td class="btn-row">
+            <button class="btn btn-sm" onclick="Actions.openResetPasswordModal(${e.id}, ${JSON.stringify(e.name)})">Passwort</button>
+            <button class="btn btn-sm ${e.status === 'aktiv' ? 'btn-danger' : 'btn-primary'}" onclick="Actions.toggleEmployeeStatus(${e.id}, '${e.status === 'aktiv' ? 'inaktiv' : 'aktiv'}')">${e.status === 'aktiv' ? 'Deaktivieren' : 'Aktivieren'}</button>
+        </td>
     </tr>`);
 
     root.innerHTML = `
         <h1 class="view-title">Mitarbeiter</h1>
         <p class="view-subtitle">Verwaltung aller Mitarbeiter, Rollen und Grade.</p>
         <div class="btn-row" style="margin-bottom:14px;"><button class="btn btn-primary" onclick="Actions.openHireModal()">+ Mitarbeiter einstellen</button></div>
-        <div class="section">${table(['#', 'Name', 'Rolle', 'Status', 'Eingestellt', ''], rows)}</div>`;
+        <div class="section">${table(['#', 'Name', 'Benutzername', 'Rolle', 'Status', 'Eingestellt', ''], rows)}</div>`;
 };
 
 VIEWS['gf-drivers'] = async (root) => {
@@ -805,9 +868,10 @@ VIEWS['gf-fleet'] = async (root) => {
 VIEWS['gf-finance'] = async (root) => {
     const [overview, tx] = await Promise.all([call('gf:finance:overview'), call('gf:finance:transactions', { limit: 40 })]);
 
+    const TX_TYPE_LABELS = { einnahme: 'Einnahme', auszahlung: 'Auszahlung', einzahlung: 'Einzahlung' };
     const rows = tx.transactions.map((t) => `<tr>
         <td>#${t.id}</td>
-        <td>${t.type === 'einnahme' ? 'Einnahme' : 'Auszahlung'}${t.driver_name ? ` - ${escapeHtml(t.driver_name)}` : ''}</td>
+        <td>${TX_TYPE_LABELS[t.type] || t.type}${t.driver_name ? ` - ${escapeHtml(t.driver_name)}` : ''}</td>
         <td>${escapeHtml(t.description || '-')}</td>
         <td style="color:${t.amount >= 0 ? 'var(--green)' : 'var(--red)'};font-weight:700;">${t.amount >= 0 ? '+' : ''}${formatMoney(t.amount)}</td>
         <td>${formatDate(t.created_at, true)}</td>
@@ -832,9 +896,11 @@ VIEWS['gf-finance'] = async (root) => {
 };
 
 VIEWS['gf-payouts'] = async (root) => {
-    const [overview, history] = await Promise.all([call('gf:finance:overview'), call('gf:payout:history')]);
+    const [overview, payoutHistory, depositHistory] = await Promise.all([
+        call('gf:finance:overview'), call('gf:payout:history'), call('gf:deposit:history'),
+    ]);
 
-    const rows = history.payouts.map((p) => `<tr>
+    const payoutRows = payoutHistory.payouts.map((p) => `<tr>
         <td>${formatDate(p.executed_at, true)}</td>
         <td>${formatMoney(p.amount)}</td>
         <td>${escapeHtml(p.target)}</td>
@@ -842,27 +908,50 @@ VIEWS['gf-payouts'] = async (root) => {
         <td>${escapeHtml(p.reason)}</td>
     </tr>`);
 
-    root.innerHTML = `
-        <h1 class="view-title">Auszahlung</h1>
-        <div class="grid grid-2">
-            <div class="section">
-                <div class="card-title">Aktuelles Guthaben</div>
-                <div class="card-value" style="margin-bottom:16px;">${formatMoney(overview.balance)}</div>
+    const depositRows = depositHistory.deposits.map((d) => `<tr>
+        <td>${formatDate(d.executed_at, true)}</td>
+        <td>${formatMoney(d.amount)}</td>
+        <td>${escapeHtml(d.source)}</td>
+        <td>${escapeHtml(d.executed_by_name || '-')}</td>
+        <td>${escapeHtml(d.reason)}</td>
+    </tr>`);
 
+    root.innerHTML = `
+        <h1 class="view-title">Ein-/Auszahlungen</h1>
+        <div class="section finance-hero">
+            <div class="label">Aktuelles Guthaben</div>
+            <div class="value">${formatMoney(overview.balance)}</div>
+        </div>
+        <div class="grid grid-2" style="margin-top:16px;">
+            <div class="section">
+                <h3 style="margin:0 0 12px;">Einzahlung</h3>
+                <label>Einzahlungsbetrag</label>
+                <input id="deposit-amount" type="number" min="1" step="1" placeholder="0" />
+                <label>Herkunft</label>
+                <input id="deposit-source" type="text" value="${escapeHtml(window.__depositSource || 'Bareinzahlung')}" />
+                <label>Grund</label>
+                <input id="deposit-reason" type="text" placeholder="z.B. Kapitaleinlage" />
+                <button class="btn btn-primary" style="margin-top:16px;width:100%;" onclick="Actions.executeDeposit()">Einzahlung verbuchen</button>
+            </div>
+            <div class="section">
+                <h3 style="margin:0 0 12px;">Auszahlung</h3>
                 <label>Auszahlungsbetrag</label>
                 <input id="payout-amount" type="number" min="1" step="1" placeholder="0" />
-
                 <label>Auszahlung an</label>
                 <input id="payout-target" type="text" value="${escapeHtml(window.__payoutTarget || 'Unternehmensbankkonto')}" />
-
                 <label>Grund</label>
                 <input id="payout-reason" type="text" placeholder="z.B. Monatsabrechnung" />
-
                 <button class="btn btn-primary" style="margin-top:16px;width:100%;" onclick="Actions.executePayout()">Auszahlung bestätigen</button>
+            </div>
+        </div>
+        <div class="grid grid-2" style="margin-top:16px;">
+            <div class="section">
+                <div class="section-header"><h3>Einzahlungshistorie</h3></div>
+                ${table(['Datum', 'Betrag', 'Herkunft', 'Durchgeführt von', 'Grund'], depositRows)}
             </div>
             <div class="section">
                 <div class="section-header"><h3>Auszahlungshistorie</h3></div>
-                ${table(['Datum', 'Betrag', 'Ziel', 'Durchgeführt von', 'Grund'], rows)}
+                ${table(['Datum', 'Betrag', 'Ziel', 'Durchgeführt von', 'Grund'], payoutRows)}
             </div>
         </div>`;
 };
@@ -916,6 +1005,15 @@ VIEWS['gf-log'] = async (root) => {
 // =========================================================
 
 const Actions = {};
+
+Actions.confirmChangePassword = async () => {
+    const oldPassword = document.getElementById('account-old-password').value;
+    const newPassword = document.getElementById('account-new-password').value;
+    if (!oldPassword || !newPassword) { toast('Fehler', 'Bitte beide Felder ausfüllen.', 'error'); return; }
+    await call('me:changePassword', { oldPassword, newPassword });
+    closeModal();
+    toast('Passwort geändert', '', 'success');
+};
 
 Actions.setDriverStatus = async () => {
     const status = document.getElementById('driver-status-select').value;
@@ -1046,9 +1144,13 @@ Actions.confirmCancelOrder = async (orderId) => {
 };
 
 Actions.openHireModal = () => {
-    openModal('Mitarbeiter einstellen', 'Trage die Server-ID des Spielers ein.', `
-        <label>Server-ID</label>
-        <input id="hire-serverid" type="number" min="1" placeholder="z.B. 12" />
+    openModal('Mitarbeiter einstellen', 'Legt ein neues Tablet-Konto mit Zugangsdaten an - die Person muss dafür nicht online sein.', `
+        <label>Name</label>
+        <input id="hire-name" type="text" placeholder="Max Mustermann" />
+        <label>Benutzername</label>
+        <input id="hire-username" type="text" placeholder="z.B. m.mustermann" autocomplete="off" />
+        <label>Passwort</label>
+        <input id="hire-password" type="text" placeholder="Initialpasswort" autocomplete="off" />
         <label>Rolle</label>
         <select id="hire-role">
             <option value="fahrer">LKW-Fahrer</option>
@@ -1061,13 +1163,32 @@ Actions.openHireModal = () => {
     `);
 };
 Actions.confirmHire = async () => {
-    const serverId = Number(modalInputValue('hire-serverid'));
+    const name = modalInputValue('hire-name').trim();
+    const username = modalInputValue('hire-username').trim();
+    const password = modalInputValue('hire-password');
     const role = modalInputValue('hire-role');
-    if (!serverId) return;
-    await call('gf:employees:hire', { serverId, role });
+    if (!name || !username || !password) { toast('Fehler', 'Bitte alle Felder ausfüllen.', 'error'); return; }
+    await call('gf:employees:hire', { name, username, password, role });
     closeModal();
-    toast('Mitarbeiter eingestellt', '', 'success');
+    toast('Mitarbeiter eingestellt', `Zugangsdaten: ${username} / ${password}`, 'success');
     showView('gf-employees');
+};
+
+Actions.openResetPasswordModal = (employeeId, name) => {
+    openModal('Passwort zurücksetzen', name, `
+        <label>Neues Passwort</label>
+        <input id="reset-password" type="text" autocomplete="off" />
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmResetPassword(${employeeId})">Zurücksetzen</button>
+    `);
+};
+Actions.confirmResetPassword = async (employeeId) => {
+    const newPassword = modalInputValue('reset-password');
+    if (!newPassword) return;
+    await call('gf:employees:resetPassword', { employeeId, newPassword });
+    closeModal();
+    toast('Passwort zurückgesetzt', `Neues Passwort: ${newPassword}`, 'success');
 };
 
 Actions.changeRole = async (employeeId, role) => {
@@ -1268,6 +1389,17 @@ Actions.executePayout = async () => {
     window.__payoutTarget = target;
     await call('gf:payout:execute', { amount, target, reason });
     toast('Auszahlung durchgeführt', formatMoney(amount), 'success');
+    showView('gf-payouts');
+};
+
+Actions.executeDeposit = async () => {
+    const amount = Number(document.getElementById('deposit-amount').value);
+    const source = document.getElementById('deposit-source').value;
+    const reason = document.getElementById('deposit-reason').value;
+    if (!amount || amount <= 0) { toast('Ungültiger Betrag', 'Bitte einen gültigen Einzahlungsbetrag angeben.', 'error'); return; }
+    window.__depositSource = source;
+    await call('gf:deposit:execute', { amount, source, reason });
+    toast('Einzahlung verbucht', formatMoney(amount), 'success');
     showView('gf-payouts');
 };
 

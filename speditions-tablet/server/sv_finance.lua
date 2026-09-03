@@ -23,11 +23,11 @@ function Finance.AddTransaction(txType, amount, opts)
 
     local txId = MySQL.insert.await(
         [[INSERT INTO st_transactions
-            (type, amount, related_order_id, related_payout_id, driver_id, description, created_by)
-          VALUES (?, ?, ?, ?, ?, ?, ?)]],
+            (type, amount, related_order_id, related_payout_id, related_deposit_id, driver_id, description, created_by)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)]],
         {
             txType, amount,
-            opts.relatedOrderId, opts.relatedPayoutId, opts.driverId,
+            opts.relatedOrderId, opts.relatedPayoutId, opts.relatedDepositId, opts.driverId,
             opts.description, opts.createdBy,
         }
     )
@@ -77,7 +77,7 @@ function Finance.GetTransactions(limit, offset, typeFilter)
 
     local where = ''
     local params = {}
-    if typeFilter == 'einnahme' or typeFilter == 'auszahlung' then
+    if Utils.InTable({ 'einnahme', 'auszahlung', 'einzahlung' }, typeFilter) then
         where = 'WHERE t.type = ?'
         params[#params + 1] = typeFilter
     end
@@ -167,6 +167,47 @@ function Finance.GetPayoutHistory(limit)
     ]], { limit })
 end
 
+--- Verbucht eine Einzahlung ins Unternehmensguthaben. NUR Geschäftsführung.
+--- Genau wie bei der Auszahlung entscheidet ausschließlich der Server über
+--- den tatsächlich verbuchten Betrag - der Client liefert nur den Wunschwert.
+function Finance.ExecuteDeposit(src, amount, reason, source)
+    local emp = Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+
+    amount = Utils.SanitizeNumber(amount, 0.01)
+    reason = Utils.SanitizeString(reason, 255)
+    source = Utils.SanitizeString(source, 100) or 'Bareinzahlung'
+
+    if not amount then error('invalid_amount') end
+    if not reason then error('missing_reason') end
+
+    local txId = Finance.AddTransaction('einzahlung', amount, {
+        description = ('Einzahlung: %s'):format(reason),
+        createdBy = emp.id,
+    })
+
+    local depositId = MySQL.insert.await(
+        'INSERT INTO st_deposits (amount, reason, source, executed_by, transaction_id) VALUES (?, ?, ?, ?, ?)',
+        { amount, reason, source, emp.id, txId }
+    )
+
+    MySQL.update.await('UPDATE st_transactions SET related_deposit_id = ? WHERE id = ?', { depositId, txId })
+
+    Logs.Write(emp.id, 'deposit_executed', ('%s hat eine Einzahlung über %s verbucht (Grund: %s).'):format(emp.name, amount, reason))
+
+    return { depositId = depositId, newBalance = Finance.GetBalance() }
+end
+
+function Finance.GetDepositHistory(limit)
+    limit = Utils.SanitizeNumber(limit, 1, 200) or 50
+    return MySQL.query.await([[
+        SELECT d.id, d.amount, d.reason, d.source, d.executed_at, e.name AS executed_by_name
+        FROM st_deposits d
+        LEFT JOIN st_employees e ON e.id = d.executed_by
+        ORDER BY d.executed_at DESC, d.id DESC
+        LIMIT ?
+    ]], { limit })
+end
+
 -- =========================================================
 -- RPC-Handler
 -- =========================================================
@@ -188,6 +229,15 @@ end)
 RPC.Register('gf:payout:history', function(src, payload)
     Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
     return { payouts = Finance.GetPayoutHistory(payload.limit) }
+end)
+
+RPC.Register('gf:deposit:execute', function(src, payload)
+    return Finance.ExecuteDeposit(src, payload.amount, payload.reason, payload.source)
+end)
+
+RPC.Register('gf:deposit:history', function(src, payload)
+    Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    return { deposits = Finance.GetDepositHistory(payload.limit) }
 end)
 
 -- Read-only Umsatzübersicht für Disponenten (keine Auszahlungsfunktion!)

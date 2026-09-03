@@ -74,12 +74,12 @@ function Utils.DebugPrint(...)
 end
 
 --- Sucht den Server-Slot eines Mitarbeiters unter den aktuell verbundenen
---- Spielern (nur die, die das Tablet bereits mindestens einmal geöffnet
---- und damit einen Session-Cache-Eintrag haben).
+--- Spielern (nur die, die gerade als dieser Mitarbeiter am Tablet
+--- angemeldet sind).
 function Utils.FindSrcByEmployeeId(employeeId)
     for _, playerId in ipairs(GetPlayers()) do
         local src = tonumber(playerId)
-        local cached = Employees.GetCached(src)
+        local cached = Employees.GetLoggedIn(src)
         if cached and cached.id == employeeId then
             return src
         end

@@ -17,15 +17,17 @@ Config.OpenKey = 'F6' -- Keybind wird clientseitig via RegisterCommand + Keymapp
 -- =========================================================
 -- BOOTSTRAP / ERSTEINRICHTUNG
 -- =========================================================
--- Lizenzen (identifier:license:xxxx) die beim ersten Connect automatisch
--- als Geschäftsführung angelegt werden, falls noch kein Mitarbeiter-Eintrag
--- existiert. Damit ist ohne Framework-Integration eine Ersteinrichtung möglich.
-Config.InitialOwners = {
-    'license:2368ed9844b18a3bd76048779c665d1f644292d5',
+-- Das Tablet hat ein eigenes Benutzername/Passwort-Login (unabhängig vom
+-- FiveM-Charakter). Diese Konten werden beim ersten Ressourcenstart
+-- automatisch angelegt, falls der Benutzername noch nicht existiert -
+-- so ist eine Ersteinrichtung ohne Datenbankzugriff möglich.
+-- WICHTIG: Passwort nach dem ersten Login über "Passwort ändern" ändern!
+Config.InitialAccounts = {
+    { username = 'admin', password = 'ChangeMe123!', role = 'geschaeftsfuehrung', name = 'Administrator' },
 }
 
--- Ace-Permission die zusätzlich zu Config.InitialOwners berechtigt,
--- per Command Mitarbeiter zu bootstrappen (/tablet_grant).
+-- Ace-Permission, die zusätzlich zur Server-Konsole berechtigt, per Command
+-- Mitarbeiterkonten anzulegen/zurückzusetzen (/tablet_grant).
 Config.AdminAcePermission = 'speditions.admin'
 
 -- =========================================================

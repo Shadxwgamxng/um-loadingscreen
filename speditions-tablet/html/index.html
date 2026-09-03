@@ -38,10 +38,16 @@
                     <div class="boot-spinner"></div>
                 </div>
 
-                <div id="denied-screen" class="denied-screen hidden">
-                    <div class="denied-icon">&#9888;</div>
-                    <div class="denied-title">Kein Zugriff</div>
-                    <div class="denied-text" id="denied-text">Du bist kein Mitarbeiter der Spedition.</div>
+                <div id="login-screen" class="login-screen hidden">
+                    <div class="login-box">
+                        <div class="login-title">Anmeldung</div>
+                        <div class="login-subtitle">Melde dich mit deinem Mitarbeiterkonto an.</div>
+                        <label>Benutzername</label>
+                        <input id="login-username" type="text" autocomplete="off" spellcheck="false" />
+                        <label>Passwort</label>
+                        <input id="login-password" type="password" autocomplete="off" />
+                        <button id="login-submit" class="btn btn-primary" style="width:100%;margin-top:16px;">Anmelden</button>
+                    </div>
                 </div>
 
                 <div id="main-ui" class="main-ui hidden">
@@ -56,6 +62,8 @@
                                 <span id="employee-role" class="role-badge"></span>
                             </div>
                             <div id="clock" class="clock"></div>
+                            <button id="account-btn" class="close-btn" title="Passwort ändern">&#128273;</button>
+                            <button id="logout-btn" class="close-btn" title="Abmelden">&#8666;</button>
                             <button id="close-btn" class="close-btn" title="Schließen">&#10005;</button>
                         </div>
                     </header>

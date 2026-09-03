@@ -4,31 +4,41 @@
 
 math.randomseed(os.time())
 
---- Wird von der NUI beim Öffnen des Tablets aufgerufen. Liefert Rolle,
---- Mitarbeiterdaten und die für die Oberfläche benötigten Stammdaten
---- (Berechtigungskatalog, Fahrzeugklassen, ...).
-RPC.Register('session:init', function(src)
-    local emp = Employees.Resolve(src)
+--- Reiner Statusabfrage-Endpunkt ohne Seiteneffekte: meldet, ob dieser
+--- Server-Slot gerade am Tablet angemeldet ist. Wird sowohl von der NUI
+--- (Login-Bildschirm ja/nein) als auch von client/cl_hours.lua im
+--- Hintergrund abgefragt.
+RPC.Register('session:whoami', function(src)
+    local emp = Employees.GetLoggedIn(src)
     if not emp then
-        return { ok = false, reason = 'not_employee' }
-    end
-    if emp.status ~= 'aktiv' then
-        return { ok = false, reason = 'employee_inactive' }
-    end
-
-    if emp.role == Config.Roles.FAHRER then
-        Drivers.EnsureDriverRecord(emp.id)
+        return { ok = true, loggedIn = false }
     end
 
     return {
         ok = true,
+        loggedIn = true,
         employee = { id = emp.id, name = emp.name, role = emp.role, hiredAt = emp.hired_at },
         roleLabels = Config.RoleLabels,
         driverPermissions = Config.DriverPermissions,
         vehicleClasses = Config.VehicleClasses,
         vehicleStatuses = Config.VehicleStatus,
-        currency = Config.Currency,
     }
+end)
+
+--- Meldet den Spieler mit Benutzername/Passwort am Tablet an. Erfolg/Misserfolg
+--- wird ausschließlich serverseitig anhand der Datenbank entschieden.
+RPC.Register('session:login', function(src, payload)
+    local result = Employees.Login(src, payload.username, payload.password)
+    local emp = Employees.GetLoggedIn(src)
+    if emp and emp.role == Config.Roles.FAHRER then
+        Drivers.EnsureDriverRecord(emp.id)
+    end
+    return result
+end)
+
+RPC.Register('session:logout', function(src)
+    Employees.Logout(src)
+    return { ok = true }
 end)
 
 local function countRows(query, params)

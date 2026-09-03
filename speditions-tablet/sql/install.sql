@@ -4,7 +4,12 @@
 
 CREATE TABLE IF NOT EXISTS `st_employees` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `identifier` VARCHAR(64) NOT NULL,
+    -- Zuletzt bekannter FiveM-Charakter, nur informativ/für das Protokoll -
+    -- die Anmeldung selbst läuft über username/password_hash, NICHT hierüber.
+    `identifier` VARCHAR(64) NULL,
+    `username` VARCHAR(50) NULL,
+    `password_hash` VARCHAR(64) NULL,
+    `password_salt` VARCHAR(32) NULL,
     `name` VARCHAR(100) NOT NULL,
     `role` ENUM('fahrer','disponent','geschaeftsfuehrung') NOT NULL DEFAULT 'fahrer',
     `status` ENUM('aktiv','inaktiv') NOT NULL DEFAULT 'aktiv',
@@ -12,7 +17,7 @@ CREATE TABLE IF NOT EXISTS `st_employees` (
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uq_identifier` (`identifier`)
+    UNIQUE KEY `uq_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `st_drivers` (
@@ -146,10 +151,11 @@ CREATE TABLE IF NOT EXISTS `st_order_history` (
 
 CREATE TABLE IF NOT EXISTS `st_transactions` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `type` ENUM('einnahme','auszahlung') NOT NULL,
+    `type` ENUM('einnahme','auszahlung','einzahlung') NOT NULL,
     `amount` DECIMAL(14,2) NOT NULL,
     `related_order_id` INT UNSIGNED NULL,
     `related_payout_id` INT UNSIGNED NULL,
+    `related_deposit_id` INT UNSIGNED NULL,
     `driver_id` INT UNSIGNED NULL,
     `description` VARCHAR(255) NULL,
     `created_by` INT UNSIGNED NULL,
@@ -180,6 +186,18 @@ CREATE TABLE IF NOT EXISTS `st_payouts` (
     `transaction_id` INT UNSIGNED NOT NULL,
     PRIMARY KEY (`id`),
     CONSTRAINT `fk_payout_tx` FOREIGN KEY (`transaction_id`) REFERENCES `st_transactions` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `st_deposits` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `amount` DECIMAL(14,2) NOT NULL,
+    `reason` VARCHAR(255) NOT NULL,
+    `source` VARCHAR(100) NOT NULL DEFAULT 'Bareinzahlung',
+    `executed_by` INT UNSIGNED NOT NULL,
+    `executed_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `transaction_id` INT UNSIGNED NOT NULL,
+    PRIMARY KEY (`id`),
+    CONSTRAINT `fk_deposit_tx` FOREIGN KEY (`transaction_id`) REFERENCES `st_transactions` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `st_notifications` (

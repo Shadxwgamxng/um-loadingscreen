@@ -15,37 +15,58 @@ verwaltet.
 
 1. Ressource nach `resources/[speditions]/speditions-tablet` kopieren.
 2. `sql/install.sql` in die Datenbank importieren (bei einer bereits
-   bestehenden Installation stattdessen `sql/upgrade_v2.sql` ausführen, um
-   das Lenk-/Ruhezeiten-System und die Gefahrgut-Spalte nachzurüsten).
+   bestehenden Installation stattdessen der Reihe nach `sql/upgrade_v2.sql`
+   dann `sql/upgrade_v3.sql` ausführen, um Lenk-/Ruhezeiten, Gefahrgut,
+   das Login-System und Ein-/Auszahlungen nachzurüsten).
 3. In `server.cfg`:
    ```
    ensure oxmysql
    ensure speditions-tablet
    ```
-4. `config.lua` anpassen (siehe unten) - insbesondere `Config.CompanyName`
-   und `Config.Locations`.
+4. `config.lua` anpassen (siehe unten) - insbesondere `Config.CompanyName`,
+   `Config.Locations` und `Config.InitialAccounts`.
 5. Server starten.
 
-## Ersteinrichtung (erste Geschäftsführung anlegen)
+## Anmeldung (Login-System)
 
-Da die Ressource standalone läuft, gibt es zwei Wege, den/die ersten
-Geschäftsführer:in anzulegen:
+Das Tablet hat ein **eigenes Benutzername/Passwort-Login**, unabhängig vom
+FiveM-Charakter - ein Mitarbeiter meldet sich aktiv am Tablet an (wie bei
+echter Unternehmenssoftware), statt automatisch über seine Spieler-ID/seinen
+Charakter erkannt zu werden. Das hat zwei praktische Vorteile: Mehrere
+Personen können sich am selben Terminal mit unterschiedlichen Konten
+anmelden, und die Geschäftsführung kann Konten für Personen anlegen, die
+gerade gar nicht online sind (Zugangsdaten werden z.B. per Discord
+weitergegeben).
 
-**Variante A - Config:**
-Trage die `license:`-Identifier in `Config.InitialOwners` ein. Beim ersten
-Öffnen des Tablets (`/tablet`) wird der Account automatisch als
-Geschäftsführung angelegt.
-
-**Variante B - Server-Command:**
+**Erstes Konto (Ersteinrichtung):**
+`Config.InitialAccounts` in `config.lua` wird beim ersten Ressourcenstart
+automatisch angelegt, falls der Benutzername noch nicht existiert:
+```lua
+Config.InitialAccounts = {
+    { username = 'admin', password = 'ChangeMe123!', role = 'geschaeftsfuehrung', name = 'Administrator' },
+}
 ```
-tablet_grant [serverId] [fahrer|disponent|geschaeftsfuehrung]
-```
-Kann von der Server-Konsole oder von Spielern mit der Ace-Permission
-`speditions.admin` (konfigurierbar über `Config.AdminAcePermission`)
-ausgeführt werden.
+**Wichtig:** Nach dem ersten Login unbedingt über den Schlüssel-Button oben
+im Tablet das Passwort ändern!
 
-Die Geschäftsführung kann anschließend über den Tab **Mitarbeiter** weitere
-Fahrer, Disponenten und Geschäftsführer:innen einstellen.
+**Weitere Konten anlegen** - zwei Wege:
+- Über das Tablet: Geschäftsführung → Tab **Mitarbeiter** → "+ Mitarbeiter
+  einstellen" (Name, Benutzername, Passwort, Rolle - die Zielperson muss
+  dafür nicht online sein).
+- Über die Server-Konsole (auch nutzbar, um sich selbst auszusperren zu
+  vermeiden, oder mit der Ace-Permission `speditions.admin`):
+  ```
+  tablet_grant [benutzername] [passwort] [fahrer|disponent|geschaeftsfuehrung] [Anzeigename...]
+  ```
+  Legt das Konto an oder aktualisiert Rolle + Passwort, falls der
+  Benutzername schon existiert.
+
+**Sicherheitshinweis:** Passwörter werden serverseitig per `SHA2(passwort || salt, 256)`
+über MySQL gehasht (`server/sv_bootstrap.lua`) - es gibt keine
+Crypto-Bibliothek in reinem Lua/FiveM ohne Zusatzabhängigkeit. Das ist für
+den Spielkontext ausreichend, aber kein Enterprise-Auth-Standard (kein
+bcrypt/Argon2, keine Rate-Limits gegen Brute-Force). Vergib keine echten,
+wiederverwendeten Passwörter.
 
 ## Bedienung
 
@@ -68,20 +89,28 @@ Auszahlungsbeträge oder "Auftrag abgeschlossen" selbst setzen.
 |---|---|
 | LKW-Fahrer | Fahrerkarte, Statuswechsel, Aufträge annehmen/ablehnen, Frachtstatus, Einnahmenübersicht (nur Ansicht), eigenes Fahrzeug, Nachrichten |
 | Disponent | Fahrerübersicht, Auftragspool disponieren/neu zuweisen, aktive Aufträge überwachen, Fahrer kontaktieren, Umsatz einsehen (keine Auszahlung, keine Fahrzeugverwaltung) |
-| Geschäftsführung | Mitarbeiter-/Fahrerverwaltung, vollständige Fuhrparkverwaltung, Unternehmensfinanzen, Auszahlungen, Statistiken, Aktivitätsprotokoll |
+| Geschäftsführung | Mitarbeiter-/Fahrerverwaltung, vollständige Fuhrparkverwaltung, Unternehmensfinanzen, Ein-/Auszahlungen, Statistiken, Aktivitätsprotokoll |
 
 Alle Aktionen der Geschäftsführung sowie sicherheitsrelevante Systemereignisse
 werden in `st_activity_logs` protokolliert und sind nur für die
 Geschäftsführung einsehbar (Tab **Protokoll**).
 
-## Wichtiges Prinzip: Fahrer-Einnahmen
+## Wichtiges Prinzip: Fahrer-Einnahmen & Ein-/Auszahlungen
 
 Abgeschlossene Aufträge erzeugen **Einnahmen für das Unternehmen**, nicht für
-den Fahrer persönlich. Jede Einnahme und jede Auszahlung wird als eigene,
-unveränderliche Transaktion in `st_transactions` gespeichert - es wird niemals
-nur ein Kontostand überschrieben. Nur die Geschäftsführung kann über den Tab
-**Auszahlungen** Unternehmensguthaben auszahlen; der Betrag wird dabei
-serverseitig gegen das tatsächliche Guthaben geprüft.
+den Fahrer persönlich. Jede Einnahme, jede Auszahlung und jede Einzahlung
+wird als eigene, unveränderliche Transaktion in `st_transactions` gespeichert
+- es wird niemals nur ein Kontostand überschrieben. Nur die Geschäftsführung
+kann über den Tab **Ein-/Auszahlungen**:
+- **Einzahlen**: Guthaben von außen ins Unternehmenskonto verbuchen (Betrag,
+  Herkunft, Grund) - z.B. eine Kapitaleinlage. Erhöht das Guthaben sofort und
+  wird protokolliert (`st_deposits`).
+- **Auszahlen**: Unternehmensguthaben auszahlen. Der Betrag wird dabei
+  serverseitig gegen das tatsächliche Guthaben geprüft (`st_payouts`).
+
+Beide Aktionen sind reine Buchungsvorgänge im internen Ledger - es findet
+keine automatische Übertragung von echtem Spielergeld statt (keine
+Framework-Anbindung in diesem Standalone-Setup).
 
 ## Lenk- und Ruhezeiten, Wegpunkte, Gefahrgut
 
@@ -118,7 +147,7 @@ serverseitig gegen das tatsächliche Guthaben geprüft.
 Siehe `sql/install.sql`. Wichtigste Tabellen:
 
 ```
-st_employees            Mitarbeiterstammdaten (Rolle, Status)
+st_employees            Mitarbeiterstammdaten (Rolle, Status, username/password_hash fürs Login)
 st_drivers              Fahrer-Zusatzdaten (Status, Notizen, Fahrzeugzuweisung)
 st_driver_permissions   Führerscheinklassen / Sonderberechtigungen
 st_driver_statistics    Aggregierte Fahrerstatistik (aus st_orders berechnet)
@@ -128,9 +157,10 @@ st_vehicle_history      Fahrzeugereignisse (erstellt, Wartung, Status, Aufträge
 st_orders               Aufträge inkl. Fahrer-/Fahrzeugzuordnung
 st_order_stops          Zwischenstopps (optional/erweiterbar)
 st_order_history        Audit-Trail je Auftragsstatus
-st_transactions         Vollständiges Transaktions-Ledger (Einnahmen/Auszahlungen)
+st_transactions         Vollständiges Transaktions-Ledger (Einnahmen/Auszahlungen/Einzahlungen)
 st_company_balance      Performance-Cache des aktuellen Guthabens
 st_payouts              Auszahlungen (Betrag, Grund, Zielkonto, ausführender Mitarbeiter)
+st_deposits             Einzahlungen (Betrag, Grund, Herkunft, ausführender Mitarbeiter)
 st_notifications        Nachrichten Disponent -> Fahrer
 st_activity_logs        Aktivitätsprotokoll
 st_driver_hours         Lenk-/Ruhezeiten je Fahrer (ununterbrochen/täglich, Pausenstatus)
@@ -149,21 +179,22 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `Config.AverageSpeedKmh`, `Config.DeadlineBufferMinutes` - Grundlage der
   Pünktlichkeitsberechnung
 - `Config.DrivingRules` - Lenk-/Ruhezeiten-Grenzwerte und Heartbeat-Intervall
-- `Config.InitialOwners`, `Config.AdminAcePermission` - Ersteinrichtung
+- `Config.InitialAccounts`, `Config.AdminAcePermission` - Login-Ersteinrichtung
 
 ## Architektur
 
 - `server/sv_rpc.lua` - zentraler, einziger Einstiegspunkt für alle
   NUI-Aktionen (`speditions-tablet:server:rpc`), inkl. serverseitiger
   Rollenprüfung pro Aktion.
-- `server/sv_bootstrap.lua` - Mitarbeiter-Session-Cache & Ersteinrichtung.
-- `server/sv_finance.lua` - Transaktions-Ledger, Guthaben, Auszahlungen.
+- `server/sv_bootstrap.lua` - Benutzername/Passwort-Login (Hashing, Session
+  je Server-Slot), Ersteinrichtung, `tablet_grant`-Command.
+- `server/sv_finance.lua` - Transaktions-Ledger, Guthaben, Ein-/Auszahlungen.
 - `server/sv_vehicles.lua` - Fuhrparkverwaltung.
 - `server/sv_drivers.lua` - Fahrerkarte, Fahrerakte, Statistik.
 - `server/sv_hours.lua` - Lenk-/Ruhezeiten-Tracking, Warnungen, Erinnerungen.
 - `server/sv_orders.lua` - Auftragsgenerierung & -lebenszyklus, Gefahrgut-Prüfung,
   Auto-Wegpunkte.
-- `server/sv_employees.lua` - Mitarbeiterverwaltung.
+- `server/sv_employees.lua` - Mitarbeiterverwaltung, Passwort setzen/ändern.
 - `server/sv_notifications.lua` - Nachrichten Disponent/Fahrer.
 - `client/cl_main.lua` - NUI-Steuerung, RPC-Relay (`ServerCall` auch für
   andere Client-Skripte nutzbar) sowie native In-Game-Hinweise/Wegpunkte sind hier verdrahtet.
