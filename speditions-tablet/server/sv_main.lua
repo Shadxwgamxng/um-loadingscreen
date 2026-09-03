@@ -13,8 +13,16 @@ RPC.Register('session:whoami', function(src)
 
     -- TEMPORÄR (nur zum Testen): Login-System übersprungen, siehe Chat
     -- und Employees.DebugAutoLogin in server/sv_bootstrap.lua.
+    -- Der print läuft IMMER (nicht nur bei Config.Debug), damit im Konsolen-
+    -- Log eindeutig sichtbar ist, ob diese neue Code-Version überhaupt läuft.
     if not emp then
-        emp = Employees.DebugAutoLogin(src)
+        local ok, result = pcall(Employees.DebugAutoLogin, src)
+        if ok then
+            emp = result
+            print(('^3[speditions-tablet]^7 WHOAMI-DEBUG: DebugAutoLogin fuer Slot %s ergab %s'):format(src, emp and ('"'..emp.name..'" ('..emp.role..')') or 'NICHTS (kein aktiver Mitarbeiter in der DB gefunden)'))
+        else
+            print(('^1[speditions-tablet]^7 WHOAMI-DEBUG: DebugAutoLogin fuer Slot %s ist mit einem Fehler abgestuerzt: %s'):format(src, tostring(result)))
+        end
     end
 
     if not emp then
