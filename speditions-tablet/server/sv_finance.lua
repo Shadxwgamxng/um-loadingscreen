@@ -151,9 +151,13 @@ function Finance.ExecutePayout(src, amount, reason, target)
 
     MySQL.update.await('UPDATE st_transactions SET related_payout_id = ? WHERE id = ?', { payoutId, txId })
 
-    Logs.Write(emp.id, 'payout_executed', ('%s hat eine Auszahlung über %s durchgeführt (Grund: %s).'):format(emp.name, amount, reason))
+    local cashGiven = Bridge.AddCash(src, amount)
 
-    return { payoutId = payoutId, newBalance = Finance.GetBalance() }
+    Logs.Write(emp.id, 'payout_executed', ('%s hat eine Auszahlung über %s durchgeführt (Grund: %s).%s'):format(
+        emp.name, amount, reason, cashGiven and ' Bargeld ausgehändigt.' or ' Bargeld-Anbindung nicht verfügbar.'
+    ))
+
+    return { payoutId = payoutId, newBalance = Finance.GetBalance(), cashGiven = cashGiven }
 end
 
 function Finance.GetPayoutHistory(limit)
@@ -179,6 +183,14 @@ function Finance.ExecuteDeposit(src, amount, reason, source)
 
     if not amount then error('invalid_amount') end
     if not reason then error('missing_reason') end
+
+    -- Echtes Bargeld wird ZUERST abgezogen - schlägt das fehl (nicht genug
+    -- Bargeld oder keine Wirtschafts-Anbindung), wird gar nichts gebucht.
+    -- Sonst könnte man beliebig "einzahlen" ohne echtes Geld zu verlieren
+    -- und es sich anschließend als Auszahlung wieder als Bargeld holen.
+    if not Bridge.RemoveCash(src, amount) then
+        error('insufficient_player_cash')
+    end
 
     local txId = Finance.AddTransaction('einzahlung', amount, {
         description = ('Einzahlung: %s'):format(reason),

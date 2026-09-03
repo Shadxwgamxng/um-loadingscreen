@@ -31,15 +31,26 @@ local function closeTablet()
     SendNUIMessage({ type = 'close' })
 end
 
-RegisterCommand(Config.OpenCommand, function()
-    if tabletOpen then
-        closeTablet()
-    else
-        openTablet()
-    end
-end, false)
+local itemRequired = Config.RequireItem and Config.RequireItem.enabled
 
-RegisterKeyMapping(Config.OpenCommand, 'Speditions-Tablet öffnen/schließen', 'keyboard', Config.OpenKey or 'F6')
+if not itemRequired then
+    RegisterCommand(Config.OpenCommand, function()
+        if tabletOpen then
+            closeTablet()
+        else
+            openTablet()
+        end
+    end, false)
+
+    RegisterKeyMapping(Config.OpenCommand, 'Speditions-Tablet öffnen/schließen', 'keyboard', Config.OpenKey or 'F6')
+end
+
+--- Wird ausgelöst, wenn das konfigurierte Item benutzt wurde (siehe
+--- server/sv_main.lua). Funktioniert unabhängig von Config.RequireItem,
+--- damit andere Ressourcen das Tablet immer per Item öffnen können.
+RegisterNetEvent('speditions-tablet:client:openFromItem', function()
+    openTablet()
+end)
 
 exports('OpenTablet', openTablet)
 exports('CloseTablet', closeTablet)
@@ -88,6 +99,10 @@ RegisterNetEvent('speditions-tablet:client:notify', function(message, notifyType
     SetNotificationTextEntry('STRING')
     AddTextComponentString(('%s\n%s'):format(prefix, message))
     DrawNotification(false, true)
+
+    if Config.NotificationSound then
+        PlaySoundFrontend(-1, Config.NotificationSound.name, Config.NotificationSound.set, true)
+    end
 end)
 
 RegisterNetEvent('speditions-tablet:client:waypoint', function(x, y, label)

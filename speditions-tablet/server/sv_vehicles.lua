@@ -235,6 +235,48 @@ function Vehicles.GetFile(vehicleId)
     }
 end
 
+--- Fahrer meldet vor der Abmeldung den aktuellen Zustand seines zugewiesenen
+--- Fahrzeugs (Tankstand, Mängel, ggf. Werkstatt nötig). Wird von der NUI vor
+--- dem tatsächlichen Logout erzwungen (siehe app.js requestLogout()).
+--- Hat der Fahrer kein Fahrzeug zugewiesen, passiert einfach nichts.
+function Vehicles.ReportCondition(src, fuel, notes, needsWorkshop)
+    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local driver = Drivers.EnsureDriverRecord(emp.id)
+
+    if not driver.assigned_vehicle_id then
+        return { ok = true, reported = false }
+    end
+
+    local vehicle = Vehicles.GetById(driver.assigned_vehicle_id)
+    if not vehicle then
+        return { ok = true, reported = false }
+    end
+
+    fuel = Utils.SanitizeNumber(fuel, 0, 100)
+    if fuel == nil then fuel = vehicle.fuel end
+    notes = Utils.SanitizeString(notes, 500)
+
+    local newNotes = vehicle.notes
+    if notes then
+        local entry = ('[%s] %s: %s'):format(Utils.Now(), emp.name, notes)
+        newNotes = vehicle.notes and (vehicle.notes .. '\n' .. entry) or entry
+    end
+
+    local newStatus = vehicle.status
+    if needsWorkshop and not Config.VehicleBlockedForDispatch[vehicle.status] then
+        newStatus = 'wartung'
+    end
+
+    MySQL.update.await('UPDATE st_vehicles SET fuel = ?, notes = ?, status = ? WHERE id = ?', { fuel, newNotes, newStatus, vehicle.id })
+    logVehicleEvent(vehicle.id, 'condition_report', ('%s hat Tankstand (%s%%) und Zustand gemeldet%s.'):format(emp.name, fuel, needsWorkshop and ' (Werkstatt erforderlich)' or ''))
+    Logs.Write(emp.id, 'vehicle_condition_report', ('%s hat den Zustand von %s (%s) gemeldet.'):format(emp.name, vehicle.name, vehicle.plate))
+
+    RPC.PushToRole(Config.Roles.DISPONENT, 'fleet:changed', {})
+    RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'fleet:changed', {})
+
+    return { ok = true, reported = true }
+end
+
 -- =========================================================
 -- RPC-Handler
 -- =========================================================
@@ -278,4 +320,8 @@ RPC.Register('gf:vehicles:file', function(src, payload)
     local vehicleId = Utils.SanitizeNumber(payload.vehicleId, 1)
     if not vehicleId then error('invalid_vehicle') end
     return Vehicles.GetFile(vehicleId)
+end)
+
+RPC.Register('driver:reportVehicleCondition', function(src, payload)
+    return Vehicles.ReportCondition(src, payload.fuel, payload.notes, payload.needsWorkshop == true)
 end)

@@ -39,6 +39,7 @@ const ERROR_MESSAGES = {
     username_taken: 'Dieser Benutzername ist bereits vergeben.',
     password_too_short: 'Das Passwort muss mindestens 4 Zeichen lang sein.',
     wrong_password: 'Das aktuelle Passwort ist falsch.',
+    insufficient_player_cash: 'Du hast nicht genug Bargeld dabei, um diesen Betrag einzuzahlen.',
     employee_inactive: 'Dieses Mitarbeiterkonto ist deaktiviert.',
     forbidden_role: 'Keine Berechtigung für diese Aktion.',
     insufficient_balance: 'Nicht genügend Guthaben für diese Auszahlung.',
@@ -372,10 +373,37 @@ document.getElementById('login-submit').addEventListener('click', submitLogin);
 document.getElementById('login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitLogin(); });
 document.getElementById('login-username').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('login-password').focus(); });
 
-document.getElementById('logout-btn').addEventListener('click', async () => {
+async function performLogout() {
     await rpc('session:logout');
     toast('Abgemeldet', '', 'info');
     showLogin();
+}
+
+function openVehicleConditionModal(vehicle) {
+    openModal('Fahrzeugzustand melden', `${escapeHtml(vehicle.name)} (${escapeHtml(vehicle.plate)}) - Pflichtangabe vor der Abmeldung`, `
+        <label>Tankstand (%)</label>
+        <input id="condition-fuel" type="number" min="0" max="100" value="${vehicle.fuel}" />
+        <label>Mängel / Besonderheiten</label>
+        <textarea id="condition-notes"></textarea>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:12px;">
+            <input type="checkbox" id="condition-workshop" style="width:auto;" />
+            <span style="font-size:12.5px;color:var(--text-1);">Werkstatt erforderlich (Fahrzeug wird auf "Wartung" gesetzt)</span>
+        </label>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.submitVehicleConditionAndLogout()">Melden &amp; abmelden</button>
+    `);
+}
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+    if (State.role === 'fahrer') {
+        const res = await rpc('driver:vehicle');
+        if (res && res.ok && res.result && res.result.vehicle) {
+            openVehicleConditionModal(res.result.vehicle);
+            return;
+        }
+    }
+    await performLogout();
 });
 
 document.getElementById('account-btn').addEventListener('click', () => {
@@ -926,21 +954,21 @@ VIEWS['gf-payouts'] = async (root) => {
             <div class="section">
                 <h3 style="margin:0 0 12px;">Einzahlung</h3>
                 <label>Einzahlungsbetrag</label>
-                <input id="deposit-amount" type="number" min="1" step="1" placeholder="0" />
+                <input id="deposit-amount" type="number" min="1" step="1" />
                 <label>Herkunft</label>
                 <input id="deposit-source" type="text" value="${escapeHtml(window.__depositSource || 'Bareinzahlung')}" />
                 <label>Grund</label>
-                <input id="deposit-reason" type="text" placeholder="z.B. Kapitaleinlage" />
+                <input id="deposit-reason" type="text" />
                 <button class="btn btn-primary" style="margin-top:16px;width:100%;" onclick="Actions.executeDeposit()">Einzahlung verbuchen</button>
             </div>
             <div class="section">
                 <h3 style="margin:0 0 12px;">Auszahlung</h3>
                 <label>Auszahlungsbetrag</label>
-                <input id="payout-amount" type="number" min="1" step="1" placeholder="0" />
+                <input id="payout-amount" type="number" min="1" step="1" />
                 <label>Auszahlung an</label>
                 <input id="payout-target" type="text" value="${escapeHtml(window.__payoutTarget || 'Unternehmensbankkonto')}" />
                 <label>Grund</label>
-                <input id="payout-reason" type="text" placeholder="z.B. Monatsabrechnung" />
+                <input id="payout-reason" type="text" />
                 <button class="btn btn-primary" style="margin-top:16px;width:100%;" onclick="Actions.executePayout()">Auszahlung bestätigen</button>
             </div>
         </div>
@@ -1006,6 +1034,15 @@ VIEWS['gf-log'] = async (root) => {
 
 const Actions = {};
 
+Actions.submitVehicleConditionAndLogout = async () => {
+    const fuel = Number(document.getElementById('condition-fuel').value);
+    const notes = document.getElementById('condition-notes').value.trim();
+    const needsWorkshop = document.getElementById('condition-workshop').checked;
+    await call('driver:reportVehicleCondition', { fuel, notes, needsWorkshop });
+    closeModal();
+    await performLogout();
+};
+
 Actions.confirmChangePassword = async () => {
     const oldPassword = document.getElementById('account-old-password').value;
     const newPassword = document.getElementById('account-new-password').value;
@@ -1031,7 +1068,7 @@ Actions.acceptOrder = async (orderId) => {
 Actions.declineOrder = (orderId) => {
     openModal('Auftrag ablehnen', `Auftrag #${orderId}`, `
         <label>Grund</label>
-        <textarea id="decline-reason" placeholder="Warum lehnst du den Auftrag ab?"></textarea>
+        <textarea id="decline-reason"></textarea>
     `, `
         <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
         <button class="btn btn-danger" onclick="Actions.confirmDecline(${orderId})">Ablehnen</button>
@@ -1064,7 +1101,7 @@ Actions.markRead = async (id) => {
 Actions.messageDriver = (driverId, driverName) => {
     openModal('Nachricht senden', driverName, `
         <label>Nachricht</label>
-        <textarea id="message-text" placeholder="Nachricht an den Fahrer..."></textarea>
+        <textarea id="message-text"></textarea>
     `, `
         <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
         <button class="btn btn-primary" onclick="Actions.confirmMessageDriver(${driverId})">Senden</button>
@@ -1129,7 +1166,7 @@ Actions.confirmReassign = async (orderId) => {
 Actions.cancelOrder = (orderId) => {
     openModal('Auftrag abbrechen', `Auftrag #${orderId}`, `
         <label>Grund</label>
-        <textarea id="cancel-reason" placeholder="Warum wird der Auftrag abgebrochen?"></textarea>
+        <textarea id="cancel-reason"></textarea>
     `, `
         <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
         <button class="btn btn-danger" onclick="Actions.confirmCancelOrder(${orderId})">Auftrag abbrechen</button>
@@ -1146,11 +1183,11 @@ Actions.confirmCancelOrder = async (orderId) => {
 Actions.openHireModal = () => {
     openModal('Mitarbeiter einstellen', 'Legt ein neues Tablet-Konto mit Zugangsdaten an - die Person muss dafür nicht online sein.', `
         <label>Name</label>
-        <input id="hire-name" type="text" placeholder="Max Mustermann" />
+        <input id="hire-name" type="text" />
         <label>Benutzername</label>
-        <input id="hire-username" type="text" placeholder="z.B. m.mustermann" autocomplete="off" />
+        <input id="hire-username" type="text" autocomplete="off" />
         <label>Passwort</label>
-        <input id="hire-password" type="text" placeholder="Initialpasswort" autocomplete="off" />
+        <input id="hire-password" type="text" autocomplete="off" />
         <label>Rolle</label>
         <select id="hire-role">
             <option value="fahrer">LKW-Fahrer</option>
@@ -1245,15 +1282,15 @@ Actions.toggleArchivedFleet = () => {
 Actions.openVehicleCreateModal = () => {
     const classOptions = (State.config.vehicleClasses || []).map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
     openModal('Fahrzeug erstellen', '', `
-        <label>Fahrzeugname</label><input id="v-name" type="text" placeholder="Mercedes Actros" />
-        <label>Modell</label><input id="v-model" type="text" placeholder="Actros 2024" />
-        <label>Kennzeichen</label><input id="v-plate" type="text" placeholder="HH-TR 420" />
+        <label>Fahrzeugname</label><input id="v-name" type="text" />
+        <label>Modell</label><input id="v-model" type="text" />
+        <label>Kennzeichen</label><input id="v-plate" type="text" />
         <label>Fahrzeugklasse</label><select id="v-class">${classOptions}</select>
         <div class="form-row">
             <div><label>Kilometerstand</label><input id="v-mileage" type="number" min="0" value="0" /></div>
             <div><label>Tank (%)</label><input id="v-fuel" type="number" min="0" max="100" value="100" /></div>
         </div>
-        <label>Fahrgestell-/Fahrzeug-ID</label><input id="v-identifier" type="text" placeholder="XXXXX" />
+        <label>Fahrgestell-/Fahrzeug-ID</label><input id="v-identifier" type="text" />
     `, `
         <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
         <button class="btn btn-primary" onclick="Actions.confirmCreateVehicle()">Fahrzeug erstellen</button>
@@ -1387,8 +1424,12 @@ Actions.executePayout = async () => {
     const reason = document.getElementById('payout-reason').value;
     if (!amount || amount <= 0) { toast('Ungültiger Betrag', 'Bitte einen gültigen Auszahlungsbetrag angeben.', 'error'); return; }
     window.__payoutTarget = target;
-    await call('gf:payout:execute', { amount, target, reason });
-    toast('Auszahlung durchgeführt', formatMoney(amount), 'success');
+    const result = await call('gf:payout:execute', { amount, target, reason });
+    if (result.cashGiven) {
+        toast('Auszahlung durchgeführt', `${formatMoney(amount)} als Bargeld erhalten.`, 'success');
+    } else {
+        toast('Auszahlung gebucht', `${formatMoney(amount)} - Bargeld konnte nicht übergeben werden (Wirtschafts-Anbindung nicht verfügbar).`, 'info');
+    }
     showView('gf-payouts');
 };
 
@@ -1399,7 +1440,7 @@ Actions.executeDeposit = async () => {
     if (!amount || amount <= 0) { toast('Ungültiger Betrag', 'Bitte einen gültigen Einzahlungsbetrag angeben.', 'error'); return; }
     window.__depositSource = source;
     await call('gf:deposit:execute', { amount, source, reason });
-    toast('Einzahlung verbucht', formatMoney(amount), 'success');
+    toast('Einzahlung verbucht', `${formatMoney(amount)} Bargeld abgezogen.`, 'success');
     showView('gf-payouts');
 };
 

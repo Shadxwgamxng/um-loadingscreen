@@ -72,6 +72,12 @@ RPC.Register('dispatch:messageDriver', function(src, payload)
     if not driver then error('driver_not_found') end
 
     Notifications.Send(nil, driver.employee_id, ('Nachricht von %s'):format(emp.name), message, emp.id)
+
+    local driverSrc = Utils.FindSrcByEmployeeId(driver.employee_id)
+    if driverSrc then
+        Utils.NotifyClient(driverSrc, ('Nachricht von %s: %s'):format(emp.name, message), 'info')
+    end
+
     Logs.Write(emp.id, 'message_sent', ('%s hat einer Nachricht an Fahrer #%s gesendet.'):format(emp.name, driverId))
 
     return { ok = true }

@@ -68,15 +68,57 @@ den Spielkontext ausreichend, aber kein Enterprise-Auth-Standard (kein
 bcrypt/Argon2, keine Rate-Limits gegen Brute-Force). Vergib keine echten,
 wiederverwendeten Passwörter.
 
+**Login-Fehler debuggen:** Schlägt eine Anmeldung mit `invalid_credentials`
+fehl, obwohl du dir sicher bist, dass Benutzername/Passwort stimmen, setz
+kurzzeitig `Config.Debug = true` und versuch es erneut - die Server-Konsole
+zeigt dann Benutzername, Passwortlänge sowie berechneten und gespeicherten
+Hash zum direkten Vergleich. Danach `Config.Debug` wieder auf `false`
+setzen. `sql/cleanup_employees.sql` leert bei Bedarf die komplette
+Mitarbeitertabelle (z.B. um Test-/Doppelkonten loszuwerden), ohne
+Fahrzeuge/Aufträge/Finanzen anzufassen.
+
 ## Bedienung
 
 - `/tablet` (Standard-Keybind `F6`, in den Keybindings des Spielers
-  änderbar) öffnet/schließt das Tablet.
+  änderbar) öffnet/schließt das Tablet - **außer** `Config.RequireItem.enabled`
+  ist aktiv (siehe unten), dann ist der Command/Keybind deaktiviert.
 - Andere Ressourcen können das Tablet auch selbst öffnen, z.B. aus einem
   Inventar-Item-Handler:
   ```lua
   exports['speditions-tablet']:OpenTablet()
   ```
+
+### Tablet nur per Item öffnen
+
+`Config.RequireItem = { enabled = true, itemName = 'essence' }` deaktiviert
+den freien Command/Keybind komplett - das Tablet öffnet sich dann nur noch,
+wenn das konfigurierte Item benutzt wird:
+- Mit **ESX** passiert das automatisch über `ESX.RegisterUsableItem`
+  (`server/sv_main.lua`), solange `Config.MoneyBridge` (s.u.) ESX findet.
+- Mit einem anderen Inventarsystem (ox_inventory, qb-inventory, ...) lässt du
+  dein eigenes Item-Skript beim Gebrauch selbst
+  `TriggerEvent('speditions-tablet:server:openFromItem')` (server-seitig,
+  `source` = der Spieler) feuern.
+
+### Bargeld bei Aus-/Einzahlung
+
+`Config.MoneyBridge = 'esx' | 'qbcore' | 'custom'` (Standard: `'esx'`):
+Führt die Geschäftsführung eine **Auszahlung** durch, bekommt sie den Betrag
+als echtes Bargeld in die Hand. Damit das nicht zur Geldvermehrung
+missbraucht werden kann, zieht eine **Einzahlung** ihr symmetrisch echtes
+Bargeld ab (schlägt fehl, wenn nicht genug Bargeld vorhanden ist -
+`insufficient_player_cash`). Bei `'custom'` (oder wenn das gewählte
+Framework nicht gefunden wird) werden nur die Events
+`speditions-tablet:server:cashPayout` / `-cashDeposit` gefeuert, die du in
+deinem eigenen Wirtschaftsskript abfangen kannst - `server/sv_bridge.lua`.
+
+### Fahrzeugstand vor der Abmeldung
+
+Hat ein Fahrer beim Abmelden (Button oben im Tablet) ein Fahrzeug
+zugewiesen, muss er zuerst Tankstand und ggf. Mängel/Besonderheiten melden
+(optional mit Häkchen "Werkstatt erforderlich", setzt den Fahrzeugstatus
+automatisch auf "Wartung"). Ohne zugewiesenes Fahrzeug meldet er sich direkt
+ab. Siehe `Vehicles.ReportCondition` in `server/sv_vehicles.lua`.
 
 ## Rollen & Berechtigungen
 
@@ -180,12 +222,17 @@ Alle Stellschrauben befinden sich in `config.lua`:
   Pünktlichkeitsberechnung
 - `Config.DrivingRules` - Lenk-/Ruhezeiten-Grenzwerte und Heartbeat-Intervall
 - `Config.InitialAccounts`, `Config.AdminAcePermission` - Login-Ersteinrichtung
+- `Config.RequireItem` - Tablet nur per Item öffnen
+- `Config.MoneyBridge` - Framework-Anbindung für Bargeld bei Aus-/Einzahlung
+- `Config.NotificationSound` - Klingelton bei nativen In-Game-Hinweisen
 
 ## Architektur
 
 - `server/sv_rpc.lua` - zentraler, einziger Einstiegspunkt für alle
   NUI-Aktionen (`speditions-tablet:server:rpc`), inkl. serverseitiger
   Rollenprüfung pro Aktion.
+- `server/sv_bridge.lua` - Optionale Framework-Anbindung (ESX/QBCore) für
+  Bargeld bei Aus-/Einzahlung, inkl. ESX-Objekt für `ESX.RegisterUsableItem`.
 - `server/sv_bootstrap.lua` - Benutzername/Passwort-Login (Hashing, Session
   je Server-Slot), Ersteinrichtung, `tablet_grant`-Command.
 - `server/sv_finance.lua` - Transaktions-Ledger, Guthaben, Ein-/Auszahlungen.

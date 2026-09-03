@@ -14,6 +14,25 @@ Config.CompanyName = 'Baltic Freight Spedition GmbH'
 Config.OpenCommand = 'tablet'
 Config.OpenKey = 'F6' -- Keybind wird clientseitig via RegisterCommand + Keymapping gesetzt
 
+-- Wenn aktiviert, öffnet sich das Tablet NICHT mehr per Command/Keybind,
+-- sondern ausschließlich, wenn das konfigurierte Item benutzt wird
+-- (per ESX.RegisterUsableItem). Für andere Inventarsysteme (ox_inventory,
+-- qb-inventory, ...) lässt du dein eigenes Item-Skript beim Gebrauch selbst
+-- das Event 'speditions-tablet:server:openFromItem' (Ziel-Spieler als src)
+-- feuern.
+Config.RequireItem = {
+    enabled = true,
+    itemName = 'essence', -- Testwert - auf den echten Tablet-Item-Namen anpassen
+}
+
+-- Klingelton, der bei jedem nativen In-Game-Hinweis abgespielt wird (neue
+-- Nachricht, neuer Auftrag, Lenkzeit-Warnung, Disponenten-Erinnerung, ...).
+-- Name/Soundset müssen ein gültiges GTA-Frontend-Sound-Paar sein.
+Config.NotificationSound = {
+    name = 'Remote_Text_Tone',
+    set = 'Phone_SoundSet_Default',
+}
+
 -- =========================================================
 -- BOOTSTRAP / ERSTEINRICHTUNG
 -- =========================================================
@@ -168,6 +187,14 @@ Config.Currency = {
 }
 
 Config.DefaultPayoutTarget = 'Unternehmensbankkonto'
+
+-- Bei einer Auszahlung erhält die ausführende Geschäftsführung den Betrag
+-- als echtes Bargeld, bei einer Einzahlung wird ihr der Betrag symmetrisch
+-- als Bargeld abgezogen (verhindert Geldvermehrung). 'esx' und 'qbcore'
+-- binden automatisch an das jeweilige Framework an, 'custom' feuert nur
+-- die Events speditions-tablet:server:cashPayout/-cashDeposit, die du
+-- selbst in deinem eigenen Wirtschaftssystem abfangen kannst.
+Config.MoneyBridge = 'esx' -- 'esx' | 'qbcore' | 'custom'
 
 -- =========================================================
 -- LOGGING

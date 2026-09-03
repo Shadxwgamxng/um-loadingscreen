@@ -59,8 +59,22 @@ function Employees.Login(src, username, password)
     if not username or not password then error('invalid_credentials') end
 
     local emp = loadEmployeeByUsername(username)
+
+    if Config.Debug then
+        Utils.DebugPrint(('LOGIN-DEBUG username=%q password_len=%d gefunden=%s hash_vorhanden=%s'):format(
+            username, #password, tostring(emp ~= nil), tostring(emp and emp.password_hash ~= nil)
+        ))
+    end
+
     if not emp or not emp.password_hash then error('invalid_credentials') end
-    if Employees.HashPassword(password, emp.password_salt) ~= emp.password_hash then
+
+    local computedHash = Employees.HashPassword(password, emp.password_salt)
+    if Config.Debug then
+        Utils.DebugPrint(('LOGIN-DEBUG salt=%s berechneter_hash=%s gespeicherter_hash=%s stimmt_ueberein=%s'):format(
+            tostring(emp.password_salt), tostring(computedHash), tostring(emp.password_hash), tostring(computedHash == emp.password_hash)
+        ))
+    end
+    if computedHash ~= emp.password_hash then
         error('invalid_credentials')
     end
     if emp.status ~= 'aktiv' then
