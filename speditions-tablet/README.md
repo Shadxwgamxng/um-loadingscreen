@@ -15,67 +15,39 @@ verwaltet.
 
 1. Ressource nach `resources/[speditions]/speditions-tablet` kopieren.
 2. `sql/install.sql` in die Datenbank importieren (bei einer bereits
-   bestehenden Installation stattdessen der Reihe nach `sql/upgrade_v2.sql`
-   dann `sql/upgrade_v3.sql` ausführen, um Lenk-/Ruhezeiten, Gefahrgut,
-   das Login-System und Ein-/Auszahlungen nachzurüsten).
+   bestehenden Installation stattdessen der Reihe nach `sql/upgrade_v2.sql`,
+   `sql/upgrade_v3.sql` und `sql/upgrade_v4.sql` ausführen, um Lenk-/
+   Ruhezeiten, Gefahrgut, Ein-/Auszahlungen nachzurüsten und das
+   Login-System zu entfernen).
 3. In `server.cfg`:
    ```
    ensure oxmysql
    ensure speditions-tablet
    ```
-4. `config.lua` anpassen (siehe unten) - insbesondere `Config.CompanyName`,
-   `Config.Locations` und `Config.InitialAccounts`.
+4. `config.lua` anpassen (siehe unten) - insbesondere `Config.CompanyName`
+   und `Config.Locations`.
 5. Server starten.
 
-## Anmeldung (Login-System)
+## Mitarbeiter erkennen (kein Login-Bildschirm)
 
-Das Tablet hat ein **eigenes Benutzername/Passwort-Login**, unabhängig vom
-FiveM-Charakter - ein Mitarbeiter meldet sich aktiv am Tablet an (wie bei
-echter Unternehmenssoftware), statt automatisch über seine Spieler-ID/seinen
-Charakter erkannt zu werden. Das hat zwei praktische Vorteile: Mehrere
-Personen können sich am selben Terminal mit unterschiedlichen Konten
-anmelden, und die Geschäftsführung kann Konten für Personen anlegen, die
-gerade gar nicht online sind (Zugangsdaten werden z.B. per Discord
-weitergegeben).
+Das Tablet hat **keinen Login-Bildschirm**. Ein Mitarbeiter wird automatisch
+anhand seines FiveM-Charakters (license-Identifier) erkannt, sobald er das
+Tablet öffnet - hat sein Charakter noch kein Mitarbeiterkonto, zeigt das
+Tablet stattdessen einen Hinweis, dass die Geschäftsführung ihm eine Rolle
+zuweisen muss.
 
-**Erstes Konto (Ersteinrichtung):**
-`Config.InitialAccounts` in `config.lua` wird beim ersten Ressourcenstart
-automatisch angelegt, falls der Benutzername noch nicht existiert:
-```lua
-Config.InitialAccounts = {
-    { username = 'admin', password = 'ChangeMe123!', role = 'geschaeftsfuehrung', name = 'Administrator' },
-}
+**Erste Rolle vergeben (Ersteinrichtung):** Über die Server-Konsole, während
+die Zielperson online ist (auch nutzbar mit der Ace-Permission
+`speditions.admin`):
 ```
-**Wichtig:** Nach dem ersten Login unbedingt über den Schlüssel-Button oben
-im Tablet das Passwort ändern!
+tablet_grant [server-id] [fahrer|disponent|geschaeftsfuehrung] [Anzeigename...]
+```
+Legt das Mitarbeiterkonto für den Charakter dieses Spielers an oder
+aktualisiert dessen Rolle, falls bereits eines existiert.
 
-**Weitere Konten anlegen** - zwei Wege:
-- Über das Tablet: Geschäftsführung → Tab **Mitarbeiter** → "+ Mitarbeiter
-  einstellen" (Name, Benutzername, Passwort, Rolle - die Zielperson muss
-  dafür nicht online sein).
-- Über die Server-Konsole (auch nutzbar, um sich selbst auszusperren zu
-  vermeiden, oder mit der Ace-Permission `speditions.admin`):
-  ```
-  tablet_grant [benutzername] [passwort] [fahrer|disponent|geschaeftsfuehrung] [Anzeigename...]
-  ```
-  Legt das Konto an oder aktualisiert Rolle + Passwort, falls der
-  Benutzername schon existiert.
-
-**Sicherheitshinweis:** Passwörter werden serverseitig per `SHA2(passwort || salt, 256)`
-über MySQL gehasht (`server/sv_bootstrap.lua`) - es gibt keine
-Crypto-Bibliothek in reinem Lua/FiveM ohne Zusatzabhängigkeit. Das ist für
-den Spielkontext ausreichend, aber kein Enterprise-Auth-Standard (kein
-bcrypt/Argon2, keine Rate-Limits gegen Brute-Force). Vergib keine echten,
-wiederverwendeten Passwörter.
-
-**Login-Fehler debuggen:** Schlägt eine Anmeldung mit `invalid_credentials`
-fehl, obwohl du dir sicher bist, dass Benutzername/Passwort stimmen, setz
-kurzzeitig `Config.Debug = true` und versuch es erneut - die Server-Konsole
-zeigt dann Benutzername, Passwortlänge sowie berechneten und gespeicherten
-Hash zum direkten Vergleich. Danach `Config.Debug` wieder auf `false`
-setzen. `sql/cleanup_employees.sql` leert bei Bedarf die komplette
-Mitarbeitertabelle (z.B. um Test-/Doppelkonten loszuwerden), ohne
-Fahrzeuge/Aufträge/Finanzen anzufassen.
+**Weitere Mitarbeiter einstellen** - über das Tablet: Geschäftsführung →
+Tab **Mitarbeiter** → "+ Mitarbeiter einstellen" (die Zielperson muss dafür
+online sein, wird per Dropdown aus den aktuell online Spielern ausgewählt).
 
 ## Bedienung
 
@@ -189,7 +161,7 @@ Framework-Anbindung in diesem Standalone-Setup).
 Siehe `sql/install.sql`. Wichtigste Tabellen:
 
 ```
-st_employees            Mitarbeiterstammdaten (Rolle, Status, username/password_hash fürs Login)
+st_employees            Mitarbeiterstammdaten (Rolle, Status, FiveM-Charakter-Identifier)
 st_drivers              Fahrer-Zusatzdaten (Status, Notizen, Fahrzeugzuweisung)
 st_driver_permissions   Führerscheinklassen / Sonderberechtigungen
 st_driver_statistics    Aggregierte Fahrerstatistik (aus st_orders berechnet)
@@ -221,7 +193,7 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `Config.AverageSpeedKmh`, `Config.DeadlineBufferMinutes` - Grundlage der
   Pünktlichkeitsberechnung
 - `Config.DrivingRules` - Lenk-/Ruhezeiten-Grenzwerte und Heartbeat-Intervall
-- `Config.InitialAccounts`, `Config.AdminAcePermission` - Login-Ersteinrichtung
+- `Config.AdminAcePermission` - berechtigt zusätzlich zur Server-Konsole zum Vergeben von Mitarbeiterrollen (`tablet_grant`)
 - `Config.RequireItem` - Tablet nur per Item öffnen
 - `Config.MoneyBridge` - Framework-Anbindung für Bargeld bei Aus-/Einzahlung
 - `Config.NotificationSound` - Klingelton bei nativen In-Game-Hinweisen
@@ -233,15 +205,15 @@ Alle Stellschrauben befinden sich in `config.lua`:
   Rollenprüfung pro Aktion.
 - `server/sv_bridge.lua` - Optionale Framework-Anbindung (ESX/QBCore) für
   Bargeld bei Aus-/Einzahlung, inkl. ESX-Objekt für `ESX.RegisterUsableItem`.
-- `server/sv_bootstrap.lua` - Benutzername/Passwort-Login (Hashing, Session
-  je Server-Slot), Ersteinrichtung, `tablet_grant`-Command.
+- `server/sv_bootstrap.lua` - automatische Mitarbeitererkennung anhand des
+  FiveM-Charakters (Session je Server-Slot), `tablet_grant`-Command.
 - `server/sv_finance.lua` - Transaktions-Ledger, Guthaben, Ein-/Auszahlungen.
 - `server/sv_vehicles.lua` - Fuhrparkverwaltung.
 - `server/sv_drivers.lua` - Fahrerkarte, Fahrerakte, Statistik.
 - `server/sv_hours.lua` - Lenk-/Ruhezeiten-Tracking, Warnungen, Erinnerungen.
 - `server/sv_orders.lua` - Auftragsgenerierung & -lebenszyklus, Gefahrgut-Prüfung,
   Auto-Wegpunkte.
-- `server/sv_employees.lua` - Mitarbeiterverwaltung, Passwort setzen/ändern.
+- `server/sv_employees.lua` - Mitarbeiterverwaltung (Einstellen, Rolle/Status ändern).
 - `server/sv_notifications.lua` - Nachrichten Disponent/Fahrer.
 - `client/cl_main.lua` - NUI-Steuerung, RPC-Relay (`ServerCall` auch für
   andere Client-Skripte nutzbar) sowie native In-Game-Hinweise/Wegpunkte sind hier verdrahtet.

@@ -34,11 +34,9 @@ function nuiPost(name, payload) {
 }
 
 const ERROR_MESSAGES = {
-    not_logged_in: 'Du bist nicht angemeldet.',
-    invalid_credentials: 'Benutzername oder Passwort ist falsch.',
-    username_taken: 'Dieser Benutzername ist bereits vergeben.',
-    password_too_short: 'Das Passwort muss mindestens 4 Zeichen lang sein.',
-    wrong_password: 'Das aktuelle Passwort ist falsch.',
+    not_logged_in: 'Dein Charakter hat kein Mitarbeiterkonto.',
+    player_not_online: 'Dieser Spieler ist nicht online.',
+    employee_already_exists: 'Dieser Charakter hat bereits ein Mitarbeiterkonto.',
     insufficient_player_cash: 'Du hast nicht genug Bargeld dabei, um diesen Betrag einzuzahlen.',
     employee_inactive: 'Dieses Mitarbeiterkonto ist deaktiviert.',
     forbidden_role: 'Keine Berechtigung für diese Aktion.',
@@ -288,26 +286,36 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') requestClose();
 });
 
-document.getElementById('close-btn').addEventListener('click', () => requestClose());
 document.getElementById('lock-screen').addEventListener('click', () => unlockTablet());
+document.getElementById('no-account-retry').addEventListener('click', () => unlockTablet());
 
 function requestClose() {
     nuiPost('close', {});
 }
 
+async function closeTabletWithVehicleCheck() {
+    if (State.role === 'fahrer') {
+        const res = await rpc('driver:vehicle');
+        if (res && res.ok && res.result && res.result.vehicle) {
+            openVehicleConditionModal(res.result.vehicle);
+            return;
+        }
+    }
+    requestClose();
+}
+
+document.getElementById('close-btn').addEventListener('click', () => closeTabletWithVehicleCheck());
+
 function hideAllScreens() {
     document.getElementById('lock-screen').classList.add('hidden');
     document.getElementById('boot-screen').classList.add('hidden');
-    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('no-account-screen').classList.add('hidden');
     document.getElementById('main-ui').classList.add('hidden');
 }
 
-function showLogin() {
+function showNoAccount() {
     hideAllScreens();
-    document.getElementById('login-screen').classList.remove('hidden');
-    document.getElementById('login-username').value = '';
-    document.getElementById('login-password').value = '';
-    setTimeout(() => document.getElementById('login-username').focus(), 50);
+    document.getElementById('no-account-screen').classList.remove('hidden');
 }
 
 function handleOpen(companyName) {
@@ -338,62 +346,12 @@ async function unlockTablet() {
         State.config = data;
         boot(data);
     } else {
-        showLogin();
+        showNoAccount();
     }
-}
-
-async function submitLogin() {
-    const username = document.getElementById('login-username').value.trim();
-    const password = document.getElementById('login-password').value;
-    if (!username || !password) {
-        toast('Fehler', 'Bitte Benutzername und Passwort eingeben.', 'error');
-        return;
-    }
-
-    // TEMPORÄRES DEBUGGING - siehe Chat: zeigt Schritt für Schritt als Toast an,
-    // wo der Login-Ablauf ggf. hängen bleibt / einen JS-Fehler wirft.
-    try {
-        toast('Debug 1/4', 'Sende Login-Anfrage an den Server...', 'info');
-
-        const btn = document.getElementById('login-submit');
-        btn.disabled = true;
-        const res = await rpc('session:login', { username, password });
-        btn.disabled = false;
-
-        toast('Debug 2/4', 'Antwort erhalten: ' + JSON.stringify(res).slice(0, 220), 'info');
-
-        if (!res || !res.ok) {
-            toast('Anmeldung fehlgeschlagen', translateError(res && res.error), 'error');
-            return;
-        }
-
-        const data = res.result;
-        State.employee = data.employee;
-        State.role = data.employee.role;
-        State.config = data;
-
-        toast('Debug 3/4', 'Login ok, wechsle zur Oberfläche...', 'info');
-        hideAllScreens();
-        document.getElementById('boot-screen').classList.remove('hidden');
-        boot(data);
-        toast('Debug 4/4', 'boot() abgeschlossen.', 'success');
-    } catch (e) {
-        toast('JS-FEHLER beim Login', String((e && e.stack) || e), 'error');
-    }
-}
-
-document.getElementById('login-submit').addEventListener('click', submitLogin);
-document.getElementById('login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitLogin(); });
-document.getElementById('login-username').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('login-password').focus(); });
-
-async function performLogout() {
-    await rpc('session:logout');
-    toast('Abgemeldet', '', 'info');
-    showLogin();
 }
 
 function openVehicleConditionModal(vehicle) {
-    openModal('Fahrzeugzustand melden', `${escapeHtml(vehicle.name)} (${escapeHtml(vehicle.plate)}) - Pflichtangabe vor der Abmeldung`, `
+    openModal('Fahrzeugzustand melden', `${escapeHtml(vehicle.name)} (${escapeHtml(vehicle.plate)}) - Pflichtangabe vor dem Schließen des Tablets`, `
         <label>Tankstand (%)</label>
         <input id="condition-fuel" type="number" min="0" max="100" value="${vehicle.fuel}" />
         <label>Mängel / Besonderheiten</label>
@@ -404,32 +362,9 @@ function openVehicleConditionModal(vehicle) {
         </label>
     `, `
         <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
-        <button class="btn btn-primary" onclick="Actions.submitVehicleConditionAndLogout()">Melden &amp; abmelden</button>
+        <button class="btn btn-primary" onclick="Actions.submitVehicleConditionAndClose()">Melden &amp; schließen</button>
     `);
 }
-
-document.getElementById('logout-btn').addEventListener('click', async () => {
-    if (State.role === 'fahrer') {
-        const res = await rpc('driver:vehicle');
-        if (res && res.ok && res.result && res.result.vehicle) {
-            openVehicleConditionModal(res.result.vehicle);
-            return;
-        }
-    }
-    await performLogout();
-});
-
-document.getElementById('account-btn').addEventListener('click', () => {
-    openModal('Passwort ändern', State.employee ? State.employee.name : '', `
-        <label>Aktuelles Passwort</label>
-        <input id="account-old-password" type="password" autocomplete="off" />
-        <label>Neues Passwort</label>
-        <input id="account-new-password" type="password" autocomplete="off" />
-    `, `
-        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
-        <button class="btn btn-primary" onclick="Actions.confirmChangePassword()">Speichern</button>
-    `);
-});
 
 function handleClose() {
     document.getElementById('app').classList.add('hidden');
@@ -835,7 +770,6 @@ VIEWS['gf-employees'] = async (root) => {
     const rows = d.employees.map((e) => `<tr>
         <td>#${e.id}</td>
         <td>${escapeHtml(e.name)}</td>
-        <td>${escapeHtml(e.username || '-')}</td>
         <td>
             <select onchange="Actions.changeRole(${e.id}, this.value)">
                 <option value="fahrer" ${e.role === 'fahrer' ? 'selected' : ''}>LKW-Fahrer</option>
@@ -846,16 +780,15 @@ VIEWS['gf-employees'] = async (root) => {
         <td>${badge(EMPLOYMENT_STATUS_META[e.status])}</td>
         <td>${formatDate(e.hired_at)}</td>
         <td class="btn-row">
-            <button class="btn btn-sm" onclick="Actions.openResetPasswordModal(${e.id}, ${JSON.stringify(e.name)})">Passwort</button>
             <button class="btn btn-sm ${e.status === 'aktiv' ? 'btn-danger' : 'btn-primary'}" onclick="Actions.toggleEmployeeStatus(${e.id}, '${e.status === 'aktiv' ? 'inaktiv' : 'aktiv'}')">${e.status === 'aktiv' ? 'Deaktivieren' : 'Aktivieren'}</button>
         </td>
     </tr>`);
 
     root.innerHTML = `
         <h1 class="view-title">Mitarbeiter</h1>
-        <p class="view-subtitle">Verwaltung aller Mitarbeiter, Rollen und Grade.</p>
+        <p class="view-subtitle">Verwaltung aller Mitarbeiter, Rollen und Grade. Mitarbeiter werden automatisch anhand ihres FiveM-Charakters erkannt.</p>
         <div class="btn-row" style="margin-bottom:14px;"><button class="btn btn-primary" onclick="Actions.openHireModal()">+ Mitarbeiter einstellen</button></div>
-        <div class="section">${table(['#', 'Name', 'Benutzername', 'Rolle', 'Status', 'Eingestellt', ''], rows)}</div>`;
+        <div class="section">${table(['#', 'Name', 'Rolle', 'Status', 'Eingestellt', ''], rows)}</div>`;
 };
 
 VIEWS['gf-drivers'] = async (root) => {
@@ -1047,22 +980,13 @@ VIEWS['gf-log'] = async (root) => {
 
 const Actions = {};
 
-Actions.submitVehicleConditionAndLogout = async () => {
+Actions.submitVehicleConditionAndClose = async () => {
     const fuel = Number(document.getElementById('condition-fuel').value);
     const notes = document.getElementById('condition-notes').value.trim();
     const needsWorkshop = document.getElementById('condition-workshop').checked;
     await call('driver:reportVehicleCondition', { fuel, notes, needsWorkshop });
     closeModal();
-    await performLogout();
-};
-
-Actions.confirmChangePassword = async () => {
-    const oldPassword = document.getElementById('account-old-password').value;
-    const newPassword = document.getElementById('account-new-password').value;
-    if (!oldPassword || !newPassword) { toast('Fehler', 'Bitte beide Felder ausfüllen.', 'error'); return; }
-    await call('me:changePassword', { oldPassword, newPassword });
-    closeModal();
-    toast('Passwort geändert', '', 'success');
+    requestClose();
 };
 
 Actions.setDriverStatus = async () => {
@@ -1193,14 +1117,17 @@ Actions.confirmCancelOrder = async (orderId) => {
     showView('dispatch-active');
 };
 
-Actions.openHireModal = () => {
-    openModal('Mitarbeiter einstellen', 'Legt ein neues Tablet-Konto mit Zugangsdaten an - die Person muss dafür nicht online sein.', `
+Actions.openHireModal = async () => {
+    const d = await call('gf:employees:onlinePlayers');
+    const options = d.players.length
+        ? d.players.map((p) => `<option value="${p.serverId}">${escapeHtml(p.name)} (ID ${p.serverId})</option>`).join('')
+        : '<option value="">Kein online Spieler ohne Mitarbeiterkonto gefunden</option>';
+
+    openModal('Mitarbeiter einstellen', 'Legt für einen gerade online Spieler ein Mitarbeiterkonto an - dessen FiveM-Charakter wird automatisch erkannt.', `
+        <label>Spieler</label>
+        <select id="hire-target">${options}</select>
         <label>Name</label>
         <input id="hire-name" type="text" />
-        <label>Benutzername</label>
-        <input id="hire-username" type="text" autocomplete="off" />
-        <label>Passwort</label>
-        <input id="hire-password" type="text" autocomplete="off" />
         <label>Rolle</label>
         <select id="hire-role">
             <option value="fahrer">LKW-Fahrer</option>
@@ -1213,32 +1140,14 @@ Actions.openHireModal = () => {
     `);
 };
 Actions.confirmHire = async () => {
+    const targetId = Number(modalInputValue('hire-target'));
     const name = modalInputValue('hire-name').trim();
-    const username = modalInputValue('hire-username').trim();
-    const password = modalInputValue('hire-password');
     const role = modalInputValue('hire-role');
-    if (!name || !username || !password) { toast('Fehler', 'Bitte alle Felder ausfüllen.', 'error'); return; }
-    await call('gf:employees:hire', { name, username, password, role });
+    if (!targetId || !name) { toast('Fehler', 'Bitte Spieler und Name auswählen.', 'error'); return; }
+    await call('gf:employees:hire', { targetId, name, role });
     closeModal();
-    toast('Mitarbeiter eingestellt', `Zugangsdaten: ${username} / ${password}`, 'success');
+    toast('Mitarbeiter eingestellt', '', 'success');
     showView('gf-employees');
-};
-
-Actions.openResetPasswordModal = (employeeId, name) => {
-    openModal('Passwort zurücksetzen', name, `
-        <label>Neues Passwort</label>
-        <input id="reset-password" type="text" autocomplete="off" />
-    `, `
-        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
-        <button class="btn btn-primary" onclick="Actions.confirmResetPassword(${employeeId})">Zurücksetzen</button>
-    `);
-};
-Actions.confirmResetPassword = async (employeeId) => {
-    const newPassword = modalInputValue('reset-password');
-    if (!newPassword) return;
-    await call('gf:employees:resetPassword', { employeeId, newPassword });
-    closeModal();
-    toast('Passwort zurückgesetzt', `Neues Passwort: ${newPassword}`, 'success');
 };
 
 Actions.changeRole = async (employeeId, role) => {

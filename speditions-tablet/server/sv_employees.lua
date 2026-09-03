@@ -1,13 +1,15 @@
 -- =========================================================
--- Mitarbeiterverwaltung (nur Geschäftsführung) + Passwort-Selbstverwaltung
+-- Mitarbeiterverwaltung (nur Geschäftsführung)
 -- Ergänzt das globale `Employees`-Modul aus sv_bootstrap.lua.
+-- Kein Login mehr: ein Mitarbeiter wird immer anhand des FiveM-Charakters
+-- eines gerade ONLINEN Spielers angelegt (Utils.GetIdentifier).
 -- =========================================================
 
 local VALID_ROLES = { 'fahrer', 'disponent', 'geschaeftsfuehrung' }
 
 function Employees.List()
     return MySQL.query.await([[
-        SELECT e.id, e.username, e.name, e.role, e.status, e.hired_at,
+        SELECT e.id, e.name, e.role, e.status, e.hired_at,
                d.id AS driver_id, d.current_status AS driver_current_status
         FROM st_employees e
         LEFT JOIN st_drivers d ON d.employee_id = e.id
@@ -23,35 +25,36 @@ local function countActiveGf(excludeId)
     return row and tonumber(row.c) or 0
 end
 
---- Legt ein neues Mitarbeiterkonto mit Zugangsdaten an. Die Zielperson muss
---- dafür NICHT online sein - Zugangsdaten werden außerhalb des Spiels
---- weitergegeben (Discord, TeamSpeak, ...).
+--- Legt ein neues Mitarbeiterkonto für einen gerade ONLINEN Spieler an -
+--- die Zuordnung läuft über dessen FiveM-Charakter (Utils.GetIdentifier),
+--- kein Benutzername/Passwort mehr nötig.
 function Employees.Hire(src, data)
     local emp = Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
 
-    local username = Utils.SanitizeString(data.username, 50)
-    local password = Utils.SanitizeString(data.password, 100)
+    local targetId = Utils.SanitizeNumber(data.targetId, 1)
     local name = Utils.SanitizeString(data.name, 100)
     local role = data.role
 
-    if not username or not password or not name then error('missing_fields') end
-    if #password < 4 then error('password_too_short') end
+    if not targetId or not name then error('missing_fields') end
     if not Utils.InTable(VALID_ROLES, role) then error('invalid_role') end
+    if not GetPlayerName(targetId) then error('player_not_online') end
 
-    local existing = MySQL.single.await('SELECT id FROM st_employees WHERE username = ? LIMIT 1', { username })
-    if existing then error('username_taken') end
+    local identifier = Utils.GetIdentifier(targetId)
+    if not identifier then error('player_not_online') end
+
+    local existing = MySQL.single.await('SELECT id FROM st_employees WHERE identifier = ? LIMIT 1', { identifier })
+    if existing then error('employee_already_exists') end
 
     local employeeId = MySQL.insert.await(
-        'INSERT INTO st_employees (username, name, role, status) VALUES (?, ?, ?, ?)',
-        { username, name, role, 'aktiv' }
+        'INSERT INTO st_employees (identifier, name, role, status) VALUES (?, ?, ?, ?)',
+        { identifier, name, role, 'aktiv' }
     )
-    Employees.SetPassword(employeeId, password)
 
     if role == Config.Roles.FAHRER then
         Drivers.EnsureDriverRecord(employeeId)
     end
 
-    Logs.Write(emp.id, 'employee_hired', ('%s hat %s (Benutzername "%s") als "%s" eingestellt.'):format(emp.name, name, username, role))
+    Logs.Write(emp.id, 'employee_hired', ('%s hat %s als "%s" eingestellt.'):format(emp.name, name, role))
 
     return { employeeId = employeeId }
 end
@@ -97,37 +100,6 @@ function Employees.SetStatus(src, employeeId, status)
     return { ok = true }
 end
 
---- Geschäftsführung setzt das Passwort eines Mitarbeiters neu (z.B. vergessen).
-function Employees.ResetPassword(src, employeeId, newPassword)
-    local emp = Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
-    newPassword = Utils.SanitizeString(newPassword, 100)
-    if not newPassword or #newPassword < 4 then error('password_too_short') end
-
-    local target = MySQL.single.await('SELECT * FROM st_employees WHERE id = ?', { employeeId })
-    if not target then error('employee_not_found') end
-
-    Employees.SetPassword(employeeId, newPassword)
-    Employees.RefreshLoginById(employeeId)
-    Logs.Write(emp.id, 'password_reset', ('%s hat das Passwort von %s zurückgesetzt.'):format(emp.name, target.name))
-
-    return { ok = true }
-end
-
---- Selbstständige Passwortänderung durch den angemeldeten Mitarbeiter selbst.
-function Employees.ChangeOwnPassword(src, oldPassword, newPassword)
-    local emp = Employees.RequireRole(src)
-    oldPassword = Utils.SanitizeString(oldPassword, 100)
-    newPassword = Utils.SanitizeString(newPassword, 100)
-    if not oldPassword or not newPassword then error('missing_fields') end
-    if #newPassword < 4 then error('password_too_short') end
-    if not Employees.VerifyPassword(emp.id, oldPassword) then error('wrong_password') end
-
-    Employees.SetPassword(emp.id, newPassword)
-    Logs.Write(emp.id, 'password_change', ('%s hat sein Passwort geändert.'):format(emp.name))
-
-    return { ok = true }
-end
-
 -- =========================================================
 -- RPC-Handler
 -- =========================================================
@@ -135,6 +107,28 @@ end
 RPC.Register('gf:employees:list', function(src)
     Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
     return { employees = Employees.List() }
+end)
+
+--- Liste aller aktuell online Spieler (Server-ID + Name), die noch KEIN
+--- Mitarbeiterkonto haben - für das "Mitarbeiter einstellen"-Formular.
+RPC.Register('gf:employees:onlinePlayers', function(src)
+    Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+
+    local hired = {}
+    for _, row in ipairs(MySQL.query.await('SELECT identifier FROM st_employees WHERE identifier IS NOT NULL')) do
+        hired[row.identifier] = true
+    end
+
+    local players = {}
+    for _, playerId in ipairs(GetPlayers()) do
+        local id = tonumber(playerId)
+        local identifier = Utils.GetIdentifier(id)
+        if identifier and not hired[identifier] then
+            players[#players + 1] = { serverId = id, name = GetPlayerName(id) }
+        end
+    end
+
+    return { players = players }
 end)
 
 RPC.Register('gf:employees:hire', function(src, payload)
@@ -153,12 +147,3 @@ RPC.Register('gf:employees:setStatus', function(src, payload)
     return Employees.SetStatus(src, employeeId, payload.status)
 end)
 
-RPC.Register('gf:employees:resetPassword', function(src, payload)
-    local employeeId = Utils.SanitizeNumber(payload.employeeId, 1)
-    if not employeeId then error('invalid_payload') end
-    return Employees.ResetPassword(src, employeeId, payload.newPassword)
-end)
-
-RPC.Register('me:changePassword', function(src, payload)
-    return Employees.ChangeOwnPassword(src, payload.oldPassword, payload.newPassword)
-end)

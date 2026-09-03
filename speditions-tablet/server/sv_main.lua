@@ -5,25 +5,12 @@
 math.randomseed(os.time())
 
 --- Reiner Statusabfrage-Endpunkt ohne Seiteneffekte: meldet, ob dieser
---- Server-Slot gerade am Tablet angemeldet ist. Wird sowohl von der NUI
---- (Login-Bildschirm ja/nein) als auch von client/cl_hours.lua im
+--- Server-Slot (anhand seines FiveM-Charakters) einem Mitarbeiterkonto
+--- zugeordnet werden kann. Kein Login-Bildschirm - wird sowohl von der NUI
+--- beim Entsperren des Tablets als auch von client/cl_hours.lua im
 --- Hintergrund abgefragt.
 RPC.Register('session:whoami', function(src)
-    local emp = Employees.GetLoggedIn(src)
-
-    -- TEMPORÄR (nur zum Testen): Login-System übersprungen, siehe Chat
-    -- und Employees.DebugAutoLogin in server/sv_bootstrap.lua.
-    -- Der print läuft IMMER (nicht nur bei Config.Debug), damit im Konsolen-
-    -- Log eindeutig sichtbar ist, ob diese neue Code-Version überhaupt läuft.
-    if not emp then
-        local ok, result = pcall(Employees.DebugAutoLogin, src)
-        if ok then
-            emp = result
-            print(('^3[speditions-tablet]^7 WHOAMI-DEBUG: DebugAutoLogin fuer Slot %s ergab %s'):format(src, emp and ('"'..emp.name..'" ('..emp.role..')') or 'NICHTS (kein aktiver Mitarbeiter in der DB gefunden)'))
-        else
-            print(('^1[speditions-tablet]^7 WHOAMI-DEBUG: DebugAutoLogin fuer Slot %s ist mit einem Fehler abgestuerzt: %s'):format(src, tostring(result)))
-        end
-    end
+    local emp = Employees.EnsureSession(src)
 
     if not emp then
         return { ok = true, loggedIn = false }
@@ -38,22 +25,6 @@ RPC.Register('session:whoami', function(src)
         vehicleClasses = Config.VehicleClasses,
         vehicleStatuses = Config.VehicleStatus,
     }
-end)
-
---- Meldet den Spieler mit Benutzername/Passwort am Tablet an. Erfolg/Misserfolg
---- wird ausschließlich serverseitig anhand der Datenbank entschieden.
-RPC.Register('session:login', function(src, payload)
-    local result = Employees.Login(src, payload.username, payload.password)
-    local emp = Employees.GetLoggedIn(src)
-    if emp and emp.role == Config.Roles.FAHRER then
-        Drivers.EnsureDriverRecord(emp.id)
-    end
-    return result
-end)
-
-RPC.Register('session:logout', function(src)
-    Employees.Logout(src)
-    return { ok = true }
 end)
 
 local function countRows(query, params)

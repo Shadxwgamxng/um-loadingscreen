@@ -4,12 +4,9 @@
 
 CREATE TABLE IF NOT EXISTS `st_employees` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    -- Zuletzt bekannter FiveM-Charakter, nur informativ/für das Protokoll -
-    -- die Anmeldung selbst läuft über username/password_hash, NICHT hierüber.
-    `identifier` VARCHAR(64) NULL,
-    `username` VARCHAR(50) NULL,
-    `password_hash` VARCHAR(64) NULL,
-    `password_salt` VARCHAR(32) NULL,
+    -- FiveM-Charakter (license), über den dieser Mitarbeiter automatisch
+    -- erkannt wird - kein Login-Bildschirm, kein Benutzername/Passwort.
+    `identifier` VARCHAR(64) NOT NULL,
     `name` VARCHAR(100) NOT NULL,
     `role` ENUM('fahrer','disponent','geschaeftsfuehrung') NOT NULL DEFAULT 'fahrer',
     `status` ENUM('aktiv','inaktiv') NOT NULL DEFAULT 'aktiv',
@@ -17,7 +14,7 @@ CREATE TABLE IF NOT EXISTS `st_employees` (
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uq_username` (`username`)
+    UNIQUE KEY `uq_identifier` (`identifier`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `st_drivers` (

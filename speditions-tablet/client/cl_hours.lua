@@ -2,9 +2,8 @@
 -- Client: Lenk-/Ruhezeiten-Tracker
 --
 -- Läuft unabhängig davon, ob das Tablet gerade GEÖFFNET ist - erfordert aber,
--- dass sich der Spieler in dieser Verbindung mindestens einmal am Tablet
--- ANGEMELDET hat (Benutzername/Passwort), da die Rolle erst dadurch bekannt
--- ist. Ein Fahrer "fährt" im Sinne des Systems, solange er auf dem
+-- dass der Spieler-Charakter einem Mitarbeiterkonto zugeordnet ist, da die
+-- Rolle erst dadurch bekannt ist. Ein Fahrer "fährt" im Sinne des Systems, solange er auf dem
 -- Fahrersitz eines Fahrzeugs sitzt, dessen Kennzeichen mit dem in der
 -- Spedition zugewiesenen Firmenfahrzeug übereinstimmt (SetVehicleNumberPlateText
 -- muss vom jeweiligen Fahrzeug-/Garagen-Skript entsprechend gesetzt werden).

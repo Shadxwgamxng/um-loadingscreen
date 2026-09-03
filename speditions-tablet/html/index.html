@@ -38,15 +38,11 @@
                     <div class="boot-spinner"></div>
                 </div>
 
-                <div id="login-screen" class="login-screen hidden">
+                <div id="no-account-screen" class="login-screen hidden">
                     <div class="login-box">
-                        <div class="login-title">Anmeldung</div>
-                        <div class="login-subtitle">Melde dich mit deinem Mitarbeiterkonto an.</div>
-                        <label>Benutzername</label>
-                        <input id="login-username" type="text" autocomplete="off" spellcheck="false" />
-                        <label>Passwort</label>
-                        <input id="login-password" type="password" autocomplete="off" />
-                        <button id="login-submit" class="btn btn-primary" style="width:100%;margin-top:16px;">Anmelden</button>
+                        <div class="login-title">Kein Mitarbeiterkonto</div>
+                        <div class="login-subtitle">Dein Charakter ist noch keinem Mitarbeiterkonto zugeordnet. Wende dich an die Geschäftsführung, damit dir eine Rolle zugewiesen wird.</div>
+                        <button id="no-account-retry" class="btn btn-primary" style="width:100%;margin-top:16px;">Erneut versuchen</button>
                     </div>
                 </div>
 
@@ -62,8 +58,6 @@
                                 <span id="employee-role" class="role-badge"></span>
                             </div>
                             <div id="clock" class="clock"></div>
-                            <button id="account-btn" class="close-btn" title="Passwort ändern">&#128273;</button>
-                            <button id="logout-btn" class="close-btn" title="Abmelden">&#8666;</button>
                             <button id="close-btn" class="close-btn" title="Schließen">&#10005;</button>
                         </div>
                     </header>
@@ -80,10 +74,6 @@
 
     <div id="toast-stack" class="toast-stack"></div>
     <div id="modal-root" class="modal-root hidden"></div>
-
-    <!-- TEMPORÄRER VERSIONS-STEMPEL zum Cache-Debugging - siehe Chat.
-         Steht IMMER sichtbar unten rechts, unabhängig vom Tablet-Zustand. -->
-    <div id="debug-build-badge" style="position:fixed;bottom:6px;right:6px;z-index:99999;background:#000;color:#39ff6a;font-family:monospace;font-size:12px;padding:4px 8px;border-radius:4px;opacity:0.9;pointer-events:none;">BUILD-DBG-A8</div>
 
     <script src="js/app.js"></script>
 </body>

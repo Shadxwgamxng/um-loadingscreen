@@ -36,17 +36,14 @@ Config.NotificationSound = {
 -- =========================================================
 -- BOOTSTRAP / ERSTEINRICHTUNG
 -- =========================================================
--- Das Tablet hat ein eigenes Benutzername/Passwort-Login (unabhängig vom
--- FiveM-Charakter). Diese Konten werden beim ersten Ressourcenstart
--- automatisch angelegt, falls der Benutzername noch nicht existiert -
--- so ist eine Ersteinrichtung ohne Datenbankzugriff möglich.
--- WICHTIG: Passwort nach dem ersten Login über "Passwort ändern" ändern!
-Config.InitialAccounts = {
-    { username = 'admin', password = 'ChangeMe123!', role = 'geschaeftsfuehrung', name = 'Administrator' },
-}
+-- Kein Login-Bildschirm: ein Mitarbeiter wird automatisch anhand seines
+-- FiveM-Charakters (license) erkannt, sobald er das Tablet öffnet. Die
+-- allererste Rolle (z.B. Geschäftsführung) vergibt ein Server-Admin über
+-- die Konsole, während die Zielperson online ist:
+--   tablet_grant [server-id] [fahrer|disponent|geschaeftsfuehrung] [Anzeigename...]
 
 -- Ace-Permission, die zusätzlich zur Server-Konsole berechtigt, per Command
--- Mitarbeiterkonten anzulegen/zurückzusetzen (/tablet_grant).
+-- Mitarbeiterrollen zu vergeben (/tablet_grant).
 Config.AdminAcePermission = 'speditions.admin'
 
 -- =========================================================
