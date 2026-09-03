@@ -1,3 +1,6 @@
+/* BUILD-DBG-A8 - temporärer Marker zum Cache-Debugging, siehe Chat. */
+#debug-build-badge::after { content: " (CSS ok)"; }
+
 :root {
     --bg-0: #0b1220;
     --bg-1: #0f172a;
