@@ -68,9 +68,17 @@ function Employees.Login(src, username, password)
     end
 
     -- Zuletzt bekannten Charakter nur informativ mitschreiben (kein Auth-Faktor).
+    -- In einem pcall, damit ein Problem mit diesem rein informativen Feld
+    -- (z.B. eine noch nicht bereinigte alte Unique-Sperre) niemals den
+    -- eigentlichen Login blockiert.
     local identifier = Utils.GetIdentifier(src)
     if identifier then
-        MySQL.update.await('UPDATE st_employees SET identifier = ? WHERE id = ?', { identifier, emp.id })
+        local ok = pcall(function()
+            MySQL.update.await('UPDATE st_employees SET identifier = ? WHERE id = ?', { identifier, emp.id })
+        end)
+        if not ok then
+            Utils.DebugPrint(('Konnte identifier fuer Mitarbeiter #%s nicht aktualisieren (nicht kritisch).'):format(emp.id))
+        end
         emp.identifier = identifier
     end
 

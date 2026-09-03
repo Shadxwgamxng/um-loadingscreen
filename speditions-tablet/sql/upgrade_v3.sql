@@ -13,6 +13,14 @@
 --   tablet_grant [benutzername] [passwort] [fahrer|disponent|geschaeftsfuehrung] [Anzeigename]
 -- =========================================================
 
+-- `identifier` ist jetzt nur noch ein informatives "zuletzt genutzter
+-- Charakter"-Feld (siehe Employees.Login in sv_bootstrap.lua) und darf daher
+-- NICHT mehr eindeutig sein - mehrere Konten können vom selben Charakter aus
+-- benutzt werden. Die alte uq_identifier-Sperre aus install.sql muss weg,
+-- sonst schlägt der Login mit "Duplicate entry ... for key 'uq_identifier'" fehl.
+ALTER TABLE `st_employees`
+    DROP INDEX `uq_identifier`;
+
 ALTER TABLE `st_employees`
     MODIFY COLUMN `identifier` VARCHAR(64) NULL,
     ADD COLUMN `username` VARCHAR(50) NULL AFTER `identifier`,
