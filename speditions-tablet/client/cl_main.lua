@@ -1,0 +1,67 @@
+-- =========================================================
+-- Client: NUI-Steuerung & RPC-Relay
+-- =========================================================
+
+local tabletOpen = false
+local pendingRpc = {}
+local rpcCounter = 0
+
+local function openTablet()
+    if tabletOpen then return end
+    tabletOpen = true
+    SetNuiFocus(true, true)
+    SendNUIMessage({ type = 'open' })
+end
+
+local function closeTablet()
+    if not tabletOpen then return end
+    tabletOpen = false
+    SetNuiFocus(false, false)
+    SendNUIMessage({ type = 'close' })
+end
+
+RegisterCommand(Config.OpenCommand, function()
+    if tabletOpen then
+        closeTablet()
+    else
+        openTablet()
+    end
+end, false)
+
+RegisterKeyMapping(Config.OpenCommand, 'Speditions-Tablet öffnen/schließen', 'keyboard', Config.OpenKey or 'F6')
+
+exports('OpenTablet', openTablet)
+exports('CloseTablet', closeTablet)
+exports('IsTabletOpen', function() return tabletOpen end)
+
+-- ---------------------------------------------------------
+-- NUI <-> Server RPC-Relay
+-- Die NUI ruft ausschließlich den generischen 'rpc'-Callback auf,
+-- der Client leitet die Anfrage 1:1 an den Server weiter und
+-- routet die Antwort über die reqId wieder zurück an die NUI.
+-- ---------------------------------------------------------
+
+RegisterNUICallback('rpc', function(data, cb)
+    rpcCounter = rpcCounter + 1
+    local reqId = rpcCounter
+    pendingRpc[reqId] = cb
+    TriggerServerEvent('speditions-tablet:server:rpc', data.action, data.payload, reqId)
+end)
+
+RegisterNetEvent('speditions-tablet:client:rpcResponse', function(reqId, response)
+    local cb = pendingRpc[reqId]
+    if cb then
+        cb(response)
+        pendingRpc[reqId] = nil
+    end
+end)
+
+RegisterNetEvent('speditions-tablet:client:push', function(event, data)
+    if not tabletOpen then return end
+    SendNUIMessage({ type = 'push', event = event, data = data })
+end)
+
+RegisterNUICallback('close', function(_, cb)
+    closeTablet()
+    cb('ok')
+end)
