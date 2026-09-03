@@ -33,9 +33,22 @@ function Employees.EnsureSession(src)
     if cached then return cached end
 
     local identifier = Utils.GetIdentifier(src)
+
+    -- TEMPORÄR: läuft immer (nicht nur bei Config.Debug), damit im
+    -- Konsolen-Log eindeutig sichtbar ist, welcher Identifier für den
+    -- Server-Slot ermittelt wird und ob dazu ein Mitarbeiter gefunden wird.
+    -- Siehe Chat - wieder entfernen, sobald die Mitarbeitererkennung
+    -- bestätigt zuverlässig funktioniert.
+    print(('^3[speditions-tablet]^7 SESSION-DEBUG: Slot %s -> Identifier %s'):format(src, tostring(identifier)))
+
     if not identifier then return nil end
 
     local emp = loadEmployeeByIdentifier(identifier)
+
+    print(('^3[speditions-tablet]^7 SESSION-DEBUG: Identifier %s -> %s'):format(
+        tostring(identifier), emp and ('Mitarbeiter #' .. emp.id .. ' "' .. emp.name .. '" (' .. emp.role .. ')') or 'KEIN Mitarbeiter in st_employees gefunden'
+    ))
+
     if not emp then return nil end
 
     loggedIn[src] = emp
@@ -121,6 +134,11 @@ RegisterCommand('tablet_grant', function(src, args)
         reply('Konnte den Charakter-Identifier des Zielspielers nicht ermitteln.')
         return
     end
+
+    -- TEMPORÄR: siehe SESSION-DEBUG in Employees.EnsureSession - hiermit
+    -- lässt sich direkt vergleichen, ob tablet_grant und die spätere
+    -- Erkennung beim Tablet-Öffnen exakt denselben Identifier sehen.
+    print(('^3[speditions-tablet]^7 GRANT-DEBUG: Server-ID %s (%s) -> Identifier %s'):format(targetId, GetPlayerName(targetId), identifier))
 
     if name == '' then name = GetPlayerName(targetId) end
 
