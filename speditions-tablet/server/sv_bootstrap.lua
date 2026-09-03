@@ -157,6 +157,31 @@ AddEventHandler('playerDropped', function()
 end)
 
 -- =========================================================
+-- TEMPORÄR (nur zum Testen): meldet den Slot ohne Benutzername/Passwort
+-- automatisch als ersten aktiven Mitarbeiter an. Damit lässt sich prüfen,
+-- ob der Rest des Tablets (Bildschirmwechsel, Dashboard...) unabhängig
+-- vom Login-Bildschirm funktioniert. WIEDER ENTFERNEN, sobald der
+-- eigentliche Login-Bug gefunden ist! Siehe Aufruf in sv_main.lua
+-- (session:whoami).
+-- =========================================================
+function Employees.DebugAutoLogin(src)
+    local existing = loggedIn[src]
+    if existing then return existing end
+
+    local emp = MySQL.single.await(
+        "SELECT * FROM st_employees WHERE role = 'geschaeftsfuehrung' AND status = 'aktiv' ORDER BY id ASC LIMIT 1"
+    )
+    if not emp then
+        emp = MySQL.single.await("SELECT * FROM st_employees WHERE status = 'aktiv' ORDER BY id ASC LIMIT 1")
+    end
+    if not emp then return nil end
+
+    loggedIn[src] = emp
+    Utils.DebugPrint(('TEMP-AUTOLOGIN: Slot %s automatisch als "%s" (%s) angemeldet (Login-System zum Testen deaktiviert).'):format(src, emp.name, emp.role))
+    return emp
+end
+
+-- =========================================================
 -- Ersteinrichtung: Konten aus Config.InitialAccounts anlegen, falls der
 -- Benutzername noch nicht existiert. Läuft einmalig beim Ressourcenstart.
 -- =========================================================

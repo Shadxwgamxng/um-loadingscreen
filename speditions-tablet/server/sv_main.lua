@@ -10,6 +10,13 @@ math.randomseed(os.time())
 --- Hintergrund abgefragt.
 RPC.Register('session:whoami', function(src)
     local emp = Employees.GetLoggedIn(src)
+
+    -- TEMPORÄR (nur zum Testen): Login-System übersprungen, siehe Chat
+    -- und Employees.DebugAutoLogin in server/sv_bootstrap.lua.
+    if not emp then
+        emp = Employees.DebugAutoLogin(src)
+    end
+
     if not emp then
         return { ok = true, loggedIn = false }
     end
