@@ -53,6 +53,7 @@ const ERROR_MESSAGES = {
     order_not_reassignable: 'Auftrag kann nicht neu zugewiesen werden.',
     order_already_closed: 'Auftrag ist bereits abgeschlossen.',
     not_your_order: 'Das ist nicht dein Auftrag.',
+    driver_missing_permission: 'Dieser Fahrer besitzt nicht die für den Auftrag erforderliche Berechtigung (z.B. Gefahrgut).',
     already_employee: 'Spieler ist bereits Mitarbeiter.',
     target_not_found: 'Zielspieler nicht gefunden (offline?).',
     last_management_account: 'Es muss mindestens eine aktive Geschäftsführung geben.',
@@ -136,6 +137,22 @@ const EMPLOYMENT_STATUS_META = {
 function badge(meta) {
     if (!meta) return '-';
     return `<span class="pill"><span class="dot dot-${meta.dot}"></span>${meta.label}</span>`;
+}
+
+function hoursMeter(label, minutes, maxMinutes, extraHint) {
+    const pct = Math.min(100, Math.round((minutes / maxMinutes) * 100));
+    const cls = pct >= 100 ? 'over' : pct >= 80 ? 'warn' : '';
+    return `<div class="meter-row">
+        <div class="meter-label"><span>${label}</span><b>${minutes} / ${maxMinutes} min</b></div>
+        <div class="meter-track"><span class="meter-fill ${cls}" style="width:${pct}%;"></span></div>
+        ${extraHint ? `<div class="card-hint" style="margin-top:4px;">${extraHint}</div>` : ''}
+    </div>`;
+}
+
+function renderHoursBlock(hours) {
+    if (!hours) return '<div class="card-hint">Keine Daten.</div>';
+    const restHint = hours.resting ? `Pause läuft seit ${formatDate(hours.restingSince, true)} (mind. ${hours.requiredBreakMinutes} Min. nötig, um die Lenkzeit zurückzusetzen)` : '';
+    return `${hoursMeter('Ununterbrochene Lenkzeit', hours.continuousMinutes, hours.maxContinuousMinutes, restHint)}${hoursMeter('Lenkzeit heute', hours.dailyMinutes, hours.maxDailyMinutes)}`;
 }
 
 function table(headers, rowsHtml) {
@@ -258,16 +275,18 @@ function refreshIfViewing(ids) {
 window.addEventListener('message', (event) => {
     const data = event.data;
     if (!data || !data.type) return;
-    if (data.type === 'open') handleOpen();
+    if (data.type === 'open') handleOpen(data.companyName);
     else if (data.type === 'close') handleClose();
     else if (data.type === 'push') handlePush(data.event, data.data);
 });
 
 document.addEventListener('keydown', (e) => {
+    if (!document.getElementById('lock-screen').classList.contains('hidden')) { unlockTablet(); return; }
     if (e.key === 'Escape') requestClose();
 });
 
 document.getElementById('close-btn').addEventListener('click', () => requestClose());
+document.getElementById('lock-screen').addEventListener('click', () => unlockTablet());
 
 function requestClose() {
     nuiPost('close', {});
@@ -280,22 +299,31 @@ function showDenied(reason) {
     document.getElementById('denied-text').textContent = translateError(reason) || 'Du hast keinen Zugriff auf das Speditions-Tablet.';
 }
 
-async function handleOpen() {
+function handleOpen(companyName) {
+    State.companyName = companyName || 'Speditions-Tablet';
+    document.getElementById('lock-company-name').textContent = State.companyName;
     document.getElementById('app').classList.remove('hidden');
-    document.getElementById('boot-screen').classList.remove('hidden');
+    document.getElementById('lock-screen').classList.remove('hidden');
+    document.getElementById('boot-screen').classList.add('hidden');
     document.getElementById('denied-screen').classList.add('hidden');
     document.getElementById('main-ui').classList.add('hidden');
+    startClock();
+}
+
+let unlocking = false;
+async function unlockTablet() {
+    if (unlocking) return;
+    unlocking = true;
+
+    document.getElementById('lock-screen').classList.add('hidden');
+    document.getElementById('boot-screen').classList.remove('hidden');
+    document.getElementById('boot-logo').textContent = (State.companyName || 'SPEDITIONS-TABLET').toUpperCase();
 
     const res = await rpc('session:init');
-    if (!res || !res.ok) {
-        showDenied('server_error');
-        return;
-    }
+    unlocking = false;
+    if (!res || !res.ok) { showDenied('server_error'); return; }
     const data = res.result;
-    if (!data || !data.ok) {
-        showDenied(data && data.reason);
-        return;
-    }
+    if (!data || !data.ok) { showDenied(data && data.reason); return; }
 
     State.employee = data.employee;
     State.role = data.employee.role;
@@ -306,6 +334,7 @@ async function handleOpen() {
 function handleClose() {
     document.getElementById('app').classList.add('hidden');
     closeModal();
+    if (clockInterval) { clearInterval(clockInterval); clockInterval = null; }
 }
 
 let clockInterval = null;
@@ -313,7 +342,13 @@ function startClock() {
     if (clockInterval) clearInterval(clockInterval);
     const update = () => {
         const now = new Date();
-        document.getElementById('clock').textContent = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        const time = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        const clockEl = document.getElementById('clock');
+        if (clockEl) clockEl.textContent = time;
+        const lockTimeEl = document.getElementById('lock-time');
+        if (lockTimeEl) lockTimeEl.textContent = time;
+        const lockDateEl = document.getElementById('lock-date');
+        if (lockDateEl) lockDateEl.textContent = now.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long' });
     };
     update();
     clockInterval = setInterval(update, 15000);
@@ -324,10 +359,10 @@ function boot(data) {
     document.getElementById('main-ui').classList.remove('hidden');
     document.getElementById('employee-name').textContent = data.employee.name;
     document.getElementById('employee-role').textContent = data.roleLabels[data.employee.role] || data.employee.role;
+    document.getElementById('topbar-brand').textContent = State.companyName;
     buildSidebar(data.employee.role);
     const first = (NAV[data.employee.role] || [])[0];
     if (first) showView(first.id);
-    startClock();
 }
 
 function handlePush(event, data) {
@@ -393,6 +428,10 @@ VIEWS['driver-card'] = async (root) => {
             <div class="driver-card-section">
                 <h4>Fahrerberechtigungen</h4>
                 <div class="perm-list">${permsHtml}</div>
+            </div>
+            <div class="driver-card-section">
+                <h4>Lenk- &amp; Ruhezeiten</h4>
+                ${renderHoursBlock(d.hours)}
             </div>
             <div class="driver-card-section">
                 <h4>Aktueller LKW</h4>
@@ -525,7 +564,10 @@ VIEWS['dispatch-drivers'] = async (root) => {
         <td>${escapeHtml(r.name)}</td>
         <td>${r.vehicle_name ? `${escapeHtml(r.vehicle_name)} (${escapeHtml(r.vehicle_plate)})` : '-'}</td>
         <td>${r.vehicle_status ? badge(VEHICLE_STATUS_META[r.vehicle_status]) : '-'}</td>
-        <td><button class="btn btn-sm" onclick="Actions.messageDriver(${r.driver_id}, ${JSON.stringify(r.name)})">Nachricht</button></td>
+        <td class="btn-row">
+            <button class="btn btn-sm" onclick="Actions.messageDriver(${r.driver_id}, ${JSON.stringify(r.name)})">Nachricht</button>
+            <button class="btn btn-sm" onclick="Actions.remindDriver(${r.driver_id})">Lenkzeit erinnern</button>
+        </td>
     </tr>`);
 
     root.innerHTML = `
@@ -540,11 +582,11 @@ VIEWS['dispatch-pool'] = async (root) => {
 
     const rows = pool.orders.map((o) => `<tr>
         <td>#${o.id}</td>
-        <td>${escapeHtml(o.cargo)}</td>
+        <td>${escapeHtml(o.cargo)}${o.requires_permission ? ' <span class="pill">⚠ Gefahrgut</span>' : ''}</td>
         <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
         <td>${Number(o.distance_km).toLocaleString('de-DE')} km</td>
         <td>${formatMoney(o.value)}</td>
-        <td><button class="btn btn-sm btn-primary" onclick="Actions.openDispatchModal(${o.id})">Disponieren</button></td>
+        <td><button class="btn btn-sm btn-primary" onclick="Actions.openDispatchModal(${o.id}, ${JSON.stringify(o.requires_permission || null)})">Disponieren</button></td>
     </tr>`);
 
     root.innerHTML = `
@@ -938,12 +980,20 @@ Actions.confirmMessageDriver = async (driverId) => {
     toast('Nachricht gesendet', '', 'success');
 };
 
-Actions.openDispatchModal = (orderId) => {
-    const drivers = (window.__availableDrivers || []).filter((d) => d.current_status === 'verfuegbar');
+Actions.remindDriver = async (driverId) => {
+    await call('dispatch:remindDriver', { driverId });
+    toast('Erinnerung gesendet', 'Der Fahrer wurde an seine Lenk-/Ruhezeiten erinnert.', 'success');
+};
+
+Actions.openDispatchModal = (orderId, requiresPermission) => {
+    const hasPerm = (d) => !requiresPermission || (d.permissions || '').split(',').includes(requiresPermission);
+    const drivers = (window.__availableDrivers || []).filter((d) => d.current_status === 'verfuegbar' && hasPerm(d));
     const options = drivers.map((d) => `<option value="${d.driver_id}">${escapeHtml(d.name)}${d.vehicle_name ? ` - ${escapeHtml(d.vehicle_name)} (${escapeHtml(d.vehicle_plate)})` : ' - kein Fahrzeug'}</option>`).join('');
+    const hint = requiresPermission ? `<p class="card-hint" style="margin:0 0 10px;">⚠ Dieser Auftrag erfordert die Berechtigung "${escapeHtml(requiresPermission)}" - nur berechtigte, verfügbare Fahrer werden angezeigt.</p>` : '';
     openModal('Auftrag disponieren', `Auftrag #${orderId}`, `
+        ${hint}
         <label>Fahrer</label>
-        <select id="dispatch-driver">${options || '<option value="">Kein verfügbarer Fahrer</option>'}</select>
+        <select id="dispatch-driver">${options || '<option value="">Kein berechtigter/verfügbarer Fahrer</option>'}</select>
     `, `
         <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
         <button class="btn btn-primary" onclick="Actions.confirmDispatch(${orderId})">Zuweisen</button>
@@ -1046,6 +1096,7 @@ Actions.openDriverFile = async (driverId) => {
         <div class="stat-row"><span>Kilometer</span><span>${Number(f.statistics.total_km).toLocaleString('de-DE')} km</span></div>
         <div class="stat-row"><span>Pünktlichkeit</span><span>${f.statistics.punctuality_rate} %</span></div>
         <div class="stat-row"><span>Einnahmen gesamt</span><span>${formatMoney(f.earnings.total)}</span></div>
+        <div style="margin-top:14px;">${renderHoursBlock(f.hours)}</div>
         <div style="margin-top:14px;">${permsHtml}</div>
         <label>Verwarnungen / Notizen</label>
         <textarea id="driver-notes">${escapeHtml(f.driver.notes || '')}</textarea>

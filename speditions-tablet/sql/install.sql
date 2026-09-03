@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS `st_orders` (
     `vehicle_id` INT UNSIGNED NULL,
     `dispatcher_id` INT UNSIGNED NULL,
     `source` ENUM('auto','disponent') NOT NULL DEFAULT 'auto',
+    `requires_permission` VARCHAR(50) NULL,
     `deadline` DATETIME NULL,
     `punctual` TINYINT(1) NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -192,6 +193,19 @@ CREATE TABLE IF NOT EXISTS `st_notifications` (
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     KEY `idx_notif_recipient` (`recipient_employee_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `st_driver_hours` (
+    `driver_id` INT UNSIGNED NOT NULL,
+    `continuous_driving_seconds` INT UNSIGNED NOT NULL DEFAULT 0,
+    `daily_driving_seconds` INT UNSIGNED NOT NULL DEFAULT 0,
+    `day_date` DATE NOT NULL,
+    `resting_since` DATETIME NULL,
+    `warned_continuous` TINYINT(1) NOT NULL DEFAULT 0,
+    `warned_daily` TINYINT(1) NOT NULL DEFAULT 0,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`driver_id`),
+    CONSTRAINT `fk_hours_driver` FOREIGN KEY (`driver_id`) REFERENCES `st_drivers` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `st_activity_logs` (

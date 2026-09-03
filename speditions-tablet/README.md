@@ -14,13 +14,16 @@ verwaltet.
 ## Installation
 
 1. Ressource nach `resources/[speditions]/speditions-tablet` kopieren.
-2. `sql/install.sql` in die Datenbank importieren.
+2. `sql/install.sql` in die Datenbank importieren (bei einer bereits
+   bestehenden Installation stattdessen `sql/upgrade_v2.sql` ausführen, um
+   das Lenk-/Ruhezeiten-System und die Gefahrgut-Spalte nachzurüsten).
 3. In `server.cfg`:
    ```
    ensure oxmysql
    ensure speditions-tablet
    ```
-4. `config.lua` anpassen (siehe unten).
+4. `config.lua` anpassen (siehe unten) - insbesondere `Config.CompanyName`
+   und `Config.Locations`.
 5. Server starten.
 
 ## Ersteinrichtung (erste Geschäftsführung anlegen)
@@ -80,6 +83,36 @@ nur ein Kontostand überschrieben. Nur die Geschäftsführung kann über den Tab
 **Auszahlungen** Unternehmensguthaben auszahlen; der Betrag wird dabei
 serverseitig gegen das tatsächliche Guthaben geprüft.
 
+## Lenk- und Ruhezeiten, Wegpunkte, Gefahrgut
+
+- **Lenk-/Ruhezeiten**: Ein Fahrer "fährt" im Sinne des Systems, sobald er auf
+  dem Fahrersitz eines Fahrzeugs sitzt, dessen **Kennzeichen mit dem in der
+  Fuhrparkverwaltung hinterlegten Kennzeichen seines zugewiesenen Fahrzeugs
+  übereinstimmt** (`client/cl_hours.lua`, Abgleich per
+  `GetVehicleNumberPlateText`). Das bedeutet: Das Fahrzeug-Spawn-/Garagen-Skript
+  deines Servers muss beim Ausgeben des LKWs `SetVehicleNumberPlateText` auf
+  genau den Wert setzen, der im Fuhrpark als Kennzeichen hinterlegt ist.
+  GTA-Kennzeichen sind auf **8 Zeichen** begrenzt - nutze für reale Fahrzeuge
+  entsprechend kurze Kennzeichen (die Beispielwerte wie "HH-TR 420" in diesem
+  README sind reine Anzeigebeispiele und müssten für ein echtes Fahrzeug
+  gekürzt werden, z.B. "HHTR420").
+  Grenzwerte (ununterbrochene Lenkzeit, Pausendauer, Tageslenkzeit,
+  Warnvorlauf) stehen in `Config.DrivingRules`. Bei Überschreitung erhält der
+  Fahrer eine native In-Game-Benachrichtigung (funktioniert auch bei
+  geschlossenem Tablet); der Disponent kann Fahrer zusätzlich aktiv über den
+  Button **"Lenkzeit erinnern"** in der Fahrerübersicht erinnern.
+- **Automatische Wegpunkte**: Beim Annehmen eines Auftrags wird automatisch
+  ein GPS-Wegpunkt zum Beladepunkt gesetzt, beim Losfahren (Statuswechsel auf
+  "Unterwegs") automatisch einer zum Zielort. Die Koordinaten kommen aus
+  `Config.Locations` - passe sie unbedingt an die tatsächlichen Lade-/
+  Entladepunkte deines Servers an.
+- **Gefahrgut-Zugriffsbeschränkung**: Frachtarten in `Config.HazardousCargo`
+  erzeugen Aufträge mit `requires_permission = 'gefahrgut'`. Das Disponieren
+  und Neuzuweisen an Fahrer ohne die Fahrerberechtigung "Gefahrgut" wird
+  **serverseitig verweigert** (`driver_missing_permission`); die
+  Disponenten-Oberfläche blendet ungeeignete Fahrer in der Zuweisungsauswahl
+  zusätzlich aus.
+
 ## Datenbankschema
 
 Siehe `sql/install.sql`. Wichtigste Tabellen:
@@ -100,18 +133,22 @@ st_company_balance      Performance-Cache des aktuellen Guthabens
 st_payouts              Auszahlungen (Betrag, Grund, Zielkonto, ausführender Mitarbeiter)
 st_notifications        Nachrichten Disponent -> Fahrer
 st_activity_logs        Aktivitätsprotokoll
+st_driver_hours         Lenk-/Ruhezeiten je Fahrer (ununterbrochen/täglich, Pausenstatus)
 ```
 
 ## Konfiguration
 
 Alle Stellschrauben befinden sich in `config.lua`:
 
-- `Config.Routes` - Strecken mit Distanz und Wertspanne für die automatische
-  Auftragsgenerierung
+- `Config.CompanyName` - Firmenname auf Sperrbildschirm, Topbar und Fahrerkarte
+- `Config.Routes`, `Config.Locations` - Strecken (Distanz/Wertspanne) und die
+  dazugehörigen Wegpunkt-Koordinaten für Beladepunkt/Zielort
 - `Config.OrderGeneration` - Intervall und maximale Poolgröße
-- `Config.VehicleClasses`, `Config.CargoTypes`, `Config.DriverPermissions`
+- `Config.VehicleClasses`, `Config.CargoTypes`, `Config.HazardousCargo`,
+  `Config.DriverPermissions`
 - `Config.AverageSpeedKmh`, `Config.DeadlineBufferMinutes` - Grundlage der
   Pünktlichkeitsberechnung
+- `Config.DrivingRules` - Lenk-/Ruhezeiten-Grenzwerte und Heartbeat-Intervall
 - `Config.InitialOwners`, `Config.AdminAcePermission` - Ersteinrichtung
 
 ## Architektur
@@ -123,12 +160,18 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `server/sv_finance.lua` - Transaktions-Ledger, Guthaben, Auszahlungen.
 - `server/sv_vehicles.lua` - Fuhrparkverwaltung.
 - `server/sv_drivers.lua` - Fahrerkarte, Fahrerakte, Statistik.
-- `server/sv_orders.lua` - Auftragsgenerierung & -lebenszyklus.
+- `server/sv_hours.lua` - Lenk-/Ruhezeiten-Tracking, Warnungen, Erinnerungen.
+- `server/sv_orders.lua` - Auftragsgenerierung & -lebenszyklus, Gefahrgut-Prüfung,
+  Auto-Wegpunkte.
 - `server/sv_employees.lua` - Mitarbeiterverwaltung.
 - `server/sv_notifications.lua` - Nachrichten Disponent/Fahrer.
-- `client/cl_main.lua` - NUI-Steuerung und RPC-Relay (Client führt keine
-  Geschäftslogik aus).
-- `html/` - NUI-Frontend (rollenbasierte Ansichten, siehe `js/app.js`).
+- `client/cl_main.lua` - NUI-Steuerung, RPC-Relay (`ServerCall` auch für
+  andere Client-Skripte nutzbar) sowie native In-Game-Hinweise/Wegpunkte sind hier verdrahtet.
+- `client/cl_hours.lua` - Erkennt per Kennzeichen-Abgleich, ob der Fahrer
+  gerade sein zugewiesenes Firmenfahrzeug fährt, und meldet Fahrzeit an den Server.
+- `html/` - NUI-Frontend (Sperrbildschirm, rollenbasierte Ansichten, siehe
+  `js/app.js`). Der Client führt dabei keine Geschäftslogik aus - jede Aktion
+  wird serverseitig neu geprüft.
 
 Das System ist modular aufgebaut: neue Auftragstypen, zusätzliche
 Fahrzeugklassen oder weitere Rollen-Berechtigungen lassen sich über

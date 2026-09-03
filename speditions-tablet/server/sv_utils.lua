@@ -72,3 +72,33 @@ function Utils.DebugPrint(...)
         print('^3[speditions-tablet]^7', ...)
     end
 end
+
+--- Sucht den Server-Slot eines Mitarbeiters unter den aktuell verbundenen
+--- Spielern (nur die, die das Tablet bereits mindestens einmal geöffnet
+--- und damit einen Session-Cache-Eintrag haben).
+function Utils.FindSrcByEmployeeId(employeeId)
+    for _, playerId in ipairs(GetPlayers()) do
+        local src = tonumber(playerId)
+        local cached = Employees.GetCached(src)
+        if cached and cached.id == employeeId then
+            return src
+        end
+    end
+    return nil
+end
+
+--- Löst einen nativen In-Game-Hinweis beim Client aus (funktioniert auch,
+--- wenn das Tablet gerade nicht geöffnet ist - z.B. für Lenkzeit-Warnungen
+--- oder "neuer Auftrag zugewiesen").
+function Utils.NotifyClient(src, message, notifyType)
+    if not src then return end
+    TriggerClientEvent('speditions-tablet:client:notify', src, message, notifyType or 'info')
+end
+
+--- Setzt beim Client einen GPS-Wegpunkt (z.B. Beladepunkt/Zielort eines Auftrags).
+function Utils.SetClientWaypoint(src, locationName, label)
+    if not src then return end
+    local coords = Config.Locations[locationName]
+    if not coords then return end
+    TriggerClientEvent('speditions-tablet:client:waypoint', src, coords.x, coords.y, label or locationName)
+end

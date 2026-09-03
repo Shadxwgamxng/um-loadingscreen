@@ -18,6 +18,18 @@ local function insertOrderHistory(orderId, status, changedBy, note)
     )
 end
 
+--- Prüft, ob ein Fahrer eine bestimmte Fahrerberechtigung besitzt (z.B.
+--- "gefahrgut"). Wird u.a. genutzt, um Gefahrgut-Aufträge NICHT an Fahrer
+--- ohne die passende Berechtigung disponieren/neu zuweisen zu können.
+local function driverHasPermission(driverId, permissionKey)
+    if not permissionKey then return true end
+    local row = MySQL.single.await(
+        'SELECT 1 AS ok FROM st_driver_permissions WHERE driver_id = ? AND permission_key = ? LIMIT 1',
+        { driverId, permissionKey }
+    )
+    return row ~= nil
+end
+
 function Orders.GetById(orderId)
     return MySQL.single.await('SELECT * FROM st_orders WHERE id = ? LIMIT 1', { orderId })
 end
@@ -34,11 +46,12 @@ function Orders.GenerateOne()
     local route = Config.Routes[math.random(1, #Config.Routes)]
     local cargo = Config.CargoTypes[math.random(1, #Config.CargoTypes)]
     local value = Utils.Round2(math.random(route.minValue * 100, route.maxValue * 100) / 100)
+    local requiresPermission = Utils.InTable(Config.HazardousCargo, cargo) and 'gefahrgut' or nil
 
     local orderId = MySQL.insert.await(
-        [[INSERT INTO st_orders (cargo, start_location, end_location, distance_km, value, status, source)
-          VALUES (?, ?, ?, ?, ?, 'offen', 'auto')]],
-        { cargo, route.from, route.to, route.distance, value }
+        [[INSERT INTO st_orders (cargo, start_location, end_location, distance_km, value, status, source, requires_permission)
+          VALUES (?, ?, ?, ?, ?, 'offen', 'auto', ?)]],
+        { cargo, route.from, route.to, route.distance, value, requiresPermission }
     )
 
     insertOrderHistory(orderId, 'offen', nil, 'Automatisch generiert.')
@@ -125,6 +138,10 @@ function Orders.Dispatch(src, orderId, driverId, vehicleId)
     local driver = MySQL.single.await('SELECT d.*, e.name, e.status AS emp_status FROM st_drivers d JOIN st_employees e ON e.id = d.employee_id WHERE d.id = ?', { driverId })
     if not driver or driver.emp_status ~= 'aktiv' then error('driver_not_found') end
 
+    if not driverHasPermission(driverId, order.requires_permission) then
+        error('driver_missing_permission')
+    end
+
     local finalVehicleId = vehicleId
     if not finalVehicleId or finalVehicleId == 0 then
         finalVehicleId = driver.assigned_vehicle_id
@@ -144,6 +161,10 @@ function Orders.Dispatch(src, orderId, driverId, vehicleId)
     insertOrderHistory(orderId, 'disponiert', emp.id, ('Disponiert von %s an %s.'):format(emp.name, driver.name))
 
     Notifications.Send(nil, driver.employee_id, 'Neuer Auftrag', ('Dir wurde Auftrag #%s zugewiesen (%s -> %s).'):format(orderId, order.start_location, order.end_location), emp.id)
+    local driverSrc = Utils.FindSrcByEmployeeId(driver.employee_id)
+    if driverSrc then
+        Utils.NotifyClient(driverSrc, ('Neuer Auftrag #%s: %s -> %s. Oeffne dein Tablet fuer Details.'):format(orderId, order.start_location, order.end_location), 'info')
+    end
 
     return { ok = true }
 end
@@ -160,6 +181,10 @@ function Orders.Reassign(src, orderId, newDriverId)
     local driver = MySQL.single.await('SELECT d.*, e.name, e.status AS emp_status FROM st_drivers d JOIN st_employees e ON e.id = d.employee_id WHERE d.id = ?', { newDriverId })
     if not driver or driver.emp_status ~= 'aktiv' then error('driver_not_found') end
 
+    if not driverHasPermission(newDriverId, order.requires_permission) then
+        error('driver_missing_permission')
+    end
+
     MySQL.update.await(
         "UPDATE st_orders SET driver_id = ?, vehicle_id = ?, status = 'disponiert', accepted_at = NULL WHERE id = ?",
         { newDriverId, driver.assigned_vehicle_id, orderId }
@@ -167,6 +192,10 @@ function Orders.Reassign(src, orderId, newDriverId)
     insertOrderHistory(orderId, 'disponiert', emp.id, ('Neu disponiert von %s an %s.'):format(emp.name, driver.name))
 
     Notifications.Send(nil, driver.employee_id, 'Auftrag neu zugewiesen', ('Auftrag #%s wurde dir neu zugewiesen.'):format(orderId), emp.id)
+    local driverSrc = Utils.FindSrcByEmployeeId(driver.employee_id)
+    if driverSrc then
+        Utils.NotifyClient(driverSrc, ('Auftrag #%s wurde dir neu zugewiesen.'):format(orderId), 'info')
+    end
 
     return { ok = true }
 end
@@ -191,6 +220,8 @@ function Orders.AcceptByDriver(src, orderId)
         { minutes, orderId }
     )
     insertOrderHistory(orderId, 'angenommen', emp.id, ('%s hat den Auftrag angenommen.'):format(emp.name))
+
+    Utils.SetClientWaypoint(src, order.start_location, ('Beladepunkt (%s)'):format(order.start_location))
 
     RPC.PushToRole(Config.Roles.DISPONENT, 'orders:activeChanged', { orderId = orderId })
     RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'orders:activeChanged', { orderId = orderId })
@@ -232,8 +263,11 @@ function Orders.UpdateCargoStatus(src, orderId, newStatus)
     MySQL.update.await('UPDATE st_orders SET status = ? WHERE id = ?', { newStatus, orderId })
     insertOrderHistory(orderId, newStatus, emp.id, nil)
 
-    if newStatus == 'unterwegs' and order.vehicle_id then
-        MySQL.update.await("UPDATE st_vehicles SET status = 'im_einsatz' WHERE id = ? AND status = 'verfuegbar'", { order.vehicle_id })
+    if newStatus == 'unterwegs' then
+        if order.vehicle_id then
+            MySQL.update.await("UPDATE st_vehicles SET status = 'im_einsatz' WHERE id = ? AND status = 'verfuegbar'", { order.vehicle_id })
+        end
+        Utils.SetClientWaypoint(src, order.end_location, ('Zielort (%s)'):format(order.end_location))
     end
 
     RPC.PushToRole(Config.Roles.DISPONENT, 'orders:activeChanged', { orderId = orderId })

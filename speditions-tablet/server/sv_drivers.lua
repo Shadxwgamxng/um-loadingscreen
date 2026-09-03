@@ -145,6 +145,7 @@ function Drivers.GetOwnCard(src)
         permissions = Drivers.GetPermissions(driver.id),
         vehicle = vehicle,
         earnings = earnings,
+        hours = Hours.Status(driver.id),
     }
 end
 
@@ -166,6 +167,7 @@ function Drivers.GetFile(driverId)
         vehicle = vehicle,
         earnings = earnings,
         history = history,
+        hours = Hours.Status(driverId),
     }
 end
 
@@ -209,7 +211,8 @@ end
 function Drivers.ListForDispatch()
     return MySQL.query.await([[
         SELECT d.id AS driver_id, e.name, e.status AS employment_status, d.current_status,
-               v.id AS vehicle_id, v.name AS vehicle_name, v.plate AS vehicle_plate, v.status AS vehicle_status
+               v.id AS vehicle_id, v.name AS vehicle_name, v.plate AS vehicle_plate, v.status AS vehicle_status,
+               (SELECT GROUP_CONCAT(dp.permission_key) FROM st_driver_permissions dp WHERE dp.driver_id = d.id) AS permissions
         FROM st_drivers d
         JOIN st_employees e ON e.id = d.employee_id
         LEFT JOIN st_vehicles v ON v.id = d.assigned_vehicle_id

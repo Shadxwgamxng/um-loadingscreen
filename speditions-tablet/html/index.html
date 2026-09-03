@@ -9,10 +9,32 @@
 <body>
     <div id="app" class="hidden">
         <div class="tablet-frame">
+            <div class="bezel-top"><span class="camera-dot"></span></div>
             <div class="tablet-screen">
 
-                <div id="boot-screen" class="boot-screen">
-                    <div class="boot-logo">SPEDITIONS-TABLET</div>
+                <div id="lock-screen" class="lock-screen">
+                    <div class="lock-time" id="lock-time"></div>
+                    <div class="lock-date" id="lock-date"></div>
+                    <div class="lock-brand">
+                        <svg class="lock-logo" viewBox="0 0 220 180" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <path d="M30 72 A80 80 0 0 1 190 72" stroke="#3b82f6" stroke-width="5" stroke-linecap="round" fill="none" />
+                            <path d="M40 78 L40 128 L18 128 Z" fill="#3b82f6" />
+                            <path d="M40 128 L40 78 L118 78 L118 128 Z" fill="#0e1a30" stroke="#22304f" stroke-width="2" />
+                            <path d="M118 128 L118 92 L142 92 L162 112 L162 128 Z" fill="#0e1a30" stroke="#22304f" stroke-width="2" />
+                            <rect x="144" y="98" width="14" height="12" rx="2" fill="#cfe0ff" />
+                            <circle cx="64" cy="132" r="10" fill="#0e1a30" stroke="#22304f" stroke-width="2" />
+                            <circle cx="148" cy="132" r="10" fill="#0e1a30" stroke="#22304f" stroke-width="2" />
+                            <path d="M10 150 Q60 130 110 150 T210 150" stroke="#1e4faa" stroke-width="6" fill="none" stroke-linecap="round" />
+                            <path d="M10 162 Q60 144 110 162 T210 162" stroke="#60a5fa" stroke-width="6" fill="none" stroke-linecap="round" />
+                        </svg>
+                        <div class="lock-brand-name" id="lock-company-name">Speditions-Tablet</div>
+                        <div class="lock-brand-rule"><span></span>DIGITALE SPEDITIONSZENTRALE<span></span></div>
+                    </div>
+                    <div class="lock-hint">Zum Entsperren tippen oder eine Taste drücken</div>
+                </div>
+
+                <div id="boot-screen" class="boot-screen hidden">
+                    <div class="boot-logo" id="boot-logo">SPEDITIONS-TABLET</div>
                     <div class="boot-spinner"></div>
                 </div>
 
@@ -25,7 +47,7 @@
                 <div id="main-ui" class="main-ui hidden">
                     <header class="topbar">
                         <div class="topbar-left">
-                            <span class="brand">UM&nbsp;Spedition</span>
+                            <span class="brand" id="topbar-brand">Speditions-Tablet</span>
                             <span class="brand-sub">Speditions-Tablet</span>
                         </div>
                         <div class="topbar-right">
