@@ -350,23 +350,36 @@ async function submitLogin() {
         return;
     }
 
-    const btn = document.getElementById('login-submit');
-    btn.disabled = true;
-    const res = await rpc('session:login', { username, password });
-    btn.disabled = false;
+    // TEMPORÄRES DEBUGGING - siehe Chat: zeigt Schritt für Schritt als Toast an,
+    // wo der Login-Ablauf ggf. hängen bleibt / einen JS-Fehler wirft.
+    try {
+        toast('Debug 1/4', 'Sende Login-Anfrage an den Server...', 'info');
 
-    if (!res || !res.ok) {
-        toast('Anmeldung fehlgeschlagen', translateError(res && res.error), 'error');
-        return;
+        const btn = document.getElementById('login-submit');
+        btn.disabled = true;
+        const res = await rpc('session:login', { username, password });
+        btn.disabled = false;
+
+        toast('Debug 2/4', 'Antwort erhalten: ' + JSON.stringify(res).slice(0, 220), 'info');
+
+        if (!res || !res.ok) {
+            toast('Anmeldung fehlgeschlagen', translateError(res && res.error), 'error');
+            return;
+        }
+
+        const data = res.result;
+        State.employee = data.employee;
+        State.role = data.employee.role;
+        State.config = data;
+
+        toast('Debug 3/4', 'Login ok, wechsle zur Oberfläche...', 'info');
+        hideAllScreens();
+        document.getElementById('boot-screen').classList.remove('hidden');
+        boot(data);
+        toast('Debug 4/4', 'boot() abgeschlossen.', 'success');
+    } catch (e) {
+        toast('JS-FEHLER beim Login', String((e && e.stack) || e), 'error');
     }
-
-    const data = res.result;
-    State.employee = data.employee;
-    State.role = data.employee.role;
-    State.config = data;
-    hideAllScreens();
-    document.getElementById('boot-screen').classList.remove('hidden');
-    boot(data);
 }
 
 document.getElementById('login-submit').addEventListener('click', submitLogin);
