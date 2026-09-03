@@ -313,9 +313,13 @@ function hideAllScreens() {
     document.getElementById('main-ui').classList.add('hidden');
 }
 
-function showNoAccount() {
+function showNoAccount(debugInfo) {
     hideAllScreens();
     document.getElementById('no-account-screen').classList.remove('hidden');
+    // TEMPORÄR: zeigt die rohe Server-Antwort direkt auf dem Bildschirm an,
+    // damit wir sehen, was der Client wirklich empfangen hat - siehe Chat.
+    const el = document.getElementById('no-account-debug');
+    if (el) el.textContent = debugInfo ? JSON.stringify(debugInfo) : '(keine Antwort erhalten)';
 }
 
 function handleOpen(companyName) {
@@ -346,7 +350,7 @@ async function unlockTablet() {
         State.config = data;
         boot(data);
     } else {
-        showNoAccount();
+        showNoAccount(res);
     }
 }
 
