@@ -21,7 +21,7 @@ Config.OpenKey = 'F6' -- Keybind wird clientseitig via RegisterCommand + Keymapp
 -- als Geschäftsführung angelegt werden, falls noch kein Mitarbeiter-Eintrag
 -- existiert. Damit ist ohne Framework-Integration eine Ersteinrichtung möglich.
 Config.InitialOwners = {
-    -- 'license:1234567890abcdef1234567890abcdef12345678',
+    'license:2368ed9844b18a3bd76048779c665d1f644292d5',
 }
 
 -- Ace-Permission die zusätzlich zu Config.InitialOwners berechtigt,
