@@ -290,9 +290,6 @@ document.addEventListener('keydown', (e) => {
 document.getElementById('lock-screen').addEventListener('click', () => unlockTablet());
 document.getElementById('switch-account-btn').addEventListener('click', () => showAccountSwitch());
 document.getElementById('account-switch-screen').addEventListener('click', (e) => {
-    // TEMPORÄR zum Debuggen - siehe Chat: bestätigt, dass der Klick beim
-    // Browser überhaupt ankommt, bevor irgendwas mit dem Server passiert.
-    toast('Debug', 'Klick erkannt auf: ' + (e.target.tagName + (e.target.id ? '#' + e.target.id : '')), 'info');
     const btn = e.target.closest('[data-test-role]');
     if (btn) Actions.testSwitch(btn.dataset.testRole);
 });
@@ -989,29 +986,18 @@ VIEWS['gf-log'] = async (root) => {
 const Actions = {};
 
 Actions.testSwitch = async (role) => {
-    // TEMPORÄRES DEBUGGING - siehe Chat: Schritt-für-Schritt-Toasts, um zu
-    // sehen, ob/wo die Antwort ausbleibt oder ein Fehler auftritt.
-    try {
-        toast('Debug A', 'rpc() wird aufgerufen fuer Rolle ' + role + ' ...', 'info');
-        const res = await rpc('session:testSwitch', { role });
-        toast('Debug B', 'Antwort erhalten: ' + JSON.stringify(res).slice(0, 220), 'info');
-
-        if (!res || !res.ok) {
-            toast('Fehler', translateError(res && res.error), 'error');
-            return;
-        }
-        const data = res.result;
-        State.employee = data.employee;
-        State.role = data.employee.role;
-        State.config = data;
-        hideAllScreens();
-        document.getElementById('boot-screen').classList.remove('hidden');
-        toast('Debug C', 'rufe boot() auf ...', 'info');
-        boot(data);
-        toast('Debug D', 'boot() abgeschlossen. main-ui hidden? ' + document.getElementById('main-ui').classList.contains('hidden'), 'success');
-    } catch (e) {
-        toast('JS-FEHLER in testSwitch', String((e && e.stack) || e), 'error');
+    const res = await rpc('session:testSwitch', { role });
+    if (!res || !res.ok) {
+        toast('Fehler', translateError(res && res.error), 'error');
+        return;
     }
+    const data = res.result;
+    State.employee = data.employee;
+    State.role = data.employee.role;
+    State.config = data;
+    hideAllScreens();
+    document.getElementById('boot-screen').classList.remove('hidden');
+    boot(data);
 };
 
 Actions.submitVehicleConditionAndClose = async () => {

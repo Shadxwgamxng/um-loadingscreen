@@ -33,9 +33,6 @@ end)
 --- Testkonten (siehe Employees.TestSwitch in sv_bootstrap.lua) - ganz ohne
 --- Bezug zum FiveM-Charakter. Nur zum Ausprobieren der Basisfunktionen!
 RPC.Register('session:testSwitch', function(src, payload)
-    -- TEMPORÄR zum Debuggen - siehe Chat: bestätigt, dass der RPC-Aufruf
-    -- überhaupt beim Server ankommt.
-    print(('^3[speditions-tablet]^7 TESTSWITCH-DEBUG: Slot %s -> Rolle %s'):format(src, tostring(payload and payload.role)))
     local emp = Employees.TestSwitch(src, payload.role)
     return sessionPayload(emp)
 end)

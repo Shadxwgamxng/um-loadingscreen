@@ -127,6 +127,7 @@ html, body {
         radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.1), transparent 55%),
         var(--bg-1);
 }
+.login-screen.hidden { display: none; }
 .login-box {
     width: min(300px, 82%);
     background: var(--bg-2);
