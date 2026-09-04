@@ -16,9 +16,9 @@ verwaltet.
 1. Ressource nach `resources/[speditions]/speditions-tablet` kopieren.
 2. `sql/install.sql` in die Datenbank importieren (bei einer bereits
    bestehenden Installation stattdessen der Reihe nach `sql/upgrade_v2.sql`,
-   `sql/upgrade_v3.sql` und `sql/upgrade_v4.sql` ausführen, um Lenk-/
-   Ruhezeiten, Gefahrgut, Ein-/Auszahlungen nachzurüsten und das
-   Login-System zu entfernen).
+   `sql/upgrade_v3.sql`, `sql/upgrade_v4.sql` und `sql/upgrade_v5.sql`
+   ausführen, um Lenk-/Ruhezeiten, Gefahrgut, Ein-/Auszahlungen und
+   Gehälter/Stempeluhr nachzurüsten und das Login-System zu entfernen).
 3. In `server.cfg`:
    ```
    ensure oxmysql
@@ -178,7 +178,25 @@ st_deposits             Einzahlungen (Betrag, Grund, Herkunft, ausführender Mit
 st_notifications        Nachrichten Disponent -> Fahrer
 st_activity_logs        Aktivitätsprotokoll
 st_driver_hours         Lenk-/Ruhezeiten je Fahrer (ununterbrochen/täglich, Pausenstatus)
+st_wage_rates           Stundenlohn je Rolle (von der Geschäftsführung anpassbar)
+st_timeclock_sessions   Stempeluhr-Sessions je Mitarbeiter (ein-/ausgestempelt, bezahlt/offen)
+st_payroll_payouts      Historie der Gehaltsauszahlungen
 ```
+
+## Gehälter / Stempeluhr
+
+Jeder Mitarbeiter stempelt sich über das Topbar-Widget im Tablet selbst
+ein/aus - unabhängig von der Rolle. Die Geschäftsführung legt über den
+Reiter **Gehälter** den Stundenlohn je Rolle fest (Erstbefüllung aus
+`Config.DefaultHourlyWage`, danach ist die Datenbank die Quelle der
+Wahrheit) und sieht dort für jeden aktiven Mitarbeiter die offenen,
+noch nicht ausgezahlten Stunden samt daraus berechnetem Betrag. Ein Klick
+auf "Auszahlen" berechnet das Gehalt serverseitig neu (der Client kann
+den Betrag nicht vorgeben), zieht ihn vom Unternehmensguthaben ab und
+übergibt ihn - genau wie bei einer normalen Auszahlung - als echtes
+Bargeld, hier allerdings an den **Mitarbeiter selbst** (nicht an die
+ausführende Geschäftsführung), sofern dieser gerade online und am
+Tablet erkannt ist.
 
 ## Konfiguration
 
@@ -197,6 +215,7 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `Config.RequireItem` - Tablet nur per Item öffnen
 - `Config.MoneyBridge` - Framework-Anbindung für Bargeld bei Aus-/Einzahlung
 - `Config.NotificationSound` - Klingelton bei nativen In-Game-Hinweisen
+- `Config.DefaultHourlyWage` - Stundenlohn je Rolle, nur einmalige Erstbefüllung von `st_wage_rates`
 
 ## Architektur
 
@@ -208,6 +227,7 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `server/sv_bootstrap.lua` - automatische Mitarbeitererkennung anhand des
   FiveM-Charakters (Session je Server-Slot), `tablet_grant`-Command.
 - `server/sv_finance.lua` - Transaktions-Ledger, Guthaben, Ein-/Auszahlungen.
+- `server/sv_payroll.lua` - Stundenlöhne, Stempeluhr, Gehaltsauszahlung.
 - `server/sv_vehicles.lua` - Fuhrparkverwaltung.
 - `server/sv_drivers.lua` - Fahrerkarte, Fahrerakte, Statistik.
 - `server/sv_hours.lua` - Lenk-/Ruhezeiten-Tracking, Warnungen, Erinnerungen.

@@ -46,44 +46,6 @@ function Employees.GetLoggedIn(src)
     return loggedIn[src]
 end
 
--- =========================================================
--- TEST-KONTEN: zum schnellen Ausprobieren der Basisfunktionen ohne echte
--- Charakter-Zuordnung. Drei feste Konten (eines je Rolle) werden beim
--- Ressourcenstart angelegt, falls sie noch nicht existieren, und lassen
--- sich am Tablet jederzeit per Klick wechseln - unabhängig vom FiveM-
--- Charakter des Spielers. NICHT für den Live-Betrieb gedacht (jeder mit
--- Tablet-Zugriff kann sich als Geschäftsführung ausgeben)!
--- =========================================================
-
-local TEST_IDENTIFIER_PREFIX = 'test-account:'
-local TEST_ROLES = { 'geschaeftsfuehrung', 'disponent', 'fahrer' }
-
-function Employees.TestSwitch(src, role)
-    if not Utils.InTable(TEST_ROLES, role) then error('invalid_role') end
-
-    local emp = loadEmployeeByIdentifier(TEST_IDENTIFIER_PREFIX .. role)
-    if not emp then error('employee_not_found') end
-
-    loggedIn[src] = emp
-    return emp
-end
-
-CreateThread(function()
-    for _, role in ipairs(TEST_ROLES) do
-        local identifier = TEST_IDENTIFIER_PREFIX .. role
-        local existing = loadEmployeeByIdentifier(identifier)
-        if not existing then
-            local employeeId = MySQL.insert.await(
-                'INSERT INTO st_employees (identifier, name, role, status) VALUES (?, ?, ?, ?)',
-                { identifier, 'Test: ' .. (Config.RoleLabels[role] or role), role, 'aktiv' }
-            )
-            if role == Config.Roles.FAHRER then
-                Drivers.EnsureDriverRecord(employeeId)
-            end
-        end
-    end
-end)
-
 --- Aktualisiert den Sitzungscache eines Mitarbeiters (z.B. nach Rollen-/
 --- Statusänderung durch die Geschäftsführung), falls er gerade online ist.
 function Employees.RefreshLoginById(employeeId)

@@ -194,6 +194,20 @@ Config.DefaultPayoutTarget = 'Unternehmensbankkonto'
 Config.MoneyBridge = 'esx' -- 'esx' | 'qbcore' | 'custom'
 
 -- =========================================================
+-- GEHÄLTER / STEMPELUHR
+-- =========================================================
+-- Stundenlohn je Rolle. Wird nur EINMALIG beim ersten Ressourcenstart in die
+-- Datenbank (st_wage_rates) übernommen - danach ist die Datenbank die Quelle
+-- der Wahrheit, die Geschäftsführung kann die Sätze am Tablet anpassen
+-- (Reiter "Gehälter"). Änderungen hier in der Config wirken sich NICHT mehr
+-- aus, sobald die Sätze einmal in der Datenbank stehen.
+Config.DefaultHourlyWage = {
+    fahrer = 25,
+    disponent = 30,
+    geschaeftsfuehrung = 35,
+}
+
+-- =========================================================
 -- LOGGING
 -- =========================================================
 Config.Debug = false

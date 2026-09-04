@@ -211,6 +211,27 @@ html, body {
     letter-spacing: 0.5px;
 }
 .clock { font-variant-numeric: tabular-nums; color: var(--text-2); font-size: 13px; }
+.timeclock-chip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    color: var(--text-1);
+    padding: 5px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+}
+.timeclock-chip:hover { border-color: var(--accent-2); }
+.timeclock-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--text-2);
+    flex-shrink: 0;
+}
+.timeclock-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
 .close-btn {
     background: var(--bg-3);
     border: 1px solid var(--border);

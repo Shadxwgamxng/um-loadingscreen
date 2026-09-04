@@ -33,11 +33,22 @@ function nuiPost(name, payload) {
     }).catch(() => {});
 }
 
+// call() zeigt bei einem Fehler bewusst schon einen Toast und wirft danach,
+// damit der aufrufende Code nicht weiterläuft - das erzeugt aber eine
+// "Uncaught (in promise)"-Meldung in der Konsole, obwohl der Fehler dem
+// Nutzer bereits angezeigt wurde. Da unterdrücken wir hier gezielt.
+window.addEventListener('unhandledrejection', (event) => {
+    event.preventDefault();
+});
+
 const ERROR_MESSAGES = {
     not_logged_in: 'Dein Charakter hat kein Mitarbeiterkonto.',
     player_not_online: 'Dieser Spieler ist nicht online.',
     employee_already_exists: 'Dieser Charakter hat bereits ein Mitarbeiterkonto.',
     employee_not_found: 'Mitarbeiter nicht gefunden.',
+    already_clocked_in: 'Du bist bereits eingestempelt.',
+    not_clocked_in: 'Du bist nicht eingestempelt.',
+    nothing_to_pay: 'Für diesen Mitarbeiter steht aktuell kein Gehalt aus.',
     insufficient_player_cash: 'Du hast nicht genug Bargeld dabei, um diesen Betrag einzuzahlen.',
     employee_inactive: 'Dieses Mitarbeiterkonto ist deaktiviert.',
     forbidden_role: 'Keine Berechtigung für diese Aktion.',
@@ -234,6 +245,7 @@ const NAV = {
         { id: 'gf-fleet', label: 'Fuhrpark', icon: '🚛' },
         { id: 'gf-finance', label: 'Finanzen', icon: '💰' },
         { id: 'gf-payouts', label: 'Ein-/Auszahlungen', icon: '🏦' },
+        { id: 'gf-payroll', label: 'Gehälter', icon: '💵' },
         { id: 'gf-orders', label: 'Aufträge', icon: '📦' },
         { id: 'gf-log', label: 'Protokoll', icon: '📜' },
     ],
@@ -288,11 +300,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 document.getElementById('lock-screen').addEventListener('click', () => unlockTablet());
-document.getElementById('switch-account-btn').addEventListener('click', () => showAccountSwitch());
-document.getElementById('account-switch-screen').addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-test-role]');
-    if (btn) Actions.testSwitch(btn.dataset.testRole);
-});
+document.getElementById('no-account-retry').addEventListener('click', () => unlockTablet());
 
 function requestClose() {
     nuiPost('close', {});
@@ -314,13 +322,13 @@ document.getElementById('close-btn').addEventListener('click', () => closeTablet
 function hideAllScreens() {
     document.getElementById('lock-screen').classList.add('hidden');
     document.getElementById('boot-screen').classList.add('hidden');
-    document.getElementById('account-switch-screen').classList.add('hidden');
+    document.getElementById('no-account-screen').classList.add('hidden');
     document.getElementById('main-ui').classList.add('hidden');
 }
 
-function showAccountSwitch() {
+function showNoAccount() {
     hideAllScreens();
-    document.getElementById('account-switch-screen').classList.remove('hidden');
+    document.getElementById('no-account-screen').classList.remove('hidden');
 }
 
 function handleOpen(companyName) {
@@ -351,7 +359,7 @@ async function unlockTablet() {
         State.config = data;
         boot(data);
     } else {
-        showAccountSwitch();
+        showNoAccount();
     }
 }
 
@@ -375,6 +383,7 @@ function handleClose() {
     document.getElementById('app').classList.add('hidden');
     closeModal();
     if (clockInterval) { clearInterval(clockInterval); clockInterval = null; }
+    if (timeclockInterval) { clearInterval(timeclockInterval); timeclockInterval = null; }
 }
 
 let clockInterval = null;
@@ -403,7 +412,57 @@ function boot(data) {
     buildSidebar(data.employee.role);
     const first = (NAV[data.employee.role] || [])[0];
     if (first) showView(first.id);
+    startTimeclockWidget();
 }
+
+// ---------------------------------------------------------
+// Stempeluhr (Topbar-Widget, für jede Rolle sichtbar)
+// ---------------------------------------------------------
+
+let timeclockInterval = null;
+let timeclockState = null;
+
+function formatHm(totalSeconds) {
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    return `${h}:${String(m).padStart(2, '0')} Std.`;
+}
+
+async function refreshTimeclock() {
+    const res = await rpc('me:payrollStatus');
+    if (!res || !res.ok) return;
+    timeclockState = res.result;
+
+    const dot = document.getElementById('timeclock-dot');
+    const label = document.getElementById('timeclock-label');
+    if (!dot || !label) return;
+
+    dot.classList.toggle('on', timeclockState.clockedIn);
+    if (timeclockState.clockedIn) {
+        label.textContent = 'Eingestempelt';
+    } else {
+        label.textContent = timeclockState.unpaidSeconds > 0
+            ? `Ausgestempelt (${formatHm(timeclockState.unpaidSeconds)} offen)`
+            : 'Einstempeln';
+    }
+}
+
+function startTimeclockWidget() {
+    if (timeclockInterval) clearInterval(timeclockInterval);
+    refreshTimeclock();
+    timeclockInterval = setInterval(refreshTimeclock, 30000);
+}
+
+document.getElementById('timeclock-btn').addEventListener('click', async () => {
+    if (timeclockState && timeclockState.clockedIn) {
+        await call('me:clockOut');
+        toast('Ausgestempelt', '', 'success');
+    } else {
+        await call('me:clockIn');
+        toast('Eingestempelt', '', 'success');
+    }
+    refreshTimeclock();
+});
 
 function handlePush(event, data) {
     const map = {
@@ -847,7 +906,7 @@ VIEWS['gf-fleet'] = async (root) => {
 VIEWS['gf-finance'] = async (root) => {
     const [overview, tx] = await Promise.all([call('gf:finance:overview'), call('gf:finance:transactions', { limit: 40 })]);
 
-    const TX_TYPE_LABELS = { einnahme: 'Einnahme', auszahlung: 'Auszahlung', einzahlung: 'Einzahlung' };
+    const TX_TYPE_LABELS = { einnahme: 'Einnahme', auszahlung: 'Auszahlung', einzahlung: 'Einzahlung', gehalt: 'Gehalt' };
     const rows = tx.transactions.map((t) => `<tr>
         <td>#${t.id}</td>
         <td>${TX_TYPE_LABELS[t.type] || t.type}${t.driver_name ? ` - ${escapeHtml(t.driver_name)}` : ''}</td>
@@ -935,6 +994,43 @@ VIEWS['gf-payouts'] = async (root) => {
         </div>`;
 };
 
+VIEWS['gf-payroll'] = async (root) => {
+    const [ratesRes, overview] = await Promise.all([call('gf:payroll:rates'), call('gf:payroll:overview')]);
+
+    const rateRows = Object.keys(ratesRes.roleLabels).map((role) => `
+        <label>${escapeHtml(ratesRes.roleLabels[role])}</label>
+        <div class="btn-row" style="margin-bottom:10px;">
+            <input id="wage-rate-${role}" type="number" min="0" step="0.5" value="${Number(ratesRes.rates[role] || 0)}" style="flex:1;" />
+            <button class="btn btn-sm" onclick="Actions.setWageRate('${role}')">Speichern</button>
+        </div>`).join('');
+
+    const employeeRows = overview.employees.map((e) => `<tr>
+        <td>${escapeHtml(e.name)}</td>
+        <td>${escapeHtml(ratesRes.roleLabels[e.role] || e.role)}</td>
+        <td>${e.clockedIn ? badge({ label: 'Eingestempelt', dot: 'green' }) : badge({ label: 'Ausgestempelt', dot: 'gray' })}</td>
+        <td>${formatHm(e.unpaidSeconds)}</td>
+        <td>${formatMoney(e.hourlyRate)}/Std.</td>
+        <td style="font-weight:700;">${formatMoney(e.amount)}</td>
+        <td class="btn-row">
+            <button class="btn btn-sm btn-primary" ${e.amount <= 0 ? 'disabled' : ''} onclick="Actions.payEmployee(${e.id}, ${JSON.stringify(e.name)})">Auszahlen</button>
+        </td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Gehälter</h1>
+        <p class="view-subtitle">Stundenlöhne je Rolle festlegen und offene Gehälter anhand der Stempeluhr auszahlen.</p>
+        <div class="grid grid-2" style="align-items:start;">
+            <div class="section">
+                <h3 style="margin:0 0 12px;">Stundenlöhne</h3>
+                ${rateRows}
+            </div>
+            <div class="section">
+                <h3 style="margin:0 0 12px;">Offene Gehälter</h3>
+                ${table(['Name', 'Rolle', 'Stempeluhr', 'Offene Std.', 'Satz', 'Betrag', ''], employeeRows)}
+            </div>
+        </div>`;
+};
+
 VIEWS['gf-orders'] = async (root) => {
     const filter = window.__orderStatusFilter || '';
     const d = await call('gf:orders:all', { limit: 150, statusFilter: filter || undefined });
@@ -984,21 +1080,6 @@ VIEWS['gf-log'] = async (root) => {
 // =========================================================
 
 const Actions = {};
-
-Actions.testSwitch = async (role) => {
-    const res = await rpc('session:testSwitch', { role });
-    if (!res || !res.ok) {
-        toast('Fehler', translateError(res && res.error), 'error');
-        return;
-    }
-    const data = res.result;
-    State.employee = data.employee;
-    State.role = data.employee.role;
-    State.config = data;
-    hideAllScreens();
-    document.getElementById('boot-screen').classList.remove('hidden');
-    boot(data);
-};
 
 Actions.submitVehicleConditionAndClose = async () => {
     const fuel = Number(document.getElementById('condition-fuel').value);
@@ -1384,6 +1465,27 @@ Actions.executeDeposit = async () => {
     await call('gf:deposit:execute', { amount, source, reason });
     toast('Einzahlung verbucht', `${formatMoney(amount)} Bargeld abgezogen.`, 'success');
     showView('gf-payouts');
+};
+
+Actions.setWageRate = async (role) => {
+    const hourlyRate = Number(document.getElementById(`wage-rate-${role}`).value);
+    if (hourlyRate === null || hourlyRate < 0 || Number.isNaN(hourlyRate)) {
+        toast('Ungültiger Betrag', 'Bitte einen gültigen Stundenlohn angeben.', 'error');
+        return;
+    }
+    await call('gf:payroll:setRate', { role, hourlyRate });
+    toast('Stundenlohn gespeichert', '', 'success');
+    showView('gf-payroll');
+};
+
+Actions.payEmployee = async (employeeId, name) => {
+    const result = await call('gf:payroll:pay', { employeeId });
+    if (result.cashGiven) {
+        toast('Gehalt ausgezahlt', `${formatMoney(result.amount)} an ${name} als Bargeld übergeben.`, 'success');
+    } else {
+        toast('Gehalt gebucht', `${formatMoney(result.amount)} für ${name} - Bargeld konnte nicht übergeben werden (nicht online oder keine Wirtschafts-Anbindung).`, 'info');
+    }
+    showView('gf-payroll');
 };
 
 Actions.filterOrders = (status) => {

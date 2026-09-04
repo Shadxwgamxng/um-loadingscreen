@@ -29,14 +29,6 @@ RPC.Register('session:whoami', function(src)
     return sessionPayload(emp)
 end)
 
---- TEST-KONTEN: wechselt den Server-Slot direkt auf eines der drei festen
---- Testkonten (siehe Employees.TestSwitch in sv_bootstrap.lua) - ganz ohne
---- Bezug zum FiveM-Charakter. Nur zum Ausprobieren der Basisfunktionen!
-RPC.Register('session:testSwitch', function(src, payload)
-    local emp = Employees.TestSwitch(src, payload.role)
-    return sessionPayload(emp)
-end)
-
 local function countRows(query, params)
     local row = MySQL.single.await(query, params)
     return row and tonumber(row.c) or 0

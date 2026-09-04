@@ -21,6 +21,7 @@ server_scripts {
     'server/sv_bootstrap.lua',
     'server/sv_logs.lua',
     'server/sv_finance.lua',
+    'server/sv_payroll.lua',
     'server/sv_vehicles.lua',
     'server/sv_drivers.lua',
     'server/sv_hours.lua',
