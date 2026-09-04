@@ -290,6 +290,9 @@ document.addEventListener('keydown', (e) => {
 document.getElementById('lock-screen').addEventListener('click', () => unlockTablet());
 document.getElementById('switch-account-btn').addEventListener('click', () => showAccountSwitch());
 document.getElementById('account-switch-screen').addEventListener('click', (e) => {
+    // TEMPORÄR zum Debuggen - siehe Chat: bestätigt, dass der Klick beim
+    // Browser überhaupt ankommt, bevor irgendwas mit dem Server passiert.
+    toast('Debug', 'Klick erkannt auf: ' + (e.target.tagName + (e.target.id ? '#' + e.target.id : '')), 'info');
     const btn = e.target.closest('[data-test-role]');
     if (btn) Actions.testSwitch(btn.dataset.testRole);
 });
