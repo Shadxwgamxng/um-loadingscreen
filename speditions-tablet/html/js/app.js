@@ -336,7 +336,7 @@ async function unlockTablet() {
     if (unlocking) return;
     unlocking = true;
 
-    document.getElementById('lock-screen').classList.add('hidden');
+    hideAllScreens();
     document.getElementById('boot-screen').classList.remove('hidden');
     document.getElementById('boot-logo').textContent = (State.companyName || 'SPEDITIONS-TABLET').toUpperCase();
 
