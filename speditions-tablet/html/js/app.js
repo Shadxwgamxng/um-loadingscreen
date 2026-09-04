@@ -37,6 +37,7 @@ const ERROR_MESSAGES = {
     not_logged_in: 'Dein Charakter hat kein Mitarbeiterkonto.',
     player_not_online: 'Dieser Spieler ist nicht online.',
     employee_already_exists: 'Dieser Charakter hat bereits ein Mitarbeiterkonto.',
+    employee_not_found: 'Mitarbeiter nicht gefunden.',
     insufficient_player_cash: 'Du hast nicht genug Bargeld dabei, um diesen Betrag einzuzahlen.',
     employee_inactive: 'Dieses Mitarbeiterkonto ist deaktiviert.',
     forbidden_role: 'Keine Berechtigung für diese Aktion.',
@@ -287,7 +288,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 document.getElementById('lock-screen').addEventListener('click', () => unlockTablet());
-document.getElementById('no-account-retry').addEventListener('click', () => unlockTablet());
+document.getElementById('switch-account-btn').addEventListener('click', () => showAccountSwitch());
 
 function requestClose() {
     nuiPost('close', {});
@@ -309,17 +310,13 @@ document.getElementById('close-btn').addEventListener('click', () => closeTablet
 function hideAllScreens() {
     document.getElementById('lock-screen').classList.add('hidden');
     document.getElementById('boot-screen').classList.add('hidden');
-    document.getElementById('no-account-screen').classList.add('hidden');
+    document.getElementById('account-switch-screen').classList.add('hidden');
     document.getElementById('main-ui').classList.add('hidden');
 }
 
-function showNoAccount(debugInfo) {
+function showAccountSwitch() {
     hideAllScreens();
-    document.getElementById('no-account-screen').classList.remove('hidden');
-    // TEMPORÄR: zeigt die rohe Server-Antwort direkt auf dem Bildschirm an,
-    // damit wir sehen, was der Client wirklich empfangen hat - siehe Chat.
-    const el = document.getElementById('no-account-debug');
-    if (el) el.textContent = debugInfo ? JSON.stringify(debugInfo) : '(keine Antwort erhalten)';
+    document.getElementById('account-switch-screen').classList.remove('hidden');
 }
 
 function handleOpen(companyName) {
@@ -350,7 +347,7 @@ async function unlockTablet() {
         State.config = data;
         boot(data);
     } else {
-        showNoAccount(res);
+        showAccountSwitch();
     }
 }
 
@@ -983,6 +980,21 @@ VIEWS['gf-log'] = async (root) => {
 // =========================================================
 
 const Actions = {};
+
+Actions.testSwitch = async (role) => {
+    const res = await rpc('session:testSwitch', { role });
+    if (!res || !res.ok) {
+        toast('Fehler', translateError(res && res.error), 'error');
+        return;
+    }
+    const data = res.result;
+    State.employee = data.employee;
+    State.role = data.employee.role;
+    State.config = data;
+    hideAllScreens();
+    document.getElementById('boot-screen').classList.remove('hidden');
+    boot(data);
+};
 
 Actions.submitVehicleConditionAndClose = async () => {
     const fuel = Number(document.getElementById('condition-fuel').value);

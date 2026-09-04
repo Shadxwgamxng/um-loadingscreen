@@ -4,18 +4,7 @@
 
 math.randomseed(os.time())
 
---- Reiner Statusabfrage-Endpunkt ohne Seiteneffekte: meldet, ob dieser
---- Server-Slot (anhand seines FiveM-Charakters) einem Mitarbeiterkonto
---- zugeordnet werden kann. Kein Login-Bildschirm - wird sowohl von der NUI
---- beim Entsperren des Tablets als auch von client/cl_hours.lua im
---- Hintergrund abgefragt.
-RPC.Register('session:whoami', function(src)
-    local emp = Employees.EnsureSession(src)
-
-    if not emp then
-        return { ok = true, loggedIn = false }
-    end
-
+local function sessionPayload(emp)
     return {
         ok = true,
         loggedIn = true,
@@ -25,6 +14,27 @@ RPC.Register('session:whoami', function(src)
         vehicleClasses = Config.VehicleClasses,
         vehicleStatuses = Config.VehicleStatus,
     }
+end
+
+--- Reiner Statusabfrage-Endpunkt ohne Seiteneffekte: meldet, ob dieser
+--- Server-Slot (anhand seines FiveM-Charakters) einem Mitarbeiterkonto
+--- zugeordnet werden kann. Kein Login-Bildschirm - wird sowohl von der NUI
+--- beim Entsperren des Tablets als auch von client/cl_hours.lua im
+--- Hintergrund abgefragt.
+RPC.Register('session:whoami', function(src)
+    local emp = Employees.EnsureSession(src)
+    if not emp then
+        return { ok = true, loggedIn = false }
+    end
+    return sessionPayload(emp)
+end)
+
+--- TEST-KONTEN: wechselt den Server-Slot direkt auf eines der drei festen
+--- Testkonten (siehe Employees.TestSwitch in sv_bootstrap.lua) - ganz ohne
+--- Bezug zum FiveM-Charakter. Nur zum Ausprobieren der Basisfunktionen!
+RPC.Register('session:testSwitch', function(src, payload)
+    local emp = Employees.TestSwitch(src, payload.role)
+    return sessionPayload(emp)
 end)
 
 local function countRows(query, params)

@@ -33,22 +33,9 @@ function Employees.EnsureSession(src)
     if cached then return cached end
 
     local identifier = Utils.GetIdentifier(src)
-
-    -- TEMPORÄR: läuft immer (nicht nur bei Config.Debug), damit im
-    -- Konsolen-Log eindeutig sichtbar ist, welcher Identifier für den
-    -- Server-Slot ermittelt wird und ob dazu ein Mitarbeiter gefunden wird.
-    -- Siehe Chat - wieder entfernen, sobald die Mitarbeitererkennung
-    -- bestätigt zuverlässig funktioniert.
-    print(('^3[speditions-tablet]^7 SESSION-DEBUG: Slot %s -> Identifier %s'):format(src, tostring(identifier)))
-
     if not identifier then return nil end
 
     local emp = loadEmployeeByIdentifier(identifier)
-
-    print(('^3[speditions-tablet]^7 SESSION-DEBUG: Identifier %s -> %s'):format(
-        tostring(identifier), emp and ('Mitarbeiter #' .. emp.id .. ' "' .. emp.name .. '" (' .. emp.role .. ')') or 'KEIN Mitarbeiter in st_employees gefunden'
-    ))
-
     if not emp then return nil end
 
     loggedIn[src] = emp
@@ -58,6 +45,44 @@ end
 function Employees.GetLoggedIn(src)
     return loggedIn[src]
 end
+
+-- =========================================================
+-- TEST-KONTEN: zum schnellen Ausprobieren der Basisfunktionen ohne echte
+-- Charakter-Zuordnung. Drei feste Konten (eines je Rolle) werden beim
+-- Ressourcenstart angelegt, falls sie noch nicht existieren, und lassen
+-- sich am Tablet jederzeit per Klick wechseln - unabhängig vom FiveM-
+-- Charakter des Spielers. NICHT für den Live-Betrieb gedacht (jeder mit
+-- Tablet-Zugriff kann sich als Geschäftsführung ausgeben)!
+-- =========================================================
+
+local TEST_IDENTIFIER_PREFIX = 'test-account:'
+local TEST_ROLES = { 'geschaeftsfuehrung', 'disponent', 'fahrer' }
+
+function Employees.TestSwitch(src, role)
+    if not Utils.InTable(TEST_ROLES, role) then error('invalid_role') end
+
+    local emp = loadEmployeeByIdentifier(TEST_IDENTIFIER_PREFIX .. role)
+    if not emp then error('employee_not_found') end
+
+    loggedIn[src] = emp
+    return emp
+end
+
+CreateThread(function()
+    for _, role in ipairs(TEST_ROLES) do
+        local identifier = TEST_IDENTIFIER_PREFIX .. role
+        local existing = loadEmployeeByIdentifier(identifier)
+        if not existing then
+            local employeeId = MySQL.insert.await(
+                'INSERT INTO st_employees (identifier, name, role, status) VALUES (?, ?, ?, ?)',
+                { identifier, 'Test: ' .. (Config.RoleLabels[role] or role), role, 'aktiv' }
+            )
+            if role == Config.Roles.FAHRER then
+                Drivers.EnsureDriverRecord(employeeId)
+            end
+        end
+    end
+end)
 
 --- Aktualisiert den Sitzungscache eines Mitarbeiters (z.B. nach Rollen-/
 --- Statusänderung durch die Geschäftsführung), falls er gerade online ist.
@@ -134,11 +159,6 @@ RegisterCommand('tablet_grant', function(src, args)
         reply('Konnte den Charakter-Identifier des Zielspielers nicht ermitteln.')
         return
     end
-
-    -- TEMPORÄR: siehe SESSION-DEBUG in Employees.EnsureSession - hiermit
-    -- lässt sich direkt vergleichen, ob tablet_grant und die spätere
-    -- Erkennung beim Tablet-Öffnen exakt denselben Identifier sehen.
-    print(('^3[speditions-tablet]^7 GRANT-DEBUG: Server-ID %s (%s) -> Identifier %s'):format(targetId, GetPlayerName(targetId), identifier))
 
     if name == '' then name = GetPlayerName(targetId) end
 

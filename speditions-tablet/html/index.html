@@ -38,15 +38,13 @@
                     <div class="boot-spinner"></div>
                 </div>
 
-                <div id="no-account-screen" class="login-screen hidden">
+                <div id="account-switch-screen" class="login-screen hidden">
                     <div class="login-box">
-                        <div class="login-title">Kein Mitarbeiterkonto</div>
-                        <div class="login-subtitle">Dein Charakter ist noch keinem Mitarbeiterkonto zugeordnet. Wende dich an die Geschäftsführung, damit dir eine Rolle zugewiesen wird.</div>
-                        <button id="no-account-retry" class="btn btn-primary" style="width:100%;margin-top:16px;">Erneut versuchen</button>
-                        <!-- TEMPORÄR zum Debuggen - siehe Chat: statischer Text (kein JS nötig), zeigt ob
-                             diese HTML-Datei überhaupt aktuell ist, plus die rohe session:whoami-Antwort. -->
-                        <div style="margin-top:14px;font-family:monospace;font-size:11px;color:#39ff6a;">BUILD-DBG-B1</div>
-                        <div id="no-account-debug" style="margin-top:6px;font-family:monospace;font-size:10.5px;color:#ffb84d;word-break:break-all;"></div>
+                        <div class="login-title">Test-Konto wählen</div>
+                        <div class="login-subtitle">Zum Ausprobieren der Basisfunktionen - jederzeit wechselbar, unabhängig vom Charakter.</div>
+                        <button class="btn btn-primary" style="width:100%;margin-top:16px;" onclick="Actions.testSwitch('geschaeftsfuehrung')">Geschäftsführung</button>
+                        <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="Actions.testSwitch('disponent')">Disponent</button>
+                        <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="Actions.testSwitch('fahrer')">LKW-Fahrer</button>
                     </div>
                 </div>
 
@@ -62,6 +60,7 @@
                                 <span id="employee-role" class="role-badge"></span>
                             </div>
                             <div id="clock" class="clock"></div>
+                            <button id="switch-account-btn" class="close-btn" title="Konto wechseln">&#8646;</button>
                             <button id="close-btn" class="close-btn" title="Schließen">&#10005;</button>
                         </div>
                     </header>
