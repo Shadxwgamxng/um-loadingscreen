@@ -289,6 +289,10 @@ document.addEventListener('keydown', (e) => {
 
 document.getElementById('lock-screen').addEventListener('click', () => unlockTablet());
 document.getElementById('switch-account-btn').addEventListener('click', () => showAccountSwitch());
+document.getElementById('account-switch-screen').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-test-role]');
+    if (btn) Actions.testSwitch(btn.dataset.testRole);
+});
 
 function requestClose() {
     nuiPost('close', {});
