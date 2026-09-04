@@ -989,18 +989,29 @@ VIEWS['gf-log'] = async (root) => {
 const Actions = {};
 
 Actions.testSwitch = async (role) => {
-    const res = await rpc('session:testSwitch', { role });
-    if (!res || !res.ok) {
-        toast('Fehler', translateError(res && res.error), 'error');
-        return;
+    // TEMPORÄRES DEBUGGING - siehe Chat: Schritt-für-Schritt-Toasts, um zu
+    // sehen, ob/wo die Antwort ausbleibt oder ein Fehler auftritt.
+    try {
+        toast('Debug A', 'rpc() wird aufgerufen fuer Rolle ' + role + ' ...', 'info');
+        const res = await rpc('session:testSwitch', { role });
+        toast('Debug B', 'Antwort erhalten: ' + JSON.stringify(res).slice(0, 220), 'info');
+
+        if (!res || !res.ok) {
+            toast('Fehler', translateError(res && res.error), 'error');
+            return;
+        }
+        const data = res.result;
+        State.employee = data.employee;
+        State.role = data.employee.role;
+        State.config = data;
+        hideAllScreens();
+        document.getElementById('boot-screen').classList.remove('hidden');
+        toast('Debug C', 'rufe boot() auf ...', 'info');
+        boot(data);
+        toast('Debug D', 'boot() abgeschlossen. main-ui hidden? ' + document.getElementById('main-ui').classList.contains('hidden'), 'success');
+    } catch (e) {
+        toast('JS-FEHLER in testSwitch', String((e && e.stack) || e), 'error');
     }
-    const data = res.result;
-    State.employee = data.employee;
-    State.role = data.employee.role;
-    State.config = data;
-    hideAllScreens();
-    document.getElementById('boot-screen').classList.remove('hidden');
-    boot(data);
 };
 
 Actions.submitVehicleConditionAndClose = async () => {
