@@ -335,6 +335,9 @@ end
 function Orders.AcceptByDriver(src, orderId)
     local emp, driver, order = requireOwnOrder(src, orderId)
     if order.status ~= 'disponiert' then error('order_not_pending') end
+    print(('^3[speditions-tablet debug]^7 driver.id=%s on_shift=%s (type %s) -> ToBool=%s'):format(
+        tostring(driver.id), tostring(driver.on_shift), type(driver.on_shift), tostring(Utils.ToBool(driver.on_shift))
+    ))
     if not Utils.ToBool(driver.on_shift) then error('shift_not_started') end
 
     local minutes = (tonumber(order.distance_km) / (Config.AverageSpeedKmh or 65)) * 60 + (Config.DeadlineBufferMinutes or 8)
@@ -523,6 +526,9 @@ end)
 RPC.Register('driver:openOrders', function(src)
     local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
     local driver = Drivers.EnsureDriverRecord(emp.id)
+    print(('^3[speditions-tablet debug]^7 openOrders emp.id=%s driver.id=%s on_shift=%s (type %s) -> ToBool=%s'):format(
+        tostring(emp.id), tostring(driver.id), tostring(driver.on_shift), type(driver.on_shift), tostring(Utils.ToBool(driver.on_shift))
+    ))
     return {
         orders = Orders.ListOpen(),
         dispatcherAvailable = isDispatcherAvailable(),

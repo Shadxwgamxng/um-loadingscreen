@@ -163,6 +163,9 @@ end
 --- ohne bei einem harmlosen "nochmal derselbe Wert"-Fall falsch anzuschlagen.
 local function verifyShiftState(driverId, expectedOnShift)
     local row = MySQL.single.await('SELECT on_shift FROM st_drivers WHERE id = ?', { driverId })
+    print(('^3[speditions-tablet debug]^7 verifyShiftState driverId=%s on_shift=%s (type %s) expected=%s'):format(
+        tostring(driverId), tostring(row and row.on_shift), type(row and row.on_shift), tostring(expectedOnShift)
+    ))
     if not row or Utils.ToBool(row.on_shift) ~= expectedOnShift then
         error('shift_update_failed')
     end
@@ -171,6 +174,7 @@ end
 function Drivers.StartShift(src)
     local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
     local driver = Drivers.EnsureDriverRecord(emp.id)
+    print(('^3[speditions-tablet debug]^7 StartShift emp.id=%s driver.id=%s'):format(tostring(emp.id), tostring(driver.id)))
     MySQL.update.await('UPDATE st_drivers SET on_shift = 1, shift_started_at = NOW() WHERE id = ?', { driver.id })
     verifyShiftState(driver.id, true)
     Logs.Write(emp.id, 'shift_started', ('%s hat die Fahrerkarte eingesteckt (Fahrt gestartet).'):format(emp.name))
