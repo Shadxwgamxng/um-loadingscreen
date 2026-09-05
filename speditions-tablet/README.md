@@ -10,6 +10,7 @@ verwaltet.
 
 - [oxmysql](https://github.com/overextended/oxmysql)
 - MySQL/MariaDB-Datenbank
+- Optional: [pma-voice](https://github.com/AvarianKnight/pma-voice) für den CB-Funk (siehe unten) - ohne pma-voice wird das Bedienfeld weiterhin angezeigt und lässt sich bedienen, hat aber keine echte Audio-Wirkung.
 
 ## Installation
 
@@ -100,6 +101,29 @@ sich einen offenen Auftrag im "Offener Auftragspool"-Bereich unter "Meine
 Aufträge" selbst zuweisen ("Übernehmen"). Sobald wieder jemand mit
 Dispositionsrecht online ist, wird der Button gesperrt und die normale
 Disposition greift wieder. Siehe `Orders.SelfAssign` in `server/sv_orders.lua`.
+
+### CB-Funk
+
+Bindet an [pma-voice](https://github.com/AvarianKnight/pma-voice) an (Exports
+`setRadioChannel`/`setRadioVolume`). Ein-/Ausschalten läuft ausschließlich
+über den Knopf oben im Tablet - danach bleibt das Bedienfeld auch bei
+geschlossenem Tablet sichtbar und verschiebbar auf dem Bildschirm. Um es zu
+bedienen (ziehen, Kanal 01-09, Lautstärke, Stumm), während das Tablet
+geschlossen ist (z.B. während der Fahrt), kurz `Config.CbRadio.interactKey`
+(Standard `F7`) drücken - das gibt kurz den Mauszeiger dafür frei, ohne das
+Tablet zu öffnen. Ist das Tablet ohnehin offen, ist das Funkgerät automatisch
+mitbedienbar. Sprechen (Push-to-Talk) läuft über pma-voice's eigene
+Standard-Taste, sobald ein Kanal eingestellt ist - dafür baut dieses Skript
+nichts Eigenes.
+
+**Hinweis zum Design:** Auf Wunsch orientiert sich das Bedienfeld an einem
+mitgeschickten Foto eines physischen CB-Funkgeräts (Lautstärke-Knopf links,
+Display mit Kanalanzeige, "MUTE CTCSS"-Taste, CH-Wippe unten rechts) - da
+das Originalfoto selbst nicht als Bilddatei in die Ressource übernommen
+werden konnte, ist es als CSS/HTML-Nachbau umgesetzt, keine Bilddatei.
+Die übrigen im Foto vorhandenen, aber nicht benötigten Tasten (AM/FM MENU,
+EMG/VOX, SCAN/MSCAN, MEM/MSAVE) sind rein dekorativ nachgebaut und ohne
+Funktion - es wurden bewusst keine zusätzlichen Bedienelemente ergänzt.
 
 ## Rollen & Berechtigungen
 
@@ -248,6 +272,7 @@ Alle Stellschrauben befinden sich in `config.lua`:
   andere Client-Skripte nutzbar) sowie native In-Game-Hinweise/Wegpunkte sind hier verdrahtet.
 - `client/cl_hours.lua` - Erkennt per Kennzeichen-Abgleich, ob der Fahrer
   gerade sein zugewiesenes Firmenfahrzeug fährt, und meldet Fahrzeit an den Server.
+- `client/cl_radio.lua` - CB-Funk, bindet an pma-voice an (Kanal/Lautstärke/Stumm).
 - `html/` - NUI-Frontend (Sperrbildschirm, rollenbasierte Ansichten, siehe
   `js/app.js`). Der Client führt dabei keine Geschäftslogik aus - jede Aktion
   wird serverseitig neu geprüft.

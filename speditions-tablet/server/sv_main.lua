@@ -29,6 +29,24 @@ RPC.Register('session:whoami', function(src)
     return sessionPayload(emp)
 end)
 
+-- =========================================================
+-- CB-Funk: nur das Ein-/Ausschalten läuft über den Server (nur Mitarbeiter
+-- dürfen ein Funkgerät haben, plus Protokollierung) - Kanal/Lautstärke/Stumm
+-- passieren rein clientseitig über pma-voice, das selbst serverseitig validiert.
+-- =========================================================
+
+RPC.Register('me:radio:powerOn', function(src)
+    local emp = Employees.RequireRole(src)
+    Logs.Write(emp.id, 'radio_on', ('%s hat den CB-Funk eingeschaltet.'):format(emp.name))
+    return { ok = true }
+end)
+
+RPC.Register('me:radio:powerOff', function(src)
+    local emp = Employees.RequireRole(src)
+    Logs.Write(emp.id, 'radio_off', ('%s hat den CB-Funk ausgeschaltet.'):format(emp.name))
+    return { ok = true }
+end)
+
 local function countRows(query, params)
     local row = MySQL.single.await(query, params)
     return row and tonumber(row.c) or 0

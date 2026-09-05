@@ -53,6 +53,10 @@
                             <span class="brand-sub">Speditions-Tablet</span>
                         </div>
                         <div class="topbar-right">
+                            <button id="cb-radio-toggle" class="timeclock-chip" title="CB-Funk ein-/ausschalten">
+                                <span id="cb-radio-dot" class="timeclock-dot"></span>
+                                <span id="cb-radio-toggle-label">CB-Funk</span>
+                            </button>
                             <button id="timeclock-btn" class="timeclock-chip" title="Ein-/Ausstempeln">
                                 <span id="timeclock-dot" class="timeclock-dot"></span>
                                 <span id="timeclock-label">Stempeluhr</span>
@@ -72,6 +76,62 @@
                     </div>
                 </div>
 
+            </div>
+        </div>
+    </div>
+
+    <!-- CB-Funk: eigenständiges Bedienfeld, bleibt auch bei geschlossenem
+         Tablet sichtbar (siehe Config.CbRadio.interactKey zum Bedienen). -->
+    <div id="cb-radio" class="cb-radio hidden">
+        <div class="cb-radio-body" id="cb-radio-drag-handle">
+            <div class="cb-radio-top">
+                <div class="cb-knob-col">
+                    <div class="cb-knob cb-knob-vol" id="cb-knob-vol" title="Lautstärke (Mausrad)">
+                        <div class="cb-knob-notch"></div>
+                    </div>
+                    <div class="cb-switch"></div>
+                </div>
+
+                <div class="cb-lcd">
+                    <div class="cb-lcd-icons-top">
+                        <span>TX</span><span>FM</span><span>AM</span><span>UK</span>
+                    </div>
+                    <div class="cb-lcd-icons-left">
+                        <span>VOX</span><span>EMG</span><span>ASC</span><span>SC</span>
+                    </div>
+                    <div class="cb-lcd-main">
+                        <span id="cb-lcd-mute" class="cb-lcd-mute">🔇</span>
+                        <span class="cb-lcd-ch-label">CH</span>
+                        <span id="cb-channel" class="cb-lcd-channel">01</span>
+                    </div>
+                    <div class="cb-lcd-icons-bottom">
+                        <span>ANL</span><span>NB</span><span>RB</span><span>CTCSS</span>
+                    </div>
+                    <div class="cb-lcd-freq">27.205</div>
+                </div>
+
+                <div class="cb-knob-col">
+                    <div class="cb-knob cb-knob-sm" title="F"><span class="cb-knob-label">F</span></div>
+                </div>
+                <div class="cb-knob-col">
+                    <div class="cb-knob cb-knob-sm" title="ASC"><span class="cb-knob-label">ASC</span></div>
+                    <div class="cb-knob cb-knob-sm" title="SQ"><span class="cb-knob-label">SQ</span></div>
+                </div>
+
+                <div class="cb-speaker"></div>
+            </div>
+
+            <div class="cb-buttons">
+                <button class="cb-btn" disabled><span>AM/FM</span><small>MENU</small></button>
+                <button class="cb-btn" disabled><span>EMG</span><small>VOX</small></button>
+                <button class="cb-btn" disabled><span>SCAN</span><small>MSCAN</small></button>
+                <button class="cb-btn" disabled><span>MEM</span><small>MSAVE</small></button>
+                <button class="cb-btn cb-btn-mute" id="cb-mute-btn"><span>MUTE</span><small>CTCSS</small></button>
+                <div class="cb-ch-rocker">
+                    <button id="cb-ch-up" class="cb-ch-btn" title="Kanal +">▲</button>
+                    <span class="cb-ch-rocker-label">CH</span>
+                    <button id="cb-ch-down" class="cb-ch-btn" title="Kanal -">▼</button>
+                </div>
             </div>
         </div>
     </div>

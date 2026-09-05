@@ -533,3 +533,139 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 6px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border); }
+
+/* =========================================================
+   CB-Funk - eigenständiges, verschiebbares Bedienfeld außerhalb des
+   Tablets (siehe Config.CbRadio.interactKey zum Bedienen bei
+   geschlossenem Tablet). Nachbau eines klassischen Mobil-CB-Funkgeräts.
+   ========================================================= */
+
+.cb-radio {
+    position: fixed;
+    left: 24px;
+    bottom: 24px;
+    z-index: 500;
+    user-select: none;
+    filter: drop-shadow(0 10px 24px rgba(0,0,0,0.55));
+    transition: opacity 0.15s ease;
+}
+.cb-radio.hidden { display: none; }
+.cb-radio:not(.cb-radio-focused) { opacity: 0.88; }
+
+.cb-radio-body {
+    width: 460px;
+    background: linear-gradient(160deg, #34363a, #16171a 65%);
+    border: 2px solid #050505;
+    border-radius: 10px;
+    padding: 12px 14px 10px;
+    cursor: grab;
+}
+.cb-radio-body:active { cursor: grabbing; }
+.cb-radio-focused .cb-radio-body { box-shadow: 0 0 0 2px var(--accent-2), 0 0 18px rgba(96,165,250,0.35); }
+
+.cb-radio-top { display: flex; align-items: center; gap: 10px; }
+
+.cb-knob-col { display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0; }
+
+.cb-knob {
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #6b6f76, #1c1d20 70%);
+    border: 1px solid #000;
+    box-shadow: inset 0 0 4px rgba(0,0,0,0.6);
+    position: relative;
+}
+.cb-knob-vol { width: 46px; height: 46px; cursor: ns-resize; }
+.cb-knob-vol .cb-knob-notch {
+    position: absolute; top: 4px; left: 50%;
+    width: 2px; height: 14px;
+    background: #e8b923;
+    transform-origin: 50% 19px;
+    transform: translateX(-50%);
+}
+.cb-knob-sm { width: 24px; height: 24px; }
+.cb-knob-label {
+    position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%);
+    font-size: 8px; color: var(--text-2); letter-spacing: 0.5px; white-space: nowrap;
+}
+.cb-switch {
+    width: 20px; height: 10px;
+    background: #0c0c0d;
+    border: 1px solid #000;
+    border-radius: 2px;
+}
+
+.cb-lcd {
+    flex: 1;
+    background: #1c1400;
+    border: 1px solid #000;
+    border-radius: 3px;
+    padding: 6px 10px;
+    color: #ffb000;
+    font-family: 'Consolas', monospace;
+    position: relative;
+    overflow: hidden;
+}
+.cb-lcd-icons-top, .cb-lcd-icons-bottom {
+    display: flex; gap: 8px;
+    font-size: 8px; letter-spacing: 0.5px;
+    color: #a9701a;
+}
+.cb-lcd-icons-left { display: none; }
+.cb-lcd-main {
+    display: flex; align-items: baseline; justify-content: center; gap: 6px;
+    margin: 2px 0;
+}
+.cb-lcd-ch-label { font-size: 11px; color: #c98a1f; }
+.cb-lcd-channel { font-size: 30px; font-weight: 700; letter-spacing: 2px; line-height: 1; }
+.cb-lcd-mute { font-size: 12px; opacity: 0.15; }
+.cb-lcd-mute.active { opacity: 1; }
+.cb-lcd-freq { text-align: center; font-size: 10px; color: #c98a1f; }
+
+.cb-speaker {
+    width: 90px; height: 58px;
+    flex-shrink: 0;
+    border-radius: 6px;
+    background:
+        repeating-linear-gradient(180deg, #050505 0px, #050505 2px, #232427 2px, #232427 6px),
+        #16171a;
+    border: 1px solid #000;
+}
+
+.cb-buttons {
+    display: flex; align-items: stretch; gap: 6px;
+    margin-top: 10px;
+}
+.cb-btn {
+    flex: 1;
+    background: linear-gradient(180deg, #3c3f44, #202226);
+    border: 1px solid #050505;
+    border-radius: 4px;
+    color: #cfd3da;
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1.5;
+    padding: 6px 2px;
+    cursor: default;
+}
+.cb-btn span { display: block; }
+.cb-btn small { display: block; font-weight: 400; color: #8a8f99; font-size: 8px; }
+.cb-btn-mute { cursor: pointer; }
+.cb-btn-mute:hover { border-color: var(--accent-2); }
+.cb-btn-mute.active { background: linear-gradient(180deg, #7a2020, #401010); color: #ffdada; }
+
+.cb-ch-rocker {
+    flex-shrink: 0;
+    width: 46px;
+    display: flex; flex-direction: column; align-items: center;
+    background: linear-gradient(180deg, #3c3f44, #202226);
+    border: 1px solid #050505;
+    border-radius: 4px;
+    padding: 2px 0;
+}
+.cb-ch-btn {
+    background: none; border: none; color: #cfd3da;
+    font-size: 11px; line-height: 1; padding: 4px 0; width: 100%;
+    cursor: pointer;
+}
+.cb-ch-btn:hover { color: var(--accent-2); }
+.cb-ch-rocker-label { font-size: 8px; color: #8a8f99; }

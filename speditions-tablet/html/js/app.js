@@ -293,6 +293,7 @@ window.addEventListener('message', (event) => {
     if (data.type === 'open') handleOpen(data.companyName);
     else if (data.type === 'close') handleClose();
     else if (data.type === 'push') handlePush(data.event, data.data);
+    else if (data.type === 'radioInteract') document.getElementById('cb-radio').classList.toggle('cb-radio-focused', !!data.on);
 });
 
 document.addEventListener('keydown', (e) => {
@@ -464,6 +465,92 @@ document.getElementById('timeclock-btn').addEventListener('click', async () => {
     }
     refreshTimeclock();
 });
+
+// ---------------------------------------------------------
+// CB-Funk - ein-/ausschalten läuft über das Tablet, danach ist das
+// Bedienfeld auch bei geschlossenem Tablet sichtbar/verschiebbar
+// (siehe Config.CbRadio.interactKey, um es dann noch bedienen zu können).
+// ---------------------------------------------------------
+
+const Radio = { on: false, channel: 1, volume: 80, muted: false };
+
+function radioRefreshUi() {
+    document.getElementById('cb-channel').textContent = String(Radio.channel).padStart(2, '0');
+    document.getElementById('cb-lcd-mute').classList.toggle('active', Radio.muted);
+    document.getElementById('cb-mute-btn').classList.toggle('active', Radio.muted);
+    const notch = document.querySelector('#cb-knob-vol .cb-knob-notch');
+    if (notch) notch.style.transform = `translateX(-50%) rotate(${-135 + (Radio.volume / 100) * 270}deg)`;
+    document.getElementById('cb-radio-dot').classList.toggle('on', Radio.on);
+    document.getElementById('cb-radio-toggle-label').textContent = Radio.on ? `CB-Funk (Kanal ${Radio.channel})` : 'CB-Funk';
+}
+
+document.getElementById('cb-radio-toggle').addEventListener('click', async () => {
+    if (Radio.on) {
+        await call('me:radio:powerOff');
+        Radio.on = false;
+        await nuiPost('radioPower', { on: false });
+        document.getElementById('cb-radio').classList.add('hidden');
+        toast('CB-Funk ausgeschaltet', '', 'info');
+    } else {
+        await call('me:radio:powerOn');
+        Radio.on = true;
+        await nuiPost('radioPower', { on: true, channel: Radio.channel, volume: Radio.volume });
+        document.getElementById('cb-radio').classList.remove('hidden');
+        toast('CB-Funk eingeschaltet', `Kanal ${String(Radio.channel).padStart(2, '0')}`, 'success');
+    }
+    radioRefreshUi();
+});
+
+document.getElementById('cb-ch-up').addEventListener('click', () => {
+    Radio.channel = Radio.channel >= 9 ? 1 : Radio.channel + 1;
+    nuiPost('radioSetChannel', { channel: Radio.channel });
+    radioRefreshUi();
+});
+document.getElementById('cb-ch-down').addEventListener('click', () => {
+    Radio.channel = Radio.channel <= 1 ? 9 : Radio.channel - 1;
+    nuiPost('radioSetChannel', { channel: Radio.channel });
+    radioRefreshUi();
+});
+
+document.getElementById('cb-knob-vol').addEventListener('wheel', (e) => {
+    e.preventDefault();
+    Radio.volume = Math.max(0, Math.min(100, Radio.volume + (e.deltaY < 0 ? 5 : -5)));
+    nuiPost('radioSetVolume', { volume: Radio.volume });
+    radioRefreshUi();
+}, { passive: false });
+
+document.getElementById('cb-mute-btn').addEventListener('click', () => {
+    Radio.muted = !Radio.muted;
+    nuiPost('radioToggleMute', {});
+    radioRefreshUi();
+});
+
+// Ziehen: nur auslösen, wenn NICHT auf einem der (nicht-dekorativen)
+// Bedienelemente geklickt wird - der Rest des Foto-Nachbaus dient als
+// Ziehfläche.
+(() => {
+    const radioEl = document.getElementById('cb-radio');
+    const body = document.getElementById('cb-radio-drag-handle');
+    let dragging = false, offsetX = 0, offsetY = 0;
+
+    body.addEventListener('mousedown', (e) => {
+        if (e.target.closest('.cb-knob-vol, .cb-btn, .cb-ch-btn')) return;
+        dragging = true;
+        const rect = radioEl.getBoundingClientRect();
+        offsetX = e.clientX - rect.left;
+        offsetY = e.clientY - rect.top;
+        e.preventDefault();
+    });
+    document.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        radioEl.style.left = `${e.clientX - offsetX}px`;
+        radioEl.style.top = `${e.clientY - offsetY}px`;
+        radioEl.style.bottom = 'auto';
+    });
+    document.addEventListener('mouseup', () => { dragging = false; });
+})();
+
+radioRefreshUi();
 
 function handlePush(event, data) {
     const map = {

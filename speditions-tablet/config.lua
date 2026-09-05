@@ -194,6 +194,24 @@ Config.DefaultPayoutTarget = 'Unternehmensbankkonto'
 Config.MoneyBridge = 'esx' -- 'esx' | 'qbcore' | 'custom'
 
 -- =========================================================
+-- CB-FUNK
+-- =========================================================
+-- Bindet an pma-voice an (exports 'setRadioChannel'/'setRadioVolume').
+-- Das Funkgerät wird über das Tablet ein-/ausgeschaltet; danach bleibt das
+-- Bedienfeld auch bei geschlossenem Tablet sichtbar. Um es zu bedienen
+-- (ziehen, Kanal/Lautstärke/Stumm), während das Tablet geschlossen ist
+-- (z.B. während der Fahrt), kurz `interactKey` drücken - das gibt kurz den
+-- Mauszeiger frei, ohne das ganze Tablet zu öffnen. Ist das Tablet bereits
+-- offen, ist das Funkgerät automatisch mitbedienbar.
+Config.CbRadio = {
+    minChannel = 1,
+    maxChannel = 9,
+    defaultChannel = 1,
+    defaultVolume = 80, -- 0-100
+    interactKey = 'F7',
+}
+
+-- =========================================================
 -- GEHÄLTER / STEMPELUHR
 -- =========================================================
 -- Stundenlohn je Rolle. Wird nur EINMALIG beim ersten Ressourcenstart in die
