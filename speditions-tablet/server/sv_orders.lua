@@ -30,6 +30,21 @@ local function driverHasPermission(driverId, permissionKey)
     return row ~= nil
 end
 
+--- Prüft, ob gerade ein Disponent ODER die Geschäftsführung online UND am
+--- Tablet erkannt ist (d.h. das Tablet in dieser Verbindung schon einmal
+--- geöffnet hat). Nur wenn das NICHT der Fall ist, dürfen Fahrer sich
+--- offene Aufträge selbst zuweisen.
+local function isDispatcherAvailable()
+    for _, playerId in ipairs(GetPlayers()) do
+        local src = tonumber(playerId)
+        local emp = Employees.GetLoggedIn(src)
+        if emp and Utils.InTable({ Config.Roles.DISPONENT, Config.Roles.GESCHAEFTSFUEHRUNG }, emp.role) then
+            return true
+        end
+    end
+    return false
+end
+
 function Orders.GetById(orderId)
     return MySQL.single.await('SELECT * FROM st_orders WHERE id = ? LIMIT 1', { orderId })
 end
@@ -165,6 +180,45 @@ function Orders.Dispatch(src, orderId, driverId, vehicleId)
     if driverSrc then
         Utils.NotifyClient(driverSrc, ('Neuer Auftrag #%s: %s -> %s. Oeffne dein Tablet fuer Details.'):format(orderId, order.start_location, order.end_location), 'info')
     end
+
+    return { ok = true }
+end
+
+--- Erlaubt einem Fahrer, sich einen offenen Auftrag SELBST zuzuweisen -
+--- aber NUR, solange gerade kein Disponent/Geschäftsführung online ist.
+--- Sobald wieder ein Disponent verfügbar ist, greift wieder die normale
+--- Disposition (Orders.Dispatch). Nach der Selbstzuweisung läuft der
+--- Auftrag wie gewohnt über Orders.AcceptByDriver weiter.
+function Orders.SelfAssign(src, orderId)
+    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local driver = Drivers.EnsureDriverRecord(emp.id)
+
+    if isDispatcherAvailable() then error('dispatcher_available') end
+
+    local order = Orders.GetById(orderId)
+    if not order then error('order_not_found') end
+    if order.status ~= 'offen' then error('order_not_open') end
+
+    if not driverHasPermission(driver.id, order.requires_permission) then
+        error('driver_missing_permission')
+    end
+
+    local vehicleId = driver.assigned_vehicle_id
+    if vehicleId then
+        local vehicle = Vehicles.GetById(vehicleId)
+        if not vehicle then error('vehicle_not_found') end
+        if vehicle.archived == 1 then error('vehicle_archived') end
+        if Config.VehicleBlockedForDispatch[vehicle.status] then error('vehicle_unavailable') end
+    end
+
+    MySQL.update.await(
+        "UPDATE st_orders SET driver_id = ?, vehicle_id = ?, dispatcher_id = NULL, status = 'disponiert' WHERE id = ?",
+        { driver.id, vehicleId, orderId }
+    )
+    insertOrderHistory(orderId, 'disponiert', emp.id, ('%s hat sich den Auftrag selbst zugewiesen (kein Disponent online).'):format(emp.name))
+
+    RPC.PushToRole(Config.Roles.DISPONENT, 'orders:activeChanged', { orderId = orderId })
+    RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'orders:activeChanged', { orderId = orderId })
 
     return { ok = true }
 end
@@ -387,6 +441,19 @@ RPC.Register('driver:myOrders', function(src)
     local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
     local driver = Drivers.EnsureDriverRecord(emp.id)
     return { orders = Orders.MyOrders(driver.id) }
+end)
+
+--- Offener Auftragspool für Fahrer - zum Selbst-Übernehmen, wenn gerade
+--- kein Disponent verfügbar ist (siehe dispatcherAvailable im Ergebnis).
+RPC.Register('driver:openOrders', function(src)
+    Employees.RequireRole(src, { Config.Roles.FAHRER })
+    return { orders = Orders.ListOpen(), dispatcherAvailable = isDispatcherAvailable() }
+end)
+
+RPC.Register('driver:selfAssignOrder', function(src, payload)
+    local orderId = Utils.SanitizeNumber(payload.orderId, 1)
+    if not orderId then error('invalid_payload') end
+    return Orders.SelfAssign(src, orderId)
 end)
 
 RPC.Register('driver:acceptOrder', function(src, payload)

@@ -49,6 +49,7 @@ const ERROR_MESSAGES = {
     already_clocked_in: 'Du bist bereits eingestempelt.',
     not_clocked_in: 'Du bist nicht eingestempelt.',
     nothing_to_pay: 'Für diesen Mitarbeiter steht aktuell kein Gehalt aus.',
+    dispatcher_available: 'Ein Disponent ist gerade online - Aufträge werden von ihm zugewiesen.',
     insufficient_player_cash: 'Du hast nicht genug Bargeld dabei, um diesen Betrag einzuzahlen.',
     employee_inactive: 'Dieses Mitarbeiterkonto ist deaktiviert.',
     forbidden_role: 'Keine Berechtigung für diese Aktion.',
@@ -549,7 +550,8 @@ VIEWS['driver-card'] = async (root) => {
 };
 
 VIEWS['driver-orders'] = async (root) => {
-    const d = await call('driver:myOrders');
+    const [d, pool] = await Promise.all([call('driver:myOrders'), call('driver:openOrders')]);
+
     const rows = d.orders.map((o) => {
         let actions = '';
         if (o.status === 'disponiert') {
@@ -573,10 +575,27 @@ VIEWS['driver-orders'] = async (root) => {
         </tr>`;
     });
 
+    const poolRows = pool.orders.map((o) => `<tr>
+        <td>#${o.id}</td>
+        <td>${escapeHtml(o.cargo)}${o.requires_permission ? ' <span class="pill">⚠ Gefahrgut</span>' : ''}</td>
+        <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
+        <td>${Number(o.distance_km).toLocaleString('de-DE')} km</td>
+        <td>${formatMoney(o.value)}</td>
+        <td class="btn-row">
+            <button class="btn btn-sm btn-primary" ${pool.dispatcherAvailable ? 'disabled' : ''} onclick="Actions.selfAssignOrder(${o.id})">Übernehmen</button>
+        </td>
+    </tr>`);
+
     root.innerHTML = `
         <h1 class="view-title">Meine Aufträge</h1>
         <p class="view-subtitle">Zugewiesene und aktive Aufträge.</p>
-        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Distanz', 'Fahrzeug', 'Status', 'Aktion'], rows)}</div>`;
+        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Distanz', 'Fahrzeug', 'Status', 'Aktion'], rows)}</div>
+
+        <h1 class="view-title" style="margin-top:24px;">Offener Auftragspool</h1>
+        <p class="view-subtitle">${pool.dispatcherAvailable
+            ? 'Ein Disponent ist gerade online - Aufträge werden von ihm zugewiesen.'
+            : 'Aktuell ist kein Disponent verfügbar - du kannst dir einen offenen Auftrag selbst übernehmen.'}</p>
+        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Distanz', 'Wert', ''], poolRows)}</div>`;
 };
 
 VIEWS['driver-history'] = async (root) => {
@@ -1117,6 +1136,12 @@ Actions.confirmDecline = async (orderId) => {
     await call('driver:declineOrder', { orderId, reason });
     closeModal();
     toast('Auftrag abgelehnt', '', 'success');
+    showView('driver-orders');
+};
+
+Actions.selfAssignOrder = async (orderId) => {
+    await call('driver:selfAssignOrder', { orderId });
+    toast('Auftrag übernommen', `Auftrag #${orderId} wurde dir zugewiesen - du kannst ihn jetzt annehmen.`, 'success');
     showView('driver-orders');
 };
 

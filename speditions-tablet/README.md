@@ -92,6 +92,15 @@ zugewiesen, muss er zuerst Tankstand und ggf. Mängel/Besonderheiten melden
 automatisch auf "Wartung"). Ohne zugewiesenes Fahrzeug meldet er sich direkt
 ab. Siehe `Vehicles.ReportCondition` in `server/sv_vehicles.lua`.
 
+### Auftrags-Selbstzuweisung ohne Disponent
+
+Ist gerade weder ein Disponent noch die Geschäftsführung online (bzw. hat
+das Tablet in der aktuellen Verbindung noch nicht geöffnet), können Fahrer
+sich einen offenen Auftrag im "Offener Auftragspool"-Bereich unter "Meine
+Aufträge" selbst zuweisen ("Übernehmen"). Sobald wieder jemand mit
+Dispositionsrecht online ist, wird der Button gesperrt und die normale
+Disposition greift wieder. Siehe `Orders.SelfAssign` in `server/sv_orders.lua`.
+
 ## Rollen & Berechtigungen
 
 Alle sicherheitsrelevanten Aktionen (Rollenprüfung, Auftragsstatus,
