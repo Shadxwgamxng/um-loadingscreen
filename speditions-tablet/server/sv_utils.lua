@@ -67,6 +67,18 @@ function Utils.InTable(tbl, value)
     return false
 end
 
+--- oxmysql castet TINYINT(1)-Spalten (Anzeigebreite 1) beim Lesen zu einem
+--- echten Lua-Boolean (true/false), NICHT zu einer Zahl (1/0) - ein Vergleich
+--- wie `spalte == 1` ist dadurch immer falsch, selbst wenn die Spalte auf 1
+--- steht. Diese Funktion behandelt Boolean, Zahl und String-Repräsentation
+--- einheitlich und sollte für JEDE aus der DB gelesene TINYINT(1)-Spalte
+--- statt eines direkten `== 1`/`~= 1`-Vergleichs verwendet werden.
+function Utils.ToBool(v)
+    if v == true then return true end
+    if v == false or v == nil then return false end
+    return tonumber(v) == 1
+end
+
 function Utils.DebugPrint(...)
     if Config.Debug then
         print('^3[speditions-tablet]^7', ...)

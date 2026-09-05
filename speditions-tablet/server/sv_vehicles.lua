@@ -155,7 +155,7 @@ function Vehicles.Assign(src, vehicleId, driverId)
     local emp = Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
     local vehicle = Vehicles.GetById(vehicleId)
     if not vehicle then error('vehicle_not_found') end
-    if vehicle.archived == 1 then error('vehicle_archived') end
+    if Utils.ToBool(vehicle.archived) then error('vehicle_archived') end
 
     -- Vorherigen Fahrer dieses Fahrzeugs entkoppeln
     local previousDriver = MySQL.single.await('SELECT id FROM st_drivers WHERE assigned_vehicle_id = ?', { vehicleId })

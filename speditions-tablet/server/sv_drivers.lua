@@ -142,7 +142,7 @@ function Drivers.GetOwnCard(src)
         employee = { id = emp.id, name = emp.name, hiredAt = emp.hired_at, status = emp.status },
         driver = {
             id = driver.id, rank = driver.rank, currentStatus = driver.current_status, notes = driver.notes,
-            onShift = driver.on_shift == 1, shiftStartedAt = driver.shift_started_at,
+            onShift = Utils.ToBool(driver.on_shift), shiftStartedAt = driver.shift_started_at,
         },
         statistics = stats,
         permissions = Drivers.GetPermissions(driver.id),
@@ -163,7 +163,7 @@ end
 --- ohne bei einem harmlosen "nochmal derselbe Wert"-Fall falsch anzuschlagen.
 local function verifyShiftState(driverId, expectedOnShift)
     local row = MySQL.single.await('SELECT on_shift FROM st_drivers WHERE id = ?', { driverId })
-    if not row or (row.on_shift == 1) ~= expectedOnShift then
+    if not row or Utils.ToBool(row.on_shift) ~= expectedOnShift then
         error('shift_update_failed')
     end
 end

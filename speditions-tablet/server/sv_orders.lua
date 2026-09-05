@@ -234,7 +234,7 @@ function Orders.Dispatch(src, orderId, driverId, vehicleId)
     if finalVehicleId then
         local vehicle = Vehicles.GetById(finalVehicleId)
         if not vehicle then error('vehicle_not_found') end
-        if vehicle.archived == 1 then error('vehicle_archived') end
+        if Utils.ToBool(vehicle.archived) then error('vehicle_archived') end
         if Config.VehicleBlockedForDispatch[vehicle.status] then error('vehicle_unavailable') end
     end
 
@@ -276,7 +276,7 @@ function Orders.SelfAssign(src, orderId)
     if vehicleId then
         local vehicle = Vehicles.GetById(vehicleId)
         if not vehicle then error('vehicle_not_found') end
-        if vehicle.archived == 1 then error('vehicle_archived') end
+        if Utils.ToBool(vehicle.archived) then error('vehicle_archived') end
         if Config.VehicleBlockedForDispatch[vehicle.status] then error('vehicle_unavailable') end
     end
 
@@ -335,7 +335,7 @@ end
 function Orders.AcceptByDriver(src, orderId)
     local emp, driver, order = requireOwnOrder(src, orderId)
     if order.status ~= 'disponiert' then error('order_not_pending') end
-    if driver.on_shift ~= 1 then error('shift_not_started') end
+    if not Utils.ToBool(driver.on_shift) then error('shift_not_started') end
 
     local minutes = (tonumber(order.distance_km) / (Config.AverageSpeedKmh or 65)) * 60 + (Config.DeadlineBufferMinutes or 8)
 
@@ -526,7 +526,7 @@ RPC.Register('driver:openOrders', function(src)
     return {
         orders = Orders.ListOpen(),
         dispatcherAvailable = isDispatcherAvailable(),
-        onShift = driver.on_shift == 1,
+        onShift = Utils.ToBool(driver.on_shift),
         debugEnabled = Config.AllowManualOrderGeneration == true,
     }
 end)
