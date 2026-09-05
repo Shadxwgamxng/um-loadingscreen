@@ -1,56 +1,22 @@
 -- =========================================================
 -- Client: Be-/Entladepunkte
 --
--- An jedem Config.Locations-Standort steht ein NPC. Ist ein Auftrag gerade
--- "in Anfahrt" mit Beladepunkt hier, oder "beladen" (= beladen, zum Zielort
--- unterwegs) mit Zielort hier, kann der Fahrer per Taste (E) mit dem NPC
--- interagieren - das startet das Be-/Entladen (Zeitfenster + Fortschrittsbalken,
--- siehe Config.LoadUnloadSeconds). Danach läuft der Auftragsstatus
--- automatisch weiter (anfahrt -> beladen, bzw. beladen -> entladen ->
--- abgeschlossen) - keine manuellen Tablet-Buttons mehr dafür nötig.
+-- An jedem relevanten Standort (Beladepunkt eines "in Anfahrt"-Auftrags,
+-- oder Zielort eines "beladen"-Auftrags) markiert ein Bodenkreis die
+-- Interaktionsstelle - Taste E dort startet das Be-/Entladen (Zeitfenster +
+-- Fortschrittsbalken, siehe Config.LoadUnloadSeconds). Danach läuft der
+-- Auftragsstatus automatisch weiter (anfahrt -> beladen, bzw. beladen ->
+-- entladen -> abgeschlossen) - keine manuellen Tablet-Buttons mehr dafür
+-- nötig. Bewusst KEIN NPC (Pedestrian-KI war zu unzuverlässig/buggy) -
+-- stattdessen ein reiner Bodenmarker ohne Entity.
 -- =========================================================
 
 local INTERACT_CONTROL = 51 -- INPUT_CONTEXT ("E")
-local PED_MODEL = GetHashKey('a_m_m_business_01')
+local MARKER_TYPE = 1 -- Cylinder
 
 local myRole = nil
 local myOrders = {}
-local spawnedPeds = {} -- [locationName] = pedHandle
 local busy = false
-
-local function loadModel(model)
-    if not IsModelValid(model) then return false end
-    RequestModel(model)
-    local tries = 0
-    while not HasModelLoaded(model) and tries < 200 do
-        Wait(10)
-        tries = tries + 1
-    end
-    return HasModelLoaded(model)
-end
-
-local function spawnLocationPed(loc)
-    if spawnedPeds[loc.name] then return end
-    if not loadModel(PED_MODEL) then return end
-
-    local ped = CreatePed(4, PED_MODEL, loc.coords.x, loc.coords.y, loc.coords.z - 1.0, loc.coords.w, false, false)
-    SetEntityAsMissionEntity(ped, true, true)
-    SetBlockingOfNonTemporaryEvents(ped, true)
-    SetPedCanRagdoll(ped, false)
-    SetPedDiesWhenInjured(ped, false)
-    SetEntityInvincible(ped, true)
-    FreezeEntityPosition(ped, true)
-    TaskStartScenario(ped, 'WORLD_HUMAN_CLIPBOARD', 0.0, true)
-    spawnedPeds[loc.name] = ped
-end
-
-local function despawnLocationPed(name)
-    local ped = spawnedPeds[name]
-    if ped then
-        if DoesEntityExist(ped) then DeleteEntity(ped) end
-        spawnedPeds[name] = nil
-    end
-end
 
 local function refreshMyOrders()
     ServerCall('driver:myOrders', nil, function(res)
@@ -89,9 +55,9 @@ end
 
 --- Startet das Be-/Entladen: friert den Fahrer in einer Szenario-Animation
 --- ein, zeigt Config.LoadUnloadSeconds lang einen Fortschrittsbalken, bricht
---- ab, wenn der Spieler zu weit weggeht, und schaltet danach automatisch den
---- Auftragsstatus weiter.
-local function startLoadUnload(order, phase, ped)
+--- ab, wenn der Spieler zu weit vom Markierungskreis weggeht, und schaltet
+--- danach automatisch den Auftragsstatus weiter.
+local function startLoadUnload(order, phase, markerCoords)
     busy = true
     local playerPed = PlayerPedId()
     local duration = (Config.LoadUnloadSeconds or 150) * 1000
@@ -110,7 +76,7 @@ local function startLoadUnload(order, phase, ped)
         DisableControlAction(0, 23, true) -- Fahrzeug betreten
         DisableControlAction(0, 75, true) -- Fahrzeug verlassen
 
-        if DoesEntityExist(ped) and #(GetEntityCoords(playerPed) - GetEntityCoords(ped)) > 5.0 then
+        if #(GetEntityCoords(playerPed) - markerCoords) > 5.0 then
             cancelled = true
             break
         end
@@ -160,63 +126,44 @@ CreateThread(function()
     end
 end)
 
--- Spawn/Despawn-Loop (Performance: NPCs nur in der Nähe erzeugen).
+-- Marker-/Interaktions-Loop: zeichnet an Standorten, die gerade zu einem
+-- aktiven Auftrag gehören, bei Nähe einen Bodenkreis, zeigt "Drücke E" bei
+-- noch engerer Nähe und startet bei Tastendruck das Be-/Entladen.
 CreateThread(function()
     while true do
-        Wait(1500)
-        local playerCoords = GetEntityCoords(PlayerPedId())
-        for _, loc in ipairs(Config.Locations) do
-            local dist = #(playerCoords - vector3(loc.coords.x, loc.coords.y, loc.coords.z))
-            if dist <= (Config.LocationPedSpawnRadius or 60.0) then
-                spawnLocationPed(loc)
-            else
-                despawnLocationPed(loc.name)
-            end
-        end
-    end
-end)
+        local sleep = 1000
 
--- Interaktions-Loop: zeigt "Drücke E" an und startet bei Tastendruck das
--- Be-/Entladen, wenn der Fahrer gerade einen passenden Auftrag hat.
-CreateThread(function()
-    while true do
-        local sleep = 500
-
-        if myRole == Config.Roles.FAHRER and not busy then
+        if myRole == Config.Roles.FAHRER and not busy and #myOrders > 0 then
             local playerCoords = GetEntityCoords(PlayerPedId())
-            local nearestName, nearestPed, nearestDist = nil, nil, (Config.LocationInteractRadius or 2.5)
 
-            for name, ped in pairs(spawnedPeds) do
-                if DoesEntityExist(ped) then
-                    local d = #(playerCoords - GetEntityCoords(ped))
-                    if d <= nearestDist then
-                        nearestName, nearestPed, nearestDist = name, ped, d
-                    end
-                end
-            end
-
-            if nearestName then
-                local order, phase = findRelevantOrder(nearestName)
+            for _, loc in ipairs(Config.Locations) do
+                local order, phase = findRelevantOrder(loc.name)
                 if order then
-                    sleep = 0
-                    BeginTextCommandDisplayHelp('STRING')
-                    AddTextComponentSubstringPlayerName(('~INPUT_CONTEXT~ %s'):format(phase == 'pickup' and 'Fracht abholen' or 'Fracht abliefern'))
-                    EndTextCommandDisplayHelp(0, false, true, -1)
+                    local markerCoords = vector3(loc.coords.x, loc.coords.y, loc.coords.z)
+                    local dist = #(playerCoords - markerCoords)
 
-                    if IsControlJustPressed(0, INTERACT_CONTROL) then
-                        startLoadUnload(order, phase, nearestPed)
+                    if dist <= (Config.LocationMarkerRadius or 60.0) then
+                        sleep = 0
+                        DrawMarker(
+                            MARKER_TYPE, loc.coords.x, loc.coords.y, loc.coords.z - 1.0,
+                            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.5, 1.5, 1.0,
+                            30, 144, 255, 140, false, true, 2, false, nil, nil, false
+                        )
+
+                        if dist <= (Config.LocationInteractRadius or 2.5) then
+                            BeginTextCommandDisplayHelp('STRING')
+                            AddTextComponentSubstringPlayerName(('~INPUT_CONTEXT~ %s'):format(phase == 'pickup' and 'Fracht abholen' or 'Fracht abliefern'))
+                            EndTextCommandDisplayHelp(0, false, true, -1)
+
+                            if IsControlJustPressed(0, INTERACT_CONTROL) then
+                                startLoadUnload(order, phase, markerCoords)
+                            end
+                        end
                     end
                 end
             end
         end
 
         Wait(sleep)
-    end
-end)
-
-AddEventHandler('onResourceStop', function(resourceName)
-    if resourceName ~= GetCurrentResourceName() then return end
-    for name in pairs(spawnedPeds) do
-        despawnLocationPed(name)
     end
 end)

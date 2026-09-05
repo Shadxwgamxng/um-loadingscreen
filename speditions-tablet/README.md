@@ -222,7 +222,7 @@ Framework-Anbindung in diesem Standalone-Setup).
   `Config.Locations` - passe sie unbedingt an die tatsächlichen Lade-/
   Entladepunkte deines Servers an.
 
-### Echte Standorte, Be-/Entladen per NPC, Lieferschein
+### Echte Standorte, Be-/Entladen per Bodenmarker, Lieferschein
 
 `Config.Locations` ist eine Liste von 32 Koordinaten (30 reale
 Firmenadressen des Servers plus 2 erfundene Möbel-Abholstandorte) statt der
@@ -233,25 +233,29 @@ wählt nur Frachtarten, für die es mindestens einen passenden Start- **und**
 Zielstandort gibt, und berechnet Distanz/Wert aus der echten
 Luftlinienentfernung der Koordinaten.
 
-- **NPC an jedem Standort**: Sobald ein Fahrer sich einem Standort nähert
-  (`Config.LocationPedSpawnRadius`, Standard 60m), spawnt dort ein NPC (nur
-  clientseitig, aus Performancegründen nicht dauerhaft an allen 30 Standorten
-  gleichzeitig).
+- **Bodenmarker statt NPC**: An einem Standort, der gerade zu einem aktiven
+  Auftrag gehört (Beladepunkt eines "in Anfahrt"-Auftrags, oder Zielort
+  eines "beladen"-Auftrags), zeichnet das Spiel bei Nähe
+  (`Config.LocationMarkerRadius`, Standard 60m) einen blauen Kreis auf dem
+  Boden als Interaktionsstelle. Bewusst **kein NPC** (die
+  Pedestrian-KI/Interaktion war zu unzuverlässig) - der Marker ist rein
+  visuell, keine Entity, kein Kollisionsverhalten.
 - **Auftragsstatus-Flow**: `disponiert` (bzw. Selbstzuweisung) → `angenommen`
   (Annehmen-Button im Tablet, siehe unten die Fahrerkarten-Pflicht) → sofort
   automatisch `anfahrt` (Anfahrt zum Beladepunkt) → per Taste E am
-  Beladepunkt-NPC `beladen` (= beladen, zum Zielort unterwegs - bleibt
-  während der ganzen Fahrt bestehen) → per Taste E am Zielort-NPC `entladen`
-  → automatisch `abgeschlossen`. Nur `angenommen`/`Ablehnen` laufen noch über
-  Tablet-Buttons - der Rest passt sich automatisch der Spielwelt an.
+  Beladepunkt-Marker `beladen` (= beladen, zum Zielort unterwegs - bleibt
+  während der ganzen Fahrt bestehen) → per Taste E am Zielort-Marker
+  `entladen` → automatisch `abgeschlossen`. Nur `angenommen`/`Ablehnen`
+  laufen noch über Tablet-Buttons - der Rest passt sich automatisch der
+  Spielwelt an.
 - **Beladen/Entladen per Taste E**: Ist ein Auftrag gerade "in Anfahrt" mit
   Beladepunkt hier, oder "beladen" mit Zielort hier, zeigt das Spiel bei Nähe
-  zum NPC (`Config.LocationInteractRadius`, Standard 2,5m) einen Hinweis
+  zum Marker (`Config.LocationInteractRadius`, Standard 2,5m) einen Hinweis
   ("E - Fracht abholen/abliefern"). Taste E startet eine Animation mit
   Fortschrittsbalken über `Config.LoadUnloadSeconds` (Standard 150s = 2:30
   min); der Auftragsstatus wechselt danach automatisch weiter (s.o.).
-  Entfernt sich der Fahrer während des Vorgangs mehr als 5m vom NPC, bricht
-  der Vorgang ab.
+  Entfernt sich der Fahrer während des Vorgangs mehr als 5m vom Marker,
+  bricht der Vorgang ab.
 - **Fahrerkarte einstecken vor Auftragsannahme**: Ein Fahrer muss im Reiter
   "Fahrerkarte" zuerst seine Fahrt starten ("Fahrerkarte einstecken"), bevor
   er einen Auftrag annehmen kann (`shift_not_started`, serverseitig
@@ -275,7 +279,7 @@ Luftlinienentfernung der Koordinaten.
 - **Wichtig nach diesem Update**: Aufträge, die VOR der Umstellung auf
   `Config.Locations` (echte Standorte) erzeugt wurden, referenzieren
   Standortnamen, die es im neuen System nicht mehr gibt - an ihrem Abhol-/
-  Zielort spawnt dann kein NPC und die Taste E funktioniert dort nicht.
+  Zielort erscheint dann kein Marker und die Taste E funktioniert dort nicht.
   `sql/upgrade_v7.sql` löscht deshalb alle bestehenden Aufträge; danach
   erzeugt entweder der automatische Timer (`Config.OrderGeneration`) oder
   der neue "Auftrag generieren"-Testbutton (s.o.) ausschließlich Aufträge
@@ -345,9 +349,9 @@ Alle Stellschrauben befinden sich in `config.lua`:
 
 - `Config.CompanyName` - Firmenname auf Sperrbildschirm, Topbar und Fahrerkarte
 - `Config.Locations` - Liste der echten Firmenstandorte (Koordinaten,
-  Frachtarten-Tags `sourceCargo`/`destCargo`) für Auftragsgenerierung, NPCs,
-  Be-/Entladen und Wegpunkte; `Config.OrderValuePerKm`,
-  `Config.LoadUnloadSeconds`, `Config.LocationPedSpawnRadius`,
+  Frachtarten-Tags `sourceCargo`/`destCargo`) für Auftragsgenerierung,
+  Bodenmarker, Be-/Entladen und Wegpunkte; `Config.OrderValuePerKm`,
+  `Config.LoadUnloadSeconds`, `Config.LocationMarkerRadius`,
   `Config.LocationInteractRadius` - Wertspanne pro km sowie Timing/Radien
   für den Be-/Entladevorgang; `Config.CargoUnits` - Mengeneinheit je
   Frachtart für den Lieferschein
@@ -389,8 +393,8 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `client/cl_hours.lua` - Erkennt per Kennzeichen-Abgleich, ob der Fahrer
   gerade sein zugewiesenes Firmenfahrzeug fährt, und meldet Fahrzeit an den Server.
 - `client/cl_radio.lua` - CB-Funk, bindet an pma-voice an (Kanal/Lautstärke/Stumm, Anzeige "wer spricht").
-- `client/cl_orders.lua` - NPCs an den Standorten aus `Config.Locations`
-  (Spawn nach Nähe), Be-/Entladen per Taste E mit Fortschrittsbalken.
+- `client/cl_orders.lua` - Bodenmarker an relevanten Standorten aus
+  `Config.Locations` (kein NPC), Be-/Entladen per Taste E mit Fortschrittsbalken.
 - `html/` - NUI-Frontend (Sperrbildschirm, rollenbasierte Ansichten, siehe
   `js/app.js`). Der Client führt dabei keine Geschäftslogik aus - jede Aktion
   wird serverseitig neu geprüft.

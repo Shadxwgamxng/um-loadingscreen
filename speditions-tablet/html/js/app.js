@@ -117,7 +117,11 @@ function formatMoney(n) {
 
 function formatDate(s, withTime) {
     if (!s) return '-';
-    const d = new Date(String(s).replace(' ', 'T'));
+    // DATETIME-Spalten kommen je nach oxmysql-Version/Treiber entweder als
+    // "YYYY-MM-DD HH:MM:SS"-String ODER als roher Unix-Zeitstempel (ms) an -
+    // beide Fälle abdecken, statt nur den String-Fall.
+    const isRawTimestamp = typeof s === 'number' || /^\d+$/.test(String(s));
+    const d = isRawTimestamp ? new Date(Number(s)) : new Date(String(s).replace(' ', 'T'));
     if (isNaN(d.getTime())) return String(s);
     const date = d.toLocaleDateString('de-DE');
     if (!withTime) return date;

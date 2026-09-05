@@ -131,14 +131,16 @@ Config.CargoUnits = {
 -- =========================================================
 -- BELADE-/ENTLADEPUNKTE
 -- =========================================================
--- Jeder Ort ist ein echter Firmenstandort in der Welt: ein NPC steht dort
--- und nimmt/gibt die Fracht per Tasteninteraktion (E) entgegen (siehe
--- client/cl_orders.lua). `sourceCargo` = Frachtarten, die hier ABGEHOLT
--- werden können (Auftrags-Startpunkt), `destCargo` = Frachtarten, die hier
--- ANGENOMMEN werden (Auftrags-Zielpunkt). Ein Auftrag wird nur zwischen
--- zwei UNTERSCHIEDLICHEN Orten generiert, die dieselbe Frachtart als
--- Quelle bzw. Ziel führen. `coords` ist x, y, z, Blickrichtung (Heading)
--- des NPCs.
+-- Jeder Ort ist ein echter Firmenstandort in der Welt: dort markiert ein
+-- Bodenkreis die Be-/Entladestelle, an der per Tasteninteraktion (E) die
+-- Fracht ab-/angenommen wird (siehe client/cl_orders.lua - bewusst kein
+-- NPC, um Probleme mit der Pedestrian-KI zu vermeiden). `sourceCargo` =
+-- Frachtarten, die hier ABGEHOLT werden können (Auftrags-Startpunkt),
+-- `destCargo` = Frachtarten, die hier ANGENOMMEN werden
+-- (Auftrags-Zielpunkt). Ein Auftrag wird nur zwischen zwei
+-- UNTERSCHIEDLICHEN Orten generiert, die dieselbe Frachtart als Quelle
+-- bzw. Ziel führen. `coords` ist x, y, z, Blickrichtung (Heading, aktuell
+-- ungenutzt ohne NPC).
 Config.Locations = {
     { name = 'Holzhandel Hirschweiler',                coords = vector4(46.5653, 6301.5454, 31.2295, 139.2673),   sourceCargo = { 'Holz' } },
     { name = 'Schlachterei Hirschweiler',               coords = vector4(-74.7670, 6265.5103, 31.2581, 59.6800),   sourceCargo = { 'Lebensmittel' } },
@@ -179,12 +181,13 @@ Config.Locations = {
 -- berechnet, keine manuelle Streckenpflege mehr nötig).
 Config.OrderValuePerKm = { min = 180, max = 320 }
 
--- Wie lange das Be-/Entladen per Tasteninteraktion (E) am NPC dauert (Sekunden).
+-- Wie lange das Be-/Entladen per Tasteninteraktion (E) am Markierungskreis
+-- dauert (Sekunden).
 Config.LoadUnloadSeconds = 150 -- 2,5 Minuten
 
--- Ab welcher Entfernung (Meter) der Belade-/Entlade-NPC eines Standorts
--- überhaupt erst erzeugt wird (Performance) bzw. wieder entfernt wird.
-Config.LocationPedSpawnRadius = 60.0
+-- Ab welcher Entfernung (Meter) der Bodenmarker eines Be-/Entladepunkts
+-- überhaupt erst gezeichnet wird (Performance).
+Config.LocationMarkerRadius = 60.0
 -- Ab welcher Entfernung (Meter) die "Drücke E"-Interaktion angezeigt wird.
 Config.LocationInteractRadius = 2.5
 
