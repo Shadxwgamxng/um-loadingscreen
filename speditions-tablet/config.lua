@@ -170,6 +170,8 @@ Config.Locations = {
     { name = 'Anlieferung Einkaufszentrum Weststadt',    coords = vector4(-1543.6205, -590.0679, 34.8675, 354.0047), destCargo = { 'Möbel', 'Elektronik', 'Lebensmittel' } },
     { name = 'Anlieferung 24/7 Supermarkt',               coords = vector4(-2955.2710, 396.4877, 15.0217, 61.8753), destCargo = { 'Lebensmittel' } },
     { name = 'Abholung KfZ-Teilehandel',                  coords = vector4(963.3997, -1017.6773, 40.8475, 265.3992), sourceCargo = { 'Fahrzeugteile' } },
+    { name = 'Möbeltischlerei Hirschweiler',              coords = vector4(179.6482, 6162.3105, 31.6971, 320.5), sourceCargo = { 'Möbel' } },
+    { name = 'Zentrallager Box 5 (Möbel)',                coords = vector4(1718.9204, -1519.7361, 113.9467, 159.8), sourceCargo = { 'Möbel' } },
 }
 
 -- Wertspanne ($ pro km), aus der zufällig der Auftragswert berechnet wird

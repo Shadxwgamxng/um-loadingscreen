@@ -209,8 +209,9 @@ Framework-Anbindung in diesem Standalone-Setup).
 
 ### Echte Standorte, Be-/Entladen per NPC, Lieferschein
 
-`Config.Locations` ist eine Liste von 30 echten Koordinaten (reale
-Firmenadressen des Servers) statt der früheren abstrakten Städte-Strecken.
+`Config.Locations` ist eine Liste von 32 Koordinaten (30 reale
+Firmenadressen des Servers plus 2 erfundene Möbel-Abholstandorte) statt der
+früheren abstrakten Städte-Strecken.
 Jeder Standort trägt Frachtarten-Tags (`sourceCargo` = hier abholbare Fracht,
 `destCargo` = hier anlieferbare Fracht); die automatische Auftragsgenerierung
 wählt nur Frachtarten, für die es mindestens einen passenden Start- **und**
@@ -240,11 +241,12 @@ Luftlinienentfernung der Koordinaten.
   Entladen läuft ausschließlich clientseitig (kein serverseitiger Schutz vor
   Manipulation der lokalen Wartezeit) - für ein PvE-Logistikfeature wie
   dieses als ausreichend eingeschätzt, bei Bedarf aber erweiterbar. Für die
-  Frachtarten `Möbel` und `Elektronik` ist unter den 30 vorgegebenen
-  Standorten keine Quelle (`sourceCargo`) hinterlegt - diese beiden
-  Frachtarten werden aktuell also nie für automatisch generierte Aufträge
-  ausgewählt, bis du in `Config.Locations` einen Standort mit
-  `sourceCargo = {'Möbel'}` bzw. `{'Elektronik'}` ergänzt.
+  Frachtart `Elektronik` ist unter den 32 vorgegebenen Standorten keine
+  Quelle (`sourceCargo`) hinterlegt - sie wird aktuell also nie für
+  automatisch generierte Aufträge ausgewählt, bis du in `Config.Locations`
+  einen Standort mit `sourceCargo = {'Elektronik'}` ergänzt. (`Möbel` hat
+  inzwischen zwei erfundene Abholstandorte: "Möbeltischlerei Hirschweiler"
+  und "Zentrallager Box 5 (Möbel)".)
 - **Gefahrgut-Zugriffsbeschränkung**: Frachtarten in `Config.HazardousCargo`
   erzeugen Aufträge mit `requires_permission = 'gefahrgut'`. Das Disponieren
   und Neuzuweisen an Fahrer ohne die Fahrerberechtigung "Gefahrgut" wird
