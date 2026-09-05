@@ -155,17 +155,24 @@ end
 --- "Fahrerkarte einstecken" - startet die Schicht. Muss aktiv sein, bevor ein
 --- Fahrer einen Auftrag annehmen kann (siehe Orders.AcceptByDriver), damit
 --- der Fahrer bewusst bestätigt, dass ab jetzt seine Lenk-/Ruhezeiten laufen.
+--- Prüft nach einem Schicht-Update den TATSÄCHLICHEN Wert in der DB (statt
+--- der von UPDATE gemeldeten Zeilenanzahl - MySQL zählt dort "geänderte",
+--- nicht "getroffene" Zeilen, ein UPDATE auf denselben Wert würde also fälschlich
+--- als Fehlschlag durchgehen). So bleibt eine z.B. fehlende Migration
+--- (st_drivers.on_shift existiert nicht - siehe sql/upgrade_v7.sql) erkennbar,
+--- ohne bei einem harmlosen "nochmal derselbe Wert"-Fall falsch anzuschlagen.
+local function verifyShiftState(driverId, expectedOnShift)
+    local row = MySQL.single.await('SELECT on_shift FROM st_drivers WHERE id = ?', { driverId })
+    if not row or (row.on_shift == 1) ~= expectedOnShift then
+        error('shift_update_failed')
+    end
+end
+
 function Drivers.StartShift(src)
     local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
     local driver = Drivers.EnsureDriverRecord(emp.id)
-    local affected = MySQL.update.await('UPDATE st_drivers SET on_shift = 1, shift_started_at = NOW() WHERE id = ?', { driver.id })
-    if not affected or affected < 1 then
-        -- Betrifft z.B. eine fehlende Migration (st_drivers.on_shift existiert
-        -- noch nicht - siehe sql/upgrade_v7.sql): oxmysql wirft dafür nicht
-        -- immer einen harten Lua-Fehler, das UPDATE liefe sonst unbemerkt als
-        -- No-Op durch und die NUI würde trotzdem "Erfolg" melden.
-        error('shift_update_failed')
-    end
+    MySQL.update.await('UPDATE st_drivers SET on_shift = 1, shift_started_at = NOW() WHERE id = ?', { driver.id })
+    verifyShiftState(driver.id, true)
     Logs.Write(emp.id, 'shift_started', ('%s hat die Fahrerkarte eingesteckt (Fahrt gestartet).'):format(emp.name))
     return { ok = true }
 end
@@ -174,10 +181,8 @@ end
 function Drivers.EndShift(src)
     local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
     local driver = Drivers.EnsureDriverRecord(emp.id)
-    local affected = MySQL.update.await('UPDATE st_drivers SET on_shift = 0, shift_started_at = NULL WHERE id = ?', { driver.id })
-    if not affected or affected < 1 then
-        error('shift_update_failed')
-    end
+    MySQL.update.await('UPDATE st_drivers SET on_shift = 0, shift_started_at = NULL WHERE id = ?', { driver.id })
+    verifyShiftState(driver.id, false)
     Logs.Write(emp.id, 'shift_ended', ('%s hat die Fahrerkarte abgezogen (Fahrt beendet).'):format(emp.name))
     return { ok = true }
 end
