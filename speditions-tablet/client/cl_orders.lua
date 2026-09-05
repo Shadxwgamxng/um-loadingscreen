@@ -39,18 +39,19 @@ local function findRelevantOrder(locationName)
     return nil
 end
 
-local function drawProgressBar(label, pct)
-    local x, y, w, h = 0.5, 0.88, 0.25, 0.035
-    DrawRect(x, y, w, h, 0, 0, 0, 160)
-    DrawRect(x - (w / 2) + (w * (pct / 100) / 2), y, w * (pct / 100), h, 59, 130, 246, 220)
+local function drawProgressBar(label, pct, secondsLeft)
+    local x, y, w, h = 0.5, 0.88, 0.3, 0.045
+    DrawRect(x, y, w, h, 0, 0, 0, 180)
+    DrawRect(x - (w / 2) + (w * (pct / 100) / 2), y, w * (pct / 100), h, 59, 130, 246, 230)
 
     SetTextFont(4)
-    SetTextScale(0.34, 0.34)
+    SetTextScale(0.4, 0.4)
     SetTextColour(255, 255, 255, 255)
     SetTextCentre(true)
+    SetTextOutline()
     BeginTextCommandDisplayText('STRING')
-    AddTextComponentSubstringPlayerName(('%s... %d%%'):format(label, pct))
-    EndTextCommandDisplayText(x, y - 0.022)
+    AddTextComponentSubstringPlayerName(('%s (%d%%) - noch %ds'):format(label, pct, secondsLeft))
+    EndTextCommandDisplayText(x, y - 0.012)
 end
 
 --- Startet das Be-/Entladen: friert den Fahrer in einer Szenario-Animation
@@ -81,8 +82,10 @@ local function startLoadUnload(order, phase, markerCoords)
             break
         end
 
-        local pct = math.floor(((GetGameTimer() - startedAt) / duration) * 100)
-        drawProgressBar(phase == 'pickup' and 'Wird beladen' or 'Wird entladen', pct)
+        local elapsed = GetGameTimer() - startedAt
+        local pct = math.floor((elapsed / duration) * 100)
+        local secondsLeft = math.max(0, math.ceil((duration - elapsed) / 1000))
+        drawProgressBar(phase == 'pickup' and 'Wird beladen' or 'Wird entladen', pct, secondsLeft)
     end
 
     ClearPedTasksImmediately(playerPed)
