@@ -47,7 +47,7 @@ RPC.Register('gf:dashboard', function(src)
     local vehiclesAvailable = countRows("SELECT COUNT(*) AS c FROM st_vehicles WHERE archived = 0 AND status = 'verfuegbar'")
     local vehiclesMaintenance = countRows("SELECT COUNT(*) AS c FROM st_vehicles WHERE archived = 0 AND status IN ('wartung', 'defekt')")
     local openOrders = countRows("SELECT COUNT(*) AS c FROM st_orders WHERE status = 'offen'")
-    local activeOrders = countRows("SELECT COUNT(*) AS c FROM st_orders WHERE status IN ('disponiert', 'angenommen', 'beladen', 'unterwegs')")
+    local activeOrders = countRows("SELECT COUNT(*) AS c FROM st_orders WHERE status IN ('disponiert', 'angenommen', 'anfahrt', 'beladen', 'entladen', 'unterwegs')")
 
     local recentActivity = Logs.GetRecent(15)
 

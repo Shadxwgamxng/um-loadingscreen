@@ -16,11 +16,12 @@ verwaltet.
 
 1. Ressource nach `resources/[speditions]/speditions-tablet` kopieren.
 2. `sql/install.sql` in die Datenbank importieren (bei einer bereits
-   bestehenden Installation stattdessen der Reihe nach `sql/upgrade_v2.sql`,
-   `sql/upgrade_v3.sql`, `sql/upgrade_v4.sql`, `sql/upgrade_v5.sql` und
-   `sql/upgrade_v6.sql` ausführen, um Lenk-/Ruhezeiten, Gefahrgut,
-   Ein-/Auszahlungen, Gehälter/Stempeluhr und den Lieferschein
-   nachzurüsten und das Login-System zu entfernen).
+   bestehenden Installation stattdessen der Reihe nach `sql/upgrade_v2.sql`
+   bis `sql/upgrade_v7.sql` ausführen, um Lenk-/Ruhezeiten, Gefahrgut,
+   Ein-/Auszahlungen, Gehälter/Stempeluhr, den Lieferschein und die
+   Fahrerkarten-Pflicht nachzurüsten und das Login-System zu entfernen).
+   **`sql/upgrade_v7.sql` löscht dabei alle bestehenden Aufträge** - siehe
+   Kommentar am Anfang der Datei für den Grund.
 3. In `server.cfg`:
    ```
    ensure oxmysql
@@ -147,7 +148,21 @@ die Ressource übernommen werden konnte, ist es als CSS/HTML-Nachbau
 umgesetzt, keine Bilddatei. Die übrigen im Foto vorhandenen, aber nicht
 benötigten Tasten (AM/FM MENU, EMG/VOX, SCAN/MSCAN, MEM/MSAVE) sind rein
 dekorativ nachgebaut und ohne Funktion - es wurden bewusst keine
-zusätzlichen Bedienelemente ergänzt.
+zusätzlichen Bedienelemente ergänzt. Das Bedienfeld ist immer voll deckend
+(nicht durchsichtig), unabhängig davon, ob es gerade bedient wird.
+
+**Anzeige "wer spricht":** Auf dem LCD erscheint der Name des/der gerade auf
+dem Kanal sprechenden Spieler. Für den eigenen Spieler nutzt
+`client/cl_radio.lua` das offizielle pma-voice-Event `pma-voice:radioActive`.
+Für ANDERE Spieler bietet pma-voice selbst kein eigenes Export/Event an -
+`cl_radio.lua` hört daher zusätzlich das intern von pma-voice gefeuerte
+Event `pma-voice:setTalkingOnRadio` mit (FiveM-Events sind nicht
+ressourcen-exklusiv, das ist technisch unproblematisch), verifiziert direkt
+im pma-voice-Quellcode (`client/module/radio.lua`). Da es sich dabei um ein
+**internes, nicht offiziell dokumentiertes** Event von pma-voice handelt,
+könnte ein zukünftiges pma-voice-Update dessen Name/Parameter ändern - die
+Anzeige würde dann stillschweigend leer bleiben (kein Fehler, aber auch
+keine automatische Warnung).
 
 ## Rollen & Berechtigungen
 
@@ -222,21 +237,49 @@ Luftlinienentfernung der Koordinaten.
   (`Config.LocationPedSpawnRadius`, Standard 60m), spawnt dort ein NPC (nur
   clientseitig, aus Performancegründen nicht dauerhaft an allen 30 Standorten
   gleichzeitig).
-- **Beladen/Entladen per Taste E**: Hat der Fahrer einen angenommenen Auftrag
-  mit Beladepunkt hier, oder einen "unterwegs"-Auftrag mit Zielort hier, zeigt
-  das Spiel bei Nähe zum NPC (`Config.LocationInteractRadius`, Standard 2,5m)
-  einen Hinweis ("E - Fracht abholen/abliefern"). Taste E startet eine
-  Animation mit Fortschrittsbalken über `Config.LoadUnloadSeconds` (Standard
-  150s = 2:30 min); der Auftragsstatus wechselt danach automatisch weiter
-  (`angenommen` → `beladen` → `unterwegs` bzw. `unterwegs` → `abgeschlossen`).
+- **Auftragsstatus-Flow**: `disponiert` (bzw. Selbstzuweisung) → `angenommen`
+  (Annehmen-Button im Tablet, siehe unten die Fahrerkarten-Pflicht) → sofort
+  automatisch `anfahrt` (Anfahrt zum Beladepunkt) → per Taste E am
+  Beladepunkt-NPC `beladen` (= beladen, zum Zielort unterwegs - bleibt
+  während der ganzen Fahrt bestehen) → per Taste E am Zielort-NPC `entladen`
+  → automatisch `abgeschlossen`. Nur `angenommen`/`Ablehnen` laufen noch über
+  Tablet-Buttons - der Rest passt sich automatisch der Spielwelt an.
+- **Beladen/Entladen per Taste E**: Ist ein Auftrag gerade "in Anfahrt" mit
+  Beladepunkt hier, oder "beladen" mit Zielort hier, zeigt das Spiel bei Nähe
+  zum NPC (`Config.LocationInteractRadius`, Standard 2,5m) einen Hinweis
+  ("E - Fracht abholen/abliefern"). Taste E startet eine Animation mit
+  Fortschrittsbalken über `Config.LoadUnloadSeconds` (Standard 150s = 2:30
+  min); der Auftragsstatus wechselt danach automatisch weiter (s.o.).
   Entfernt sich der Fahrer während des Vorgangs mehr als 5m vom NPC, bricht
-  der Vorgang ab. Die manuellen Tablet-Buttons "Beladen"/"Unterwegs"/
-  "Abschließen" entfallen dadurch - im Tablet bleibt für einen Auftrag nur
-  noch **Annehmen/Ablehnen** (Übernahme durch den Disponenten bzw.
-  Selbstzuweisung) sowie die Lieferschein-Ansicht.
-- **Lieferschein im Tablet**: Solange ein Auftrag angenommen, beladen oder
-  unterwegs ist, zeigt das Tablet unter "Meine Aufträge" einen Lieferschein
-  mit Ware, Menge/Einheit (`Config.CargoUnits`), Abholort und Zielort.
+  der Vorgang ab.
+- **Fahrerkarte einstecken vor Auftragsannahme**: Ein Fahrer muss im Reiter
+  "Fahrerkarte" zuerst seine Fahrt starten ("Fahrerkarte einstecken"), bevor
+  er einen Auftrag annehmen kann (`shift_not_started`, serverseitig
+  erzwungen in `Orders.AcceptByDriver`) - damit bewusst bestätigt wird, dass
+  ab jetzt seine Lenk-/Ruhezeiten laufen. "Fahrerkarte abziehen" beendet die
+  Fahrt wieder. Der Zustand wird in `st_drivers.on_shift`/`shift_started_at`
+  gespeichert und ist unabhängig vom (automatischen, kennzeichenbasierten)
+  Lenkzeit-Tracking selbst - Letzteres läuft weiterhin wie gehabt über
+  `client/cl_hours.lua`.
+- **Lieferschein im Tablet**: Solange ein Auftrag angenommen, in Anfahrt,
+  beladen oder in Entladung ist, zeigt das Tablet unter "Meine Aufträge"
+  einen ausführlichen Lieferschein: Ware, Menge/Einheit
+  (`Config.CargoUnits`), Gefahrgut-Kennzeichnung, Entfernung, Abhol-/Zielort
+  samt GPS-Koordinaten, zugewiesenes Fahrzeug, Ausstellungsdatum,
+  disponierender Mitarbeiter und Lieferfrist.
+- **"Auftrag generieren"-Testbutton**: Im Reiter "Aufträge" (offener
+  Auftragspool) erzeugt ein Fahrer per Klick sofort einen neuen Testauftrag,
+  unabhängig vom automatischen Intervall - gesteuert über
+  `Config.AllowManualOrderGeneration` (Standard `true`; für den Live-Betrieb
+  auf `false` stellen, dann verschwindet der Button).
+- **Wichtig nach diesem Update**: Aufträge, die VOR der Umstellung auf
+  `Config.Locations` (echte Standorte) erzeugt wurden, referenzieren
+  Standortnamen, die es im neuen System nicht mehr gibt - an ihrem Abhol-/
+  Zielort spawnt dann kein NPC und die Taste E funktioniert dort nicht.
+  `sql/upgrade_v7.sql` löscht deshalb alle bestehenden Aufträge; danach
+  erzeugt entweder der automatische Timer (`Config.OrderGeneration`) oder
+  der neue "Auftrag generieren"-Testbutton (s.o.) ausschließlich Aufträge
+  mit den neuen, echten Standorten.
 - **Bekannte Einschränkungen**: Die Zeit- und Nähe-Prüfung für das Be-/
   Entladen läuft ausschließlich clientseitig (kein serverseitiger Schutz vor
   Manipulation der lokalen Wartezeit) - für ein PvE-Logistikfeature wie
@@ -260,7 +303,7 @@ Siehe `sql/install.sql`. Wichtigste Tabellen:
 
 ```
 st_employees            Mitarbeiterstammdaten (Rolle, Status, FiveM-Charakter-Identifier)
-st_drivers              Fahrer-Zusatzdaten (Status, Notizen, Fahrzeugzuweisung)
+st_drivers              Fahrer-Zusatzdaten (Status, Notizen, Fahrzeugzuweisung, Fahrerkarte eingesteckt/seit)
 st_driver_permissions   Führerscheinklassen / Sonderberechtigungen
 st_driver_statistics    Aggregierte Fahrerstatistik (aus st_orders berechnet)
 st_vehicles             Fuhrpark
@@ -309,6 +352,7 @@ Alle Stellschrauben befinden sich in `config.lua`:
   für den Be-/Entladevorgang; `Config.CargoUnits` - Mengeneinheit je
   Frachtart für den Lieferschein
 - `Config.OrderGeneration` - Intervall und maximale Poolgröße
+- `Config.AllowManualOrderGeneration` - blendet den "Auftrag generieren"-Testbutton für Fahrer ein (Standard `true`, für Live-Betrieb auf `false` stellen)
 - `Config.VehicleClasses`, `Config.CargoTypes`, `Config.HazardousCargo`,
   `Config.DriverPermissions`
 - `Config.AverageSpeedKmh`, `Config.DeadlineBufferMinutes` - Grundlage der
@@ -333,17 +377,18 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `server/sv_radio.lua` - CB-Funk ein-/ausschalten, Anrufe (privater pma-voice-Call-Kanal).
 - `server/sv_payroll.lua` - Stundenlöhne, Stempeluhr, Gehaltsauszahlung.
 - `server/sv_vehicles.lua` - Fuhrparkverwaltung.
-- `server/sv_drivers.lua` - Fahrerkarte, Fahrerakte, Statistik.
+- `server/sv_drivers.lua` - Fahrerkarte, Fahrerakte, Statistik, Fahrerkarte einstecken/abziehen (Schicht).
 - `server/sv_hours.lua` - Lenk-/Ruhezeiten-Tracking, Warnungen, Erinnerungen.
-- `server/sv_orders.lua` - Auftragsgenerierung & -lebenszyklus, Gefahrgut-Prüfung,
-  Auto-Wegpunkte, Standort-/Frachtart-Zuordnung für Lieferschein.
+- `server/sv_orders.lua` - Auftragsgenerierung & -lebenszyklus
+  (disponiert → angenommen → anfahrt → beladen → entladen → abgeschlossen),
+  Gefahrgut-Prüfung, Auto-Wegpunkte, Standort-/Frachtart-Zuordnung + GPS-Koordinaten für Lieferschein.
 - `server/sv_employees.lua` - Mitarbeiterverwaltung (Einstellen, Rolle/Status ändern).
 - `server/sv_notifications.lua` - Nachrichten Disponent/Fahrer.
 - `client/cl_main.lua` - NUI-Steuerung, RPC-Relay (`ServerCall` auch für
   andere Client-Skripte nutzbar) sowie native In-Game-Hinweise/Wegpunkte sind hier verdrahtet.
 - `client/cl_hours.lua` - Erkennt per Kennzeichen-Abgleich, ob der Fahrer
   gerade sein zugewiesenes Firmenfahrzeug fährt, und meldet Fahrzeit an den Server.
-- `client/cl_radio.lua` - CB-Funk, bindet an pma-voice an (Kanal/Lautstärke/Stumm).
+- `client/cl_radio.lua` - CB-Funk, bindet an pma-voice an (Kanal/Lautstärke/Stumm, Anzeige "wer spricht").
 - `client/cl_orders.lua` - NPCs an den Standorten aus `Config.Locations`
   (Spawn nach Nähe), Be-/Entladen per Taste E mit Fortschrittsbalken.
 - `html/` - NUI-Frontend (Sperrbildschirm, rollenbasierte Ansichten, siehe

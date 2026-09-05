@@ -9,7 +9,12 @@
 
 Orders = {}
 
-local CARGO_FLOW = { 'angenommen', 'beladen', 'unterwegs' }
+-- Frachtstatus-Fortschritt NACH der Annahme, automatisch getrieben durch die
+-- Tasteninteraktion (E) an den Standort-NPCs (siehe client/cl_orders.lua):
+-- anfahrt (zum Beladepunkt unterwegs) -> beladen (beladen, zum Zielort
+-- unterwegs) -> entladen (wird gerade entladen) -> abgeschlossen (separat
+-- über Orders.Complete()).
+local CARGO_FLOW = { 'anfahrt', 'beladen', 'entladen' }
 
 local function insertOrderHistory(orderId, status, changedBy, note)
     MySQL.insert.await(
@@ -159,7 +164,7 @@ end
 
 function Orders.ListActive()
     return MySQL.query.await(ORDER_JOIN_SELECT .. [[
-        WHERE o.status IN ('disponiert', 'angenommen', 'beladen', 'unterwegs')
+        WHERE o.status IN ('disponiert', 'angenommen', 'anfahrt', 'beladen', 'entladen')
         ORDER BY o.created_at ASC
     ]])
 end
@@ -177,7 +182,7 @@ function Orders.ListAll(limit, statusFilter)
     limit = Utils.SanitizeNumber(limit, 1, 500) or 100
     local where = ''
     local params = {}
-    local validStatuses = { 'offen', 'disponiert', 'angenommen', 'beladen', 'unterwegs', 'abgeschlossen', 'abgebrochen', 'abgelehnt' }
+    local validStatuses = { 'offen', 'disponiert', 'angenommen', 'anfahrt', 'beladen', 'entladen', 'unterwegs', 'abgeschlossen', 'abgebrochen', 'abgelehnt' }
     if statusFilter and Utils.InTable(validStatuses, statusFilter) then
         where = 'WHERE o.status = ?'
         params[#params + 1] = statusFilter
@@ -188,9 +193,22 @@ end
 
 function Orders.MyOrders(driverId)
     return MySQL.query.await(ORDER_JOIN_SELECT .. [[
-        WHERE o.driver_id = ? AND o.status IN ('disponiert', 'angenommen', 'beladen', 'unterwegs')
+        WHERE o.driver_id = ? AND o.status IN ('disponiert', 'angenommen', 'anfahrt', 'beladen', 'entladen')
         ORDER BY o.created_at ASC
     ]], { driverId })
+end
+
+--- Reichert Aufträge um die GPS-Koordinaten ihres Abhol-/Zielstandorts an
+--- (für den ausführlichen Lieferschein im Tablet). Nur x/y, da die Höhe (z)
+--- für die Anzeige im Tablet nicht relevant ist.
+function Orders.AttachLocationCoords(orders)
+    for _, o in ipairs(orders) do
+        local from = Utils.GetLocationByName(o.start_location)
+        local to = Utils.GetLocationByName(o.end_location)
+        o.start_coords = from and { x = Utils.Round2(from.coords.x), y = Utils.Round2(from.coords.y) } or nil
+        o.end_coords = to and { x = Utils.Round2(to.coords.x), y = Utils.Round2(to.coords.y) } or nil
+    end
+    return orders
 end
 
 --- Weist einen offenen (oder neu zu disponierenden) Auftrag einem Fahrer zu.
@@ -279,7 +297,7 @@ function Orders.Reassign(src, orderId, newDriverId)
 
     local order = Orders.GetById(orderId)
     if not order then error('order_not_found') end
-    if not Utils.InTable({ 'disponiert', 'angenommen', 'beladen' }, order.status) then
+    if not Utils.InTable({ 'disponiert', 'angenommen', 'anfahrt', 'beladen' }, order.status) then
         error('order_not_reassignable')
     end
 
@@ -317,6 +335,7 @@ end
 function Orders.AcceptByDriver(src, orderId)
     local emp, driver, order = requireOwnOrder(src, orderId)
     if order.status ~= 'disponiert' then error('order_not_pending') end
+    if driver.on_shift ~= 1 then error('shift_not_started') end
 
     local minutes = (tonumber(order.distance_km) / (Config.AverageSpeedKmh or 65)) * 60 + (Config.DeadlineBufferMinutes or 8)
 
@@ -325,6 +344,11 @@ function Orders.AcceptByDriver(src, orderId)
         { minutes, orderId }
     )
     insertOrderHistory(orderId, 'angenommen', emp.id, ('%s hat den Auftrag angenommen.'):format(emp.name))
+
+    -- Direkter automatischer Übergang: sobald angenommen, beginnt sofort die
+    -- Anfahrt zum Beladepunkt - keine separate manuelle Bestätigung nötig.
+    MySQL.update.await("UPDATE st_orders SET status = 'anfahrt' WHERE id = ?", { orderId })
+    insertOrderHistory(orderId, 'anfahrt', emp.id, 'Anfahrt zum Beladepunkt gestartet.')
 
     Utils.SetClientWaypoint(src, order.start_location, ('Beladepunkt (%s)'):format(order.start_location))
 
@@ -351,7 +375,7 @@ function Orders.DeclineByDriver(src, orderId, reason)
     return { ok = true }
 end
 
---- Frachtstatus-Fortschritt: angenommen -> beladen -> unterwegs.
+--- Frachtstatus-Fortschritt: anfahrt -> beladen -> entladen.
 function Orders.UpdateCargoStatus(src, orderId, newStatus)
     local emp, driver, order = requireOwnOrder(src, orderId)
 
@@ -368,7 +392,7 @@ function Orders.UpdateCargoStatus(src, orderId, newStatus)
     MySQL.update.await('UPDATE st_orders SET status = ? WHERE id = ?', { newStatus, orderId })
     insertOrderHistory(orderId, newStatus, emp.id, nil)
 
-    if newStatus == 'unterwegs' then
+    if newStatus == 'beladen' then
         if order.vehicle_id then
             MySQL.update.await("UPDATE st_vehicles SET status = 'im_einsatz' WHERE id = ? AND status = 'verfuegbar'", { order.vehicle_id })
         end
@@ -383,7 +407,7 @@ end
 
 function Orders.Complete(src, orderId)
     local emp, driver, order = requireOwnOrder(src, orderId)
-    if order.status ~= 'unterwegs' then error('order_not_in_transit') end
+    if order.status ~= 'entladen' then error('order_not_in_transit') end
 
     local punctual = 1
     if order.deadline then
@@ -491,14 +515,30 @@ end)
 RPC.Register('driver:myOrders', function(src)
     local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
     local driver = Drivers.EnsureDriverRecord(emp.id)
-    return { orders = Orders.MyOrders(driver.id) }
+    return { orders = Orders.AttachLocationCoords(Orders.MyOrders(driver.id)) }
 end)
 
 --- Offener Auftragspool für Fahrer - zum Selbst-Übernehmen, wenn gerade
 --- kein Disponent verfügbar ist (siehe dispatcherAvailable im Ergebnis).
 RPC.Register('driver:openOrders', function(src)
+    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local driver = Drivers.EnsureDriverRecord(emp.id)
+    return {
+        orders = Orders.ListOpen(),
+        dispatcherAvailable = isDispatcherAvailable(),
+        onShift = driver.on_shift == 1,
+        debugEnabled = Config.AllowManualOrderGeneration == true,
+    }
+end)
+
+--- Nur zum Testen (siehe Config.AllowManualOrderGeneration): erzeugt sofort
+--- einen neuen Pool-Auftrag, unabhängig vom automatischen Intervall.
+RPC.Register('driver:debugGenerateOrder', function(src)
     Employees.RequireRole(src, { Config.Roles.FAHRER })
-    return { orders = Orders.ListOpen(), dispatcherAvailable = isDispatcherAvailable() }
+    if not Config.AllowManualOrderGeneration then error('unknown_action') end
+    local orderId = Orders.GenerateOne()
+    if not orderId then error('no_cargo_route_available') end
+    return { ok = true, orderId = orderId }
 end)
 
 RPC.Register('driver:selfAssignOrder', function(src, payload)

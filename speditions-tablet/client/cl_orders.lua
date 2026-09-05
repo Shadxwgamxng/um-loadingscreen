@@ -1,12 +1,12 @@
 -- =========================================================
 -- Client: Be-/Entladepunkte
 --
--- An jedem Config.Locations-Standort steht ein NPC. Hat ein Fahrer gerade
--- einen angenommenen Auftrag mit Beladepunkt hier, oder einen unterwegs
--- befindlichen Auftrag mit Zielort hier, kann er per Taste (E) mit dem NPC
+-- An jedem Config.Locations-Standort steht ein NPC. Ist ein Auftrag gerade
+-- "in Anfahrt" mit Beladepunkt hier, oder "beladen" (= beladen, zum Zielort
+-- unterwegs) mit Zielort hier, kann der Fahrer per Taste (E) mit dem NPC
 -- interagieren - das startet das Be-/Entladen (Zeitfenster + Fortschrittsbalken,
 -- siehe Config.LoadUnloadSeconds). Danach läuft der Auftragsstatus
--- automatisch weiter (angenommen -> beladen -> unterwegs, bzw. unterwegs ->
+-- automatisch weiter (anfahrt -> beladen, bzw. beladen -> entladen ->
 -- abgeschlossen) - keine manuellen Tablet-Buttons mehr dafür nötig.
 -- =========================================================
 
@@ -59,13 +59,14 @@ local function refreshMyOrders()
 end
 
 --- Liefert den relevanten Auftrag (falls vorhanden) für einen Standort: ein
---- angenommener Auftrag, dessen Beladepunkt hier ist ("pickup"), oder ein
---- unterwegs befindlicher Auftrag, dessen Zielort hier ist ("dropoff").
+--- Auftrag "in Anfahrt", dessen Beladepunkt hier ist ("pickup"), oder ein
+--- "beladen" (= beladen, zum Zielort unterwegs) befindlicher Auftrag,
+--- dessen Zielort hier ist ("dropoff").
 local function findRelevantOrder(locationName)
     for _, o in ipairs(myOrders) do
-        if o.status == 'angenommen' and o.start_location == locationName then
+        if o.status == 'anfahrt' and o.start_location == locationName then
             return o, 'pickup'
-        elseif o.status == 'unterwegs' and o.end_location == locationName then
+        elseif o.status == 'beladen' and o.end_location == locationName then
             return o, 'dropoff'
         end
     end
@@ -127,18 +128,20 @@ local function startLoadUnload(order, phase, ped)
     end
 
     if phase == 'pickup' then
-        ServerCall('driver:updateCargoStatus', { orderId = order.id, status = 'beladen' }, function(res)
+        -- "beladen" ist der durchgehende Status waehrend der Fahrt zum
+        -- Zielort - kein zweiter Zwischenschritt mehr noetig.
+        ServerCall('driver:updateCargoStatus', { orderId = order.id, status = 'beladen' }, function()
+            refreshMyOrders()
+        end)
+    else
+        ServerCall('driver:updateCargoStatus', { orderId = order.id, status = 'entladen' }, function(res)
             if res and res.ok then
-                ServerCall('driver:updateCargoStatus', { orderId = order.id, status = 'unterwegs' }, function()
+                ServerCall('driver:completeOrder', { orderId = order.id }, function()
                     refreshMyOrders()
                 end)
             else
                 refreshMyOrders()
             end
-        end)
-    else
-        ServerCall('driver:completeOrder', { orderId = order.id }, function()
-            refreshMyOrders()
         end)
     end
 end

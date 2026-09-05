@@ -405,7 +405,9 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
     border-radius: var(--radius-lg);
     padding: 12px 14px;
 }
-.lieferschein-title { font-size: 12px; font-weight: 700; color: var(--text-1); margin-bottom: 8px; }
+.lieferschein-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+.lieferschein-title { font-size: 12px; font-weight: 700; color: var(--text-1); }
+.lieferschein-meta { font-size: 10.5px; color: var(--text-2); }
 .lieferschein-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -414,6 +416,7 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
 .lieferschein-grid > div { display: flex; flex-direction: column; gap: 2px; }
 .lieferschein-grid span { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-2); }
 .lieferschein-grid strong { font-size: 13px; color: var(--text-0); }
+.lieferschein-grid small { font-size: 9.5px; color: var(--text-2); }
 
 /* ---------- Badges / status dots ---------- */
 
@@ -565,10 +568,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
     z-index: 500;
     user-select: none;
     filter: drop-shadow(0 10px 24px rgba(0,0,0,0.55));
-    transition: opacity 0.15s ease;
 }
 .cb-radio.hidden { display: none; }
-.cb-radio:not(.cb-radio-focused) { opacity: 0.88; }
 
 .cb-radio-body {
     width: 460px;
@@ -653,6 +654,11 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .cb-lcd-mute { font-size: 12px; opacity: 0.15; }
 .cb-lcd-mute.active { opacity: 1; }
 .cb-lcd-freq { text-align: center; font-size: 10px; color: #c98a1f; }
+.cb-lcd-talker {
+    text-align: center; font-size: 10px; font-weight: 700; color: #ffb000;
+    margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cb-lcd-talker.hidden { display: none; }
 .cb-call-banner {
     position: absolute; inset: 0;
     background: #1c1400;

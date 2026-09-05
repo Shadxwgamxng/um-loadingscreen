@@ -140,13 +140,36 @@ function Drivers.GetOwnCard(src)
 
     return {
         employee = { id = emp.id, name = emp.name, hiredAt = emp.hired_at, status = emp.status },
-        driver = { id = driver.id, rank = driver.rank, currentStatus = driver.current_status, notes = driver.notes },
+        driver = {
+            id = driver.id, rank = driver.rank, currentStatus = driver.current_status, notes = driver.notes,
+            onShift = driver.on_shift == 1, shiftStartedAt = driver.shift_started_at,
+        },
         statistics = stats,
         permissions = Drivers.GetPermissions(driver.id),
         vehicle = vehicle,
         earnings = earnings,
         hours = Hours.Status(driver.id),
     }
+end
+
+--- "Fahrerkarte einstecken" - startet die Schicht. Muss aktiv sein, bevor ein
+--- Fahrer einen Auftrag annehmen kann (siehe Orders.AcceptByDriver), damit
+--- der Fahrer bewusst bestätigt, dass ab jetzt seine Lenk-/Ruhezeiten laufen.
+function Drivers.StartShift(src)
+    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local driver = Drivers.EnsureDriverRecord(emp.id)
+    MySQL.update.await('UPDATE st_drivers SET on_shift = 1, shift_started_at = NOW() WHERE id = ?', { driver.id })
+    Logs.Write(emp.id, 'shift_started', ('%s hat die Fahrerkarte eingesteckt (Fahrt gestartet).'):format(emp.name))
+    return { ok = true }
+end
+
+--- "Fahrerkarte abziehen" - beendet die Schicht.
+function Drivers.EndShift(src)
+    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local driver = Drivers.EnsureDriverRecord(emp.id)
+    MySQL.update.await('UPDATE st_drivers SET on_shift = 0, shift_started_at = NULL WHERE id = ?', { driver.id })
+    Logs.Write(emp.id, 'shift_ended', ('%s hat die Fahrerkarte abgezogen (Fahrt beendet).'):format(emp.name))
+    return { ok = true }
 end
 
 --- Fahrerakte für die Geschäftsführung (inkl. Notizen-Bearbeitung).
@@ -231,6 +254,14 @@ end)
 
 RPC.Register('driver:setStatus', function(src, payload)
     return Drivers.SetStatus(src, payload.status)
+end)
+
+RPC.Register('driver:startShift', function(src)
+    return Drivers.StartShift(src)
+end)
+
+RPC.Register('driver:endShift', function(src)
+    return Drivers.EndShift(src)
 end)
 
 RPC.Register('driver:history', function(src, payload)

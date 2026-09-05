@@ -72,6 +72,8 @@ const ERROR_MESSAGES = {
     order_not_pending: 'Auftrag befindet sich nicht im richtigen Status.',
     order_not_in_transit: 'Auftrag ist nicht unterwegs.',
     order_not_reassignable: 'Auftrag kann nicht neu zugewiesen werden.',
+    shift_not_started: 'Du musst zuerst deine Fahrerkarte einstecken (Reiter Fahrerkarte, Fahrt starten), bevor du einen Auftrag annehmen kannst.',
+    no_cargo_route_available: 'Aktuell gibt es keine passende Fracht-/Standortkombination für einen neuen Auftrag.',
     order_already_closed: 'Auftrag ist bereits abgeschlossen.',
     not_your_order: 'Das ist nicht dein Auftrag.',
     driver_missing_permission: 'Dieser Fahrer besitzt nicht die für den Auftrag erforderliche Berechtigung (z.B. Gefahrgut).',
@@ -141,7 +143,9 @@ const ORDER_STATUS_META = {
     offen: { label: 'Offen', dot: 'gray' },
     disponiert: { label: 'Disponiert', dot: 'yellow' },
     angenommen: { label: 'Angenommen', dot: 'blue' },
-    beladen: { label: 'Beladen', dot: 'blue' },
+    anfahrt: { label: 'Anfahrt zum Beladepunkt', dot: 'blue' },
+    beladen: { label: 'Beladen, unterwegs zum Ziel', dot: 'blue' },
+    entladen: { label: 'Wird entladen', dot: 'blue' },
     unterwegs: { label: 'Unterwegs', dot: 'blue' },
     abgeschlossen: { label: 'Abgeschlossen', dot: 'green' },
     abgebrochen: { label: 'Abgebrochen', dot: 'red' },
@@ -303,6 +307,7 @@ window.addEventListener('message', (event) => {
     else if (data.type === 'radioCallAnswered') radioOnCallAnswered();
     else if (data.type === 'radioCallEnded') radioOnCallEnded(data.reason);
     else if (data.type === 'radioPtt') document.getElementById('snd-ptt').play().catch(() => {});
+    else if (data.type === 'radioTalkers') radioSetTalkers(data.names);
 });
 
 document.addEventListener('keydown', (e) => {
@@ -509,6 +514,20 @@ function radioSetCallBanner(text) {
     const el = document.getElementById('cb-call-banner');
     if (text) { el.textContent = text; el.classList.remove('hidden'); }
     else { el.classList.add('hidden'); }
+}
+
+// Zeigt auf dem LCD an, wer gerade auf dem Kanal spricht (lokaler Spieler
+// über pma-voice:radioActive, andere Spieler über das intern von pma-voice
+// gefeuerte Event pma-voice:setTalkingOnRadio - siehe cl_radio.lua).
+function radioSetTalkers(names) {
+    const el = document.getElementById('cb-lcd-talker');
+    if (names && names.length) {
+        el.textContent = `🔊 ${names.join(', ')}`;
+        el.classList.remove('hidden');
+    } else {
+        el.textContent = '';
+        el.classList.add('hidden');
+    }
 }
 
 function radioOnIncomingCall(callerName) {
@@ -722,6 +741,17 @@ VIEWS['driver-card'] = async (root) => {
                 <div class="perm-list">${permsHtml}</div>
             </div>
             <div class="driver-card-section">
+                <h4>Fahrerkarte</h4>
+                <div class="stat-row">
+                    <span>Status</span>
+                    <span>${d.driver.onShift ? `🪪 Eingesteckt (seit ${formatDate(d.driver.shiftStartedAt, true)})` : '🪪 Nicht eingesteckt'}</span>
+                </div>
+                <p class="card-hint">Vor der Annahme eines Auftrags musst du hier deine Fahrt starten, damit deine Lenk-/Ruhezeiten erfasst werden.</p>
+                ${d.driver.onShift
+                    ? `<button class="btn btn-sm btn-danger" onclick="Actions.endShift()">Fahrerkarte abziehen (Fahrt beenden)</button>`
+                    : `<button class="btn btn-sm btn-primary" onclick="Actions.startShift()">Fahrerkarte einstecken (Fahrt starten)</button>`}
+            </div>
+            <div class="driver-card-section">
                 <h4>Lenk- &amp; Ruhezeiten</h4>
                 ${renderHoursBlock(d.hours)}
             </div>
@@ -744,7 +774,9 @@ VIEWS['driver-card'] = async (root) => {
 VIEWS['driver-orders'] = async (root) => {
     const [d, pool] = await Promise.all([call('driver:myOrders'), call('driver:openOrders')]);
 
-    const cargoHint = { angenommen: '📍 Zum Beladepunkt fahren, dort per E abholen', beladen: '⏳ Wird beladen...', unterwegs: '📍 Zum Zielort fahren, dort per E abliefern' };
+    const cargoHint = { anfahrt: '📍 Zum Beladepunkt fahren, dort per E abholen', beladen: '📍 Zum Zielort fahren, dort per E abliefern', entladen: '⏳ Wird entladen...' };
+
+    const coordsText = (c) => (c ? `GPS: ${c.x}, ${c.y}` : '');
 
     const rows = d.orders.map((o) => {
         let actions = '';
@@ -754,16 +786,23 @@ VIEWS['driver-orders'] = async (root) => {
         } else if (cargoHint[o.status]) {
             actions = `<span class="view-subtitle" style="margin:0;">${cargoHint[o.status]}</span>`;
         }
-        const lieferschein = ['angenommen', 'beladen', 'unterwegs'].includes(o.status) ? `
+        const lieferschein = ['angenommen', 'anfahrt', 'beladen', 'entladen'].includes(o.status) ? `
             <tr class="lieferschein-row">
                 <td colspan="7">
                     <div class="lieferschein">
-                        <div class="lieferschein-title">📄 Lieferschein #${o.id}</div>
+                        <div class="lieferschein-head">
+                            <div class="lieferschein-title">📄 Lieferschein #${o.id}</div>
+                            <div class="lieferschein-meta">Ausgestellt ${formatDate(o.created_at, true)}${o.dispatcher_name ? ` · Disponiert von ${escapeHtml(o.dispatcher_name)}` : ''}</div>
+                        </div>
                         <div class="lieferschein-grid">
                             <div><span>Ware</span><strong>${escapeHtml(o.cargo)}</strong></div>
                             <div><span>Menge</span><strong>${o.cargo_amount ? `${Number(o.cargo_amount).toLocaleString('de-DE')} ${escapeHtml(o.cargo_unit || '')}` : '-'}</strong></div>
-                            <div><span>Abholort</span><strong>${escapeHtml(o.start_location)}</strong></div>
-                            <div><span>Zielort</span><strong>${escapeHtml(o.end_location)}</strong></div>
+                            <div><span>Gefahrgut</span><strong>${o.requires_permission ? '⚠ Ja' : 'Nein'}</strong></div>
+                            <div><span>Entfernung</span><strong>${Number(o.distance_km).toLocaleString('de-DE')} km</strong></div>
+                            <div><span>Abholort</span><strong>${escapeHtml(o.start_location)}</strong><small>${coordsText(o.start_coords)}</small></div>
+                            <div><span>Zielort</span><strong>${escapeHtml(o.end_location)}</strong><small>${coordsText(o.end_coords)}</small></div>
+                            <div><span>Fahrzeug</span><strong>${o.vehicle_name ? `${escapeHtml(o.vehicle_name)} (${escapeHtml(o.vehicle_plate)})` : '-'}</strong></div>
+                            <div><span>Frist</span><strong>${o.deadline ? formatDate(o.deadline, true) : '-'}</strong></div>
                         </div>
                     </div>
                 </td>
@@ -793,9 +832,13 @@ VIEWS['driver-orders'] = async (root) => {
     root.innerHTML = `
         <h1 class="view-title">Meine Aufträge</h1>
         <p class="view-subtitle">Zugewiesene und aktive Aufträge.</p>
+        ${!pool.onShift ? `<p class="view-subtitle" style="color:var(--yellow);">⚠ Du musst zuerst deine Fahrerkarte einstecken (Reiter Fahrerkarte, Fahrt starten), bevor du einen Auftrag annehmen kannst.</p>` : ''}
         <div class="section">${table(['#', 'Fracht', 'Strecke', 'Distanz', 'Fahrzeug', 'Status', 'Aktion'], rows)}</div>
 
-        <h1 class="view-title" style="margin-top:24px;">Offener Auftragspool</h1>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:24px;">
+            <h1 class="view-title" style="margin:0;">Offener Auftragspool</h1>
+            ${pool.debugEnabled ? `<button class="btn btn-sm" onclick="Actions.debugGenerateOrder()">🧪 Auftrag generieren (Test)</button>` : ''}
+        </div>
         <p class="view-subtitle">${pool.dispatcherAvailable
             ? 'Ein Disponent ist gerade online - Aufträge werden von ihm zugewiesen.'
             : 'Aktuell ist kein Disponent verfügbar - du kannst dir einen offenen Auftrag selbst übernehmen.'}</p>
@@ -930,7 +973,7 @@ VIEWS['dispatch-active'] = async (root) => {
         <td>${o.vehicle_name ? `${escapeHtml(o.vehicle_name)} (${escapeHtml(o.vehicle_plate)})` : '-'}</td>
         <td>${badge(ORDER_STATUS_META[o.status])}</td>
         <td class="btn-row">
-            ${['disponiert', 'angenommen', 'beladen'].includes(o.status) ? `<button class="btn btn-sm" onclick="Actions.openReassignModal(${o.id})">Neu zuweisen</button>` : ''}
+            ${['disponiert', 'angenommen', 'anfahrt', 'beladen'].includes(o.status) ? `<button class="btn btn-sm" onclick="Actions.openReassignModal(${o.id})">Neu zuweisen</button>` : ''}
             <button class="btn btn-sm btn-danger" onclick="Actions.cancelOrder(${o.id})">Abbrechen</button>
         </td>
     </tr>`);
@@ -996,7 +1039,7 @@ VIEWS['gf-dashboard'] = async (root) => {
         <td>${t.punctuality_rate} %</td>
     </tr>`);
 
-    const statusOrder = ['offen', 'disponiert', 'angenommen', 'beladen', 'unterwegs', 'abgeschlossen', 'abgebrochen', 'abgelehnt'];
+    const statusOrder = ['offen', 'disponiert', 'angenommen', 'anfahrt', 'beladen', 'entladen', 'unterwegs', 'abgeschlossen', 'abgebrochen', 'abgelehnt'];
     const statusCounts = {};
     stats.ordersByStatus.forEach((s) => { statusCounts[s.status] = s.c; });
     const maxStatus = Math.max(1, ...Object.values(statusCounts).map(Number));
@@ -1348,6 +1391,24 @@ Actions.selfAssignOrder = async (orderId) => {
     await call('driver:selfAssignOrder', { orderId });
     toast('Auftrag übernommen', `Auftrag #${orderId} wurde dir zugewiesen - du kannst ihn jetzt annehmen.`, 'success');
     showView('driver-orders');
+};
+
+Actions.debugGenerateOrder = async () => {
+    const r = await call('driver:debugGenerateOrder');
+    toast('Testauftrag erzeugt', `Auftrag #${r.orderId} wurde in den offenen Pool gelegt.`, 'success');
+    showView('driver-orders');
+};
+
+Actions.startShift = async () => {
+    await call('driver:startShift');
+    toast('Fahrerkarte eingesteckt', 'Deine Fahrt hat begonnen - Lenk-/Ruhezeiten werden erfasst.', 'success');
+    showView('driver-card');
+};
+
+Actions.endShift = async () => {
+    await call('driver:endShift');
+    toast('Fahrerkarte abgezogen', 'Deine Fahrt wurde beendet.', 'info');
+    showView('driver-card');
 };
 
 Actions.markRead = async (id) => {

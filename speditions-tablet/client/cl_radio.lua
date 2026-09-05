@@ -20,6 +20,7 @@ local muted = false
 local interacting = false
 local interactingForCall = false -- true, wenn der Fokus nur wegen eines Anrufs automatisch aktiviert wurde
 local pendingCallChannel = nil
+local talkers = {} -- ['local'] oder [serverId] = Anzeigename, wer gerade auf dem Kanal spricht
 
 local function pmaVoiceReady()
     return GetResourceState('pma-voice') == 'started'
@@ -73,11 +74,24 @@ RegisterKeyMapping('cbRadioToggle', 'CB-Funk bedienen (an/aus)', 'keyboard', Con
 -- nur unnötige Latenz)
 -- ---------------------------------------------------------
 
+--- Baut aus der talkers-Tabelle die Namensliste und schickt sie ans LCD.
+local function sendTalkersUpdate()
+    local names = {}
+    for _, name in pairs(talkers) do
+        names[#names + 1] = name
+    end
+    SendNUIMessage({ type = 'radioTalkers', names = names })
+end
+
 RegisterNUICallback('radioPower', function(data, cb)
     radioOn = data.on and true or false
-    if not radioOn and interacting then
-        interactingForCall = false
-        setInteracting(false)
+    if not radioOn then
+        talkers = {}
+        sendTalkersUpdate()
+        if interacting then
+            interactingForCall = false
+            setInteracting(false)
+        end
     end
     applyVoiceState()
     cb('ok')
@@ -177,13 +191,35 @@ RegisterNetEvent('speditions-tablet:client:radioLeaveCall', function(reason)
 end)
 
 -- ---------------------------------------------------------
--- Sprech-Sound: pma-voice meldet lokal, wenn der Spieler selbst auf dem
--- Funkkanal zu sprechen beginnt/aufhört (Push-to-Talk).
+-- Sprech-Sound + "wer spricht"-Anzeige: pma-voice meldet lokal, wenn der
+-- Spieler selbst auf dem Funkkanal zu sprechen beginnt/aufhört
+-- (Push-to-Talk). Für ANDERE Spieler auf dem Kanal bietet pma-voice selbst
+-- kein eigenes Export/Event an - wir hören daher zusätzlich das intern von
+-- pma-voice gefeuerte Event 'pma-voice:setTalkingOnRadio' mit (verifiziert
+-- gegen den pma-voice-Quellcode, client/module/radio.lua: wird dort per
+-- RegisterNetEvent('pma-voice:setTalkingOnRadio', setTalkingOnRadio)
+-- registriert - FiveM-Events sind nicht ressourcen-exklusiv, mehrere
+-- Ressourcen können denselben Eventnamen unabhängig voneinander abonnieren).
 -- ---------------------------------------------------------
 
 RegisterNetEvent('pma-voice:radioActive', function(radioTalking)
     if not radioOn then return end
     SendNUIMessage({ type = 'radioPtt', talking = radioTalking })
+    talkers['local'] = radioTalking and 'Du' or nil
+    sendTalkersUpdate()
+end)
+
+RegisterNetEvent('pma-voice:setTalkingOnRadio', function(plySource, enabled)
+    if not radioOn then return end
+    if type(plySource) ~= 'number' then return end
+
+    if enabled then
+        local playerIndex = GetPlayerFromServerId(plySource)
+        talkers[plySource] = (playerIndex ~= -1 and GetPlayerName(playerIndex)) or ('Spieler #' .. plySource)
+    else
+        talkers[plySource] = nil
+    end
+    sendTalkersUpdate()
 end)
 
 -- Schaltet den Funk beim Ressourcen-/Verbindungsende sauber ab.

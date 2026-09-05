@@ -201,6 +201,12 @@ Config.OrderGeneration = {
     maxOpenOrders = 12,          -- maximale Anzahl unbearbeiteter (offener) Aufträge im Pool
 }
 
+-- Blendet im Tablet (Reiter "Aufträge", Offener Auftragspool) für Fahrer
+-- einen Button "Auftrag generieren" ein, der sofort - unabhängig vom oben
+-- konfigurierten Intervall - einen neuen Testauftrag erzeugt. Nur zum
+-- Testen gedacht: für den Live-Betrieb wieder auf false stellen.
+Config.AllowManualOrderGeneration = true
+
 -- =========================================================
 -- LENK- UND RUHEZEITEN
 -- =========================================================

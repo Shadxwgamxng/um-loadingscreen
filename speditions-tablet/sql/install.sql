@@ -24,6 +24,10 @@ CREATE TABLE IF NOT EXISTS `st_drivers` (
     `notes` TEXT NULL,
     `current_status` ENUM('offline','verfuegbar','im_einsatz','pause') NOT NULL DEFAULT 'offline',
     `assigned_vehicle_id` INT UNSIGNED NULL,
+    -- "Fahrerkarte eingesteckt" - muss aktiv sein, bevor ein Auftrag
+    -- angenommen werden kann (siehe Orders.AcceptByDriver).
+    `on_shift` TINYINT(1) NOT NULL DEFAULT 0,
+    `shift_started_at` DATETIME NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
@@ -105,7 +109,7 @@ CREATE TABLE IF NOT EXISTS `st_orders` (
     `end_location` VARCHAR(100) NOT NULL,
     `distance_km` DECIMAL(10,2) NOT NULL DEFAULT 0,
     `value` DECIMAL(12,2) NOT NULL DEFAULT 0,
-    `status` ENUM('offen','disponiert','angenommen','beladen','unterwegs','abgeschlossen','abgebrochen','abgelehnt') NOT NULL DEFAULT 'offen',
+    `status` ENUM('offen','disponiert','angenommen','anfahrt','beladen','entladen','unterwegs','abgeschlossen','abgebrochen','abgelehnt') NOT NULL DEFAULT 'offen',
     `driver_id` INT UNSIGNED NULL,
     `vehicle_id` INT UNSIGNED NULL,
     `dispatcher_id` INT UNSIGNED NULL,
