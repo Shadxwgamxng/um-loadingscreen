@@ -111,6 +111,8 @@ CREATE TABLE IF NOT EXISTS `st_orders` (
     `dispatcher_id` INT UNSIGNED NULL,
     `source` ENUM('auto','disponent') NOT NULL DEFAULT 'auto',
     `requires_permission` VARCHAR(50) NULL,
+    `cargo_amount` INT UNSIGNED NULL,
+    `cargo_unit` VARCHAR(30) NULL,
     `deadline` DATETIME NULL,
     `punctual` TINYINT(1) NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

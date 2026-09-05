@@ -744,18 +744,30 @@ VIEWS['driver-card'] = async (root) => {
 VIEWS['driver-orders'] = async (root) => {
     const [d, pool] = await Promise.all([call('driver:myOrders'), call('driver:openOrders')]);
 
+    const cargoHint = { angenommen: '📍 Zum Beladepunkt fahren, dort per E abholen', beladen: '⏳ Wird beladen...', unterwegs: '📍 Zum Zielort fahren, dort per E abliefern' };
+
     const rows = d.orders.map((o) => {
         let actions = '';
         if (o.status === 'disponiert') {
             actions = `<button class="btn btn-sm btn-primary" onclick="Actions.acceptOrder(${o.id})">Annehmen</button>
                         <button class="btn btn-sm btn-danger" onclick="Actions.declineOrder(${o.id})">Ablehnen</button>`;
-        } else if (o.status === 'angenommen') {
-            actions = `<button class="btn btn-sm btn-primary" onclick="Actions.cargoStatus(${o.id}, 'beladen')">Beladen</button>`;
-        } else if (o.status === 'beladen') {
-            actions = `<button class="btn btn-sm btn-primary" onclick="Actions.cargoStatus(${o.id}, 'unterwegs')">Unterwegs</button>`;
-        } else if (o.status === 'unterwegs') {
-            actions = `<button class="btn btn-sm btn-primary" onclick="Actions.completeOrder(${o.id})">Abschließen</button>`;
+        } else if (cargoHint[o.status]) {
+            actions = `<span class="view-subtitle" style="margin:0;">${cargoHint[o.status]}</span>`;
         }
+        const lieferschein = ['angenommen', 'beladen', 'unterwegs'].includes(o.status) ? `
+            <tr class="lieferschein-row">
+                <td colspan="7">
+                    <div class="lieferschein">
+                        <div class="lieferschein-title">📄 Lieferschein #${o.id}</div>
+                        <div class="lieferschein-grid">
+                            <div><span>Ware</span><strong>${escapeHtml(o.cargo)}</strong></div>
+                            <div><span>Menge</span><strong>${o.cargo_amount ? `${Number(o.cargo_amount).toLocaleString('de-DE')} ${escapeHtml(o.cargo_unit || '')}` : '-'}</strong></div>
+                            <div><span>Abholort</span><strong>${escapeHtml(o.start_location)}</strong></div>
+                            <div><span>Zielort</span><strong>${escapeHtml(o.end_location)}</strong></div>
+                        </div>
+                    </div>
+                </td>
+            </tr>` : '';
         return `<tr>
             <td>#${o.id}</td>
             <td>${escapeHtml(o.cargo)}</td>
@@ -764,7 +776,7 @@ VIEWS['driver-orders'] = async (root) => {
             <td>${o.vehicle_name ? `${escapeHtml(o.vehicle_name)} (${escapeHtml(o.vehicle_plate)})` : '-'}</td>
             <td>${badge(ORDER_STATUS_META[o.status])}</td>
             <td class="btn-row">${actions}</td>
-        </tr>`;
+        </tr>${lieferschein}`;
     });
 
     const poolRows = pool.orders.map((o) => `<tr>
@@ -1335,17 +1347,6 @@ Actions.confirmDecline = async (orderId) => {
 Actions.selfAssignOrder = async (orderId) => {
     await call('driver:selfAssignOrder', { orderId });
     toast('Auftrag übernommen', `Auftrag #${orderId} wurde dir zugewiesen - du kannst ihn jetzt annehmen.`, 'success');
-    showView('driver-orders');
-};
-
-Actions.cargoStatus = async (orderId, status) => {
-    await call('driver:updateCargoStatus', { orderId, status });
-    showView('driver-orders');
-};
-
-Actions.completeOrder = async (orderId) => {
-    const r = await call('driver:completeOrder', { orderId });
-    toast('Auftrag abgeschlossen', `Unternehmensumsatz: ${formatMoney(r.value)}`, 'success');
     showView('driver-orders');
 };
 

@@ -17,16 +17,18 @@ verwaltet.
 1. Ressource nach `resources/[speditions]/speditions-tablet` kopieren.
 2. `sql/install.sql` in die Datenbank importieren (bei einer bereits
    bestehenden Installation stattdessen der Reihe nach `sql/upgrade_v2.sql`,
-   `sql/upgrade_v3.sql`, `sql/upgrade_v4.sql` und `sql/upgrade_v5.sql`
-   ausführen, um Lenk-/Ruhezeiten, Gefahrgut, Ein-/Auszahlungen und
-   Gehälter/Stempeluhr nachzurüsten und das Login-System zu entfernen).
+   `sql/upgrade_v3.sql`, `sql/upgrade_v4.sql`, `sql/upgrade_v5.sql` und
+   `sql/upgrade_v6.sql` ausführen, um Lenk-/Ruhezeiten, Gefahrgut,
+   Ein-/Auszahlungen, Gehälter/Stempeluhr und den Lieferschein
+   nachzurüsten und das Login-System zu entfernen).
 3. In `server.cfg`:
    ```
    ensure oxmysql
    ensure speditions-tablet
    ```
 4. `config.lua` anpassen (siehe unten) - insbesondere `Config.CompanyName`
-   und `Config.Locations`.
+   und `Config.Locations` (an die tatsächlichen Firmenstandorte deines
+   Servers anpassen).
 5. Server starten.
 
 ## Mitarbeiter erkennen (kein Login-Bildschirm)
@@ -204,6 +206,45 @@ Framework-Anbindung in diesem Standalone-Setup).
   "Unterwegs") automatisch einer zum Zielort. Die Koordinaten kommen aus
   `Config.Locations` - passe sie unbedingt an die tatsächlichen Lade-/
   Entladepunkte deines Servers an.
+
+### Echte Standorte, Be-/Entladen per NPC, Lieferschein
+
+`Config.Locations` ist eine Liste von 30 echten Koordinaten (reale
+Firmenadressen des Servers) statt der früheren abstrakten Städte-Strecken.
+Jeder Standort trägt Frachtarten-Tags (`sourceCargo` = hier abholbare Fracht,
+`destCargo` = hier anlieferbare Fracht); die automatische Auftragsgenerierung
+wählt nur Frachtarten, für die es mindestens einen passenden Start- **und**
+Zielstandort gibt, und berechnet Distanz/Wert aus der echten
+Luftlinienentfernung der Koordinaten.
+
+- **NPC an jedem Standort**: Sobald ein Fahrer sich einem Standort nähert
+  (`Config.LocationPedSpawnRadius`, Standard 60m), spawnt dort ein NPC (nur
+  clientseitig, aus Performancegründen nicht dauerhaft an allen 30 Standorten
+  gleichzeitig).
+- **Beladen/Entladen per Taste E**: Hat der Fahrer einen angenommenen Auftrag
+  mit Beladepunkt hier, oder einen "unterwegs"-Auftrag mit Zielort hier, zeigt
+  das Spiel bei Nähe zum NPC (`Config.LocationInteractRadius`, Standard 2,5m)
+  einen Hinweis ("E - Fracht abholen/abliefern"). Taste E startet eine
+  Animation mit Fortschrittsbalken über `Config.LoadUnloadSeconds` (Standard
+  150s = 2:30 min); der Auftragsstatus wechselt danach automatisch weiter
+  (`angenommen` → `beladen` → `unterwegs` bzw. `unterwegs` → `abgeschlossen`).
+  Entfernt sich der Fahrer während des Vorgangs mehr als 5m vom NPC, bricht
+  der Vorgang ab. Die manuellen Tablet-Buttons "Beladen"/"Unterwegs"/
+  "Abschließen" entfallen dadurch - im Tablet bleibt für einen Auftrag nur
+  noch **Annehmen/Ablehnen** (Übernahme durch den Disponenten bzw.
+  Selbstzuweisung) sowie die Lieferschein-Ansicht.
+- **Lieferschein im Tablet**: Solange ein Auftrag angenommen, beladen oder
+  unterwegs ist, zeigt das Tablet unter "Meine Aufträge" einen Lieferschein
+  mit Ware, Menge/Einheit (`Config.CargoUnits`), Abholort und Zielort.
+- **Bekannte Einschränkungen**: Die Zeit- und Nähe-Prüfung für das Be-/
+  Entladen läuft ausschließlich clientseitig (kein serverseitiger Schutz vor
+  Manipulation der lokalen Wartezeit) - für ein PvE-Logistikfeature wie
+  dieses als ausreichend eingeschätzt, bei Bedarf aber erweiterbar. Für die
+  Frachtarten `Möbel` und `Elektronik` ist unter den 30 vorgegebenen
+  Standorten keine Quelle (`sourceCargo`) hinterlegt - diese beiden
+  Frachtarten werden aktuell also nie für automatisch generierte Aufträge
+  ausgewählt, bis du in `Config.Locations` einen Standort mit
+  `sourceCargo = {'Möbel'}` bzw. `{'Elektronik'}` ergänzt.
 - **Gefahrgut-Zugriffsbeschränkung**: Frachtarten in `Config.HazardousCargo`
   erzeugen Aufträge mit `requires_permission = 'gefahrgut'`. Das Disponieren
   und Neuzuweisen an Fahrer ohne die Fahrerberechtigung "Gefahrgut" wird
@@ -223,7 +264,7 @@ st_driver_statistics    Aggregierte Fahrerstatistik (aus st_orders berechnet)
 st_vehicles             Fuhrpark
 st_vehicle_assignments  Historie der Fahrzeug-Fahrer-Zuweisungen
 st_vehicle_history      Fahrzeugereignisse (erstellt, Wartung, Status, Aufträge)
-st_orders               Aufträge inkl. Fahrer-/Fahrzeugzuordnung
+st_orders               Aufträge inkl. Fahrer-/Fahrzeugzuordnung, Menge/Einheit (Lieferschein)
 st_order_stops          Zwischenstopps (optional/erweiterbar)
 st_order_history        Audit-Trail je Auftragsstatus
 st_transactions         Vollständiges Transaktions-Ledger (Einnahmen/Auszahlungen/Einzahlungen)
@@ -258,8 +299,13 @@ Tablet erkannt ist.
 Alle Stellschrauben befinden sich in `config.lua`:
 
 - `Config.CompanyName` - Firmenname auf Sperrbildschirm, Topbar und Fahrerkarte
-- `Config.Routes`, `Config.Locations` - Strecken (Distanz/Wertspanne) und die
-  dazugehörigen Wegpunkt-Koordinaten für Beladepunkt/Zielort
+- `Config.Locations` - Liste der echten Firmenstandorte (Koordinaten,
+  Frachtarten-Tags `sourceCargo`/`destCargo`) für Auftragsgenerierung, NPCs,
+  Be-/Entladen und Wegpunkte; `Config.OrderValuePerKm`,
+  `Config.LoadUnloadSeconds`, `Config.LocationPedSpawnRadius`,
+  `Config.LocationInteractRadius` - Wertspanne pro km sowie Timing/Radien
+  für den Be-/Entladevorgang; `Config.CargoUnits` - Mengeneinheit je
+  Frachtart für den Lieferschein
 - `Config.OrderGeneration` - Intervall und maximale Poolgröße
 - `Config.VehicleClasses`, `Config.CargoTypes`, `Config.HazardousCargo`,
   `Config.DriverPermissions`
@@ -288,7 +334,7 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `server/sv_drivers.lua` - Fahrerkarte, Fahrerakte, Statistik.
 - `server/sv_hours.lua` - Lenk-/Ruhezeiten-Tracking, Warnungen, Erinnerungen.
 - `server/sv_orders.lua` - Auftragsgenerierung & -lebenszyklus, Gefahrgut-Prüfung,
-  Auto-Wegpunkte.
+  Auto-Wegpunkte, Standort-/Frachtart-Zuordnung für Lieferschein.
 - `server/sv_employees.lua` - Mitarbeiterverwaltung (Einstellen, Rolle/Status ändern).
 - `server/sv_notifications.lua` - Nachrichten Disponent/Fahrer.
 - `client/cl_main.lua` - NUI-Steuerung, RPC-Relay (`ServerCall` auch für
@@ -296,6 +342,8 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `client/cl_hours.lua` - Erkennt per Kennzeichen-Abgleich, ob der Fahrer
   gerade sein zugewiesenes Firmenfahrzeug fährt, und meldet Fahrzeit an den Server.
 - `client/cl_radio.lua` - CB-Funk, bindet an pma-voice an (Kanal/Lautstärke/Stumm).
+- `client/cl_orders.lua` - NPCs an den Standorten aus `Config.Locations`
+  (Spawn nach Nähe), Be-/Entladen per Taste E mit Fortschrittsbalken.
 - `html/` - NUI-Frontend (Sperrbildschirm, rollenbasierte Ansichten, siehe
   `js/app.js`). Der Client führt dabei keine Geschäftslogik aus - jede Aktion
   wird serverseitig neu geprüft.

@@ -35,7 +35,8 @@ server_scripts {
 client_scripts {
     'client/cl_main.lua',
     'client/cl_hours.lua',
-    'client/cl_radio.lua'
+    'client/cl_radio.lua',
+    'client/cl_orders.lua'
 }
 
 ui_page 'html/index.html'

@@ -54,19 +54,70 @@ function Orders.CountOpen()
     return row and tonumber(row.c) or 0
 end
 
---- Erzeugt einen neuen, unbearbeiteten Pool-Auftrag anhand konfigurierter Strecken.
-function Orders.GenerateOne()
-    if #Config.Routes == 0 then return nil end
+-- ---------------------------------------------------------
+-- Frachtart -> mögliche Abhol-/Zielstandorte (aus Config.Locations
+-- aufgebaut, siehe dort für die Erklärung von sourceCargo/destCargo).
+-- ---------------------------------------------------------
 
-    local route = Config.Routes[math.random(1, #Config.Routes)]
-    local cargo = Config.CargoTypes[math.random(1, #Config.CargoTypes)]
-    local value = Utils.Round2(math.random(route.minValue * 100, route.maxValue * 100) / 100)
+local sourcesByCargo = {}
+local destsByCargo = {}
+for _, loc in ipairs(Config.Locations) do
+    for _, cargo in ipairs(loc.sourceCargo or {}) do
+        sourcesByCargo[cargo] = sourcesByCargo[cargo] or {}
+        table.insert(sourcesByCargo[cargo], loc)
+    end
+    for _, cargo in ipairs(loc.destCargo or {}) do
+        destsByCargo[cargo] = destsByCargo[cargo] or {}
+        table.insert(destsByCargo[cargo], loc)
+    end
+end
+
+--- Distanz zwischen zwei Standorten in km (echte Luftlinie aus den
+--- konfigurierten Weltkoordinaten - keine Streckenpflege mehr nötig).
+local function locationDistanceKm(a, b)
+    local dx, dy, dz = a.coords.x - b.coords.x, a.coords.y - b.coords.y, a.coords.z - b.coords.z
+    return math.sqrt(dx * dx + dy * dy + dz * dz) / 1000.0
+end
+
+--- Erzeugt einen neuen, unbearbeiteten Pool-Auftrag: wählt eine Frachtart,
+--- für die es mindestens einen Abhol- UND einen (anderen) Zielstandort
+--- gibt, und berechnet Distanz/Wert/Menge daraus.
+function Orders.GenerateOne()
+    local possibleCargoTypes = {}
+    for cargo in pairs(sourcesByCargo) do
+        if destsByCargo[cargo] then
+            possibleCargoTypes[#possibleCargoTypes + 1] = cargo
+        end
+    end
+    if #possibleCargoTypes == 0 then return nil end
+
+    local cargo = possibleCargoTypes[math.random(1, #possibleCargoTypes)]
+    local sources = sourcesByCargo[cargo]
+    local dests = destsByCargo[cargo]
+
+    local from = sources[math.random(1, #sources)]
+    local to = dests[math.random(1, #dests)]
+    if to.name == from.name then
+        -- Einziger möglicher "Umweg": bei nur einem Ziel, das zufällig mit
+        -- der Quelle identisch ist, diesen Durchlauf einfach überspringen.
+        if #dests <= 1 then return nil end
+        repeat
+            to = dests[math.random(1, #dests)]
+        until to.name ~= from.name
+    end
+
+    local distanceKm = Utils.Round2(locationDistanceKm(from, to))
+    local value = Utils.Round2(distanceKm * (Config.OrderValuePerKm.min + math.random() * (Config.OrderValuePerKm.max - Config.OrderValuePerKm.min)))
     local requiresPermission = Utils.InTable(Config.HazardousCargo, cargo) and 'gefahrgut' or nil
 
+    local unitCfg = Config.CargoUnits[cargo]
+    local cargoAmount = unitCfg and math.random(unitCfg.min, unitCfg.max) or nil
+    local cargoUnit = unitCfg and unitCfg.unit or nil
+
     local orderId = MySQL.insert.await(
-        [[INSERT INTO st_orders (cargo, start_location, end_location, distance_km, value, status, source, requires_permission)
-          VALUES (?, ?, ?, ?, ?, 'offen', 'auto', ?)]],
-        { cargo, route.from, route.to, route.distance, value, requiresPermission }
+        [[INSERT INTO st_orders (cargo, start_location, end_location, distance_km, value, status, source, requires_permission, cargo_amount, cargo_unit)
+          VALUES (?, ?, ?, ?, ?, 'offen', 'auto', ?, ?, ?)]],
+        { cargo, from.name, to.name, distanceKm, value, requiresPermission, cargoAmount, cargoUnit }
     )
 
     insertOrderHistory(orderId, 'offen', nil, 'Automatisch generiert.')

@@ -397,6 +397,24 @@ tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover { background: rgba(255,255,255,0.02); }
 .empty-row td { text-align: center; color: var(--text-2); padding: 24px; }
 
+.lieferschein-row td { padding: 0 10px 14px; border-bottom: 1px solid var(--border); }
+.lieferschein-row:last-child td { border-bottom: none; }
+.lieferschein {
+    background: var(--bg-3);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-lg);
+    padding: 12px 14px;
+}
+.lieferschein-title { font-size: 12px; font-weight: 700; color: var(--text-1); margin-bottom: 8px; }
+.lieferschein-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+.lieferschein-grid > div { display: flex; flex-direction: column; gap: 2px; }
+.lieferschein-grid span { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-2); }
+.lieferschein-grid strong { font-size: 13px; color: var(--text-0); }
+
 /* ---------- Badges / status dots ---------- */
 
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }

@@ -95,10 +95,21 @@ function Utils.NotifyClient(src, message, notifyType)
     TriggerClientEvent('speditions-tablet:client:notify', src, message, notifyType or 'info')
 end
 
+--- Findet einen konfigurierten Standort (Config.Locations) anhand seines
+--- Namens - Standorte sind eine Liste, kein Name->Koordinaten-Dictionary,
+--- weil jeder Standort zusätzlich Frachtart-Tags (sourceCargo/destCargo)
+--- trägt.
+function Utils.GetLocationByName(name)
+    for _, loc in ipairs(Config.Locations) do
+        if loc.name == name then return loc end
+    end
+    return nil
+end
+
 --- Setzt beim Client einen GPS-Wegpunkt (z.B. Beladepunkt/Zielort eines Auftrags).
 function Utils.SetClientWaypoint(src, locationName, label)
     if not src then return end
-    local coords = Config.Locations[locationName]
-    if not coords then return end
-    TriggerClientEvent('speditions-tablet:client:waypoint', src, coords.x, coords.y, label or locationName)
+    local loc = Utils.GetLocationByName(locationName)
+    if not loc then return end
+    TriggerClientEvent('speditions-tablet:client:waypoint', src, loc.coords.x, loc.coords.y, label or locationName)
 end

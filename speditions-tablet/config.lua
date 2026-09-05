@@ -103,6 +103,7 @@ Config.VehicleBlockedForDispatch = {
 Config.CargoTypes = {
     'Baustoffe', 'Lebensmittel', 'Elektronik', 'Möbel',
     'Fahrzeugteile', 'Chemikalien', 'Holz', 'Maschinenteile',
+    'Farben', 'Öle',
 }
 
 -- Frachtarten, die die Fahrerberechtigung "gefahrgut" voraussetzen. Ein
@@ -112,30 +113,78 @@ Config.HazardousCargo = {
     'Chemikalien',
 }
 
--- Vordefinierte Strecken mit Distanz (km) und Basis-Auftragswert-Spanne ($)
-Config.Routes = {
-    { from = 'Los Santos',    to = 'Paleto Bay',    distance = 45.2, minValue = 8000,  maxValue = 14000 },
-    { from = 'Los Santos',    to = 'Sandy Shores',  distance = 38.6, minValue = 6500,  maxValue = 12000 },
-    { from = 'Sandy Shores',  to = 'Paleto Bay',    distance = 22.1, minValue = 4000,  maxValue = 8000  },
-    { from = 'Los Santos',    to = 'Grapeseed',     distance = 41.0, minValue = 7000,  maxValue = 13000 },
-    { from = 'Paleto Bay',    to = 'Grapeseed',     distance = 12.4, minValue = 2500,  maxValue = 5000  },
-    { from = 'Los Santos',    to = 'Harmony',       distance = 15.8, minValue = 3000,  maxValue = 6000  },
-    { from = 'Sandy Shores',  to = 'Grand Senora',  distance = 18.3, minValue = 3200,  maxValue = 6500  },
+-- Menge/Einheit je Frachtart für den Lieferschein (zufällig innerhalb der
+-- Spanne je generiertem Auftrag).
+Config.CargoUnits = {
+    Holz            = { unit = 'Festmeter', min = 5,   max = 40   },
+    Lebensmittel    = { unit = 'kg',        min = 200, max = 2000 },
+    Farben          = { unit = 'Liter',     min = 100, max = 1500 },
+    Fahrzeugteile   = { unit = 'Stück',     min = 5,   max = 80   },
+    Chemikalien     = { unit = 'Liter',     min = 100, max = 1000 },
+    Baustoffe       = { unit = 'Tonnen',    min = 2,   max = 25   },
+    Maschinenteile  = { unit = 'Stück',     min = 1,   max = 20   },
+    ['Öle']         = { unit = 'Liter',     min = 100, max = 2000 },
+    ['Möbel']       = { unit = 'Stück',     min = 1,   max = 30   },
+    Elektronik      = { unit = 'Stück',     min = 1,   max = 50   },
 }
 
--- Koordinaten der Strecken-Orte für den automatischen GPS-Wegpunkt beim
--- Annehmen (-> Beladepunkt) und Losfahren (-> Zielort) eines Auftrags.
--- WICHTIG: Passe diese an die tatsächlichen Be-/Entladepunkte deines
--- Servers an (z.B. Warenhaus-/Lager-Koordinaten) - die Werte hier sind nur
--- grobe Richtwerte in der Nähe der jeweiligen Ortschaft.
+-- =========================================================
+-- BELADE-/ENTLADEPUNKTE
+-- =========================================================
+-- Jeder Ort ist ein echter Firmenstandort in der Welt: ein NPC steht dort
+-- und nimmt/gibt die Fracht per Tasteninteraktion (E) entgegen (siehe
+-- client/cl_orders.lua). `sourceCargo` = Frachtarten, die hier ABGEHOLT
+-- werden können (Auftrags-Startpunkt), `destCargo` = Frachtarten, die hier
+-- ANGENOMMEN werden (Auftrags-Zielpunkt). Ein Auftrag wird nur zwischen
+-- zwei UNTERSCHIEDLICHEN Orten generiert, die dieselbe Frachtart als
+-- Quelle bzw. Ziel führen. `coords` ist x, y, z, Blickrichtung (Heading)
+-- des NPCs.
 Config.Locations = {
-    ['Los Santos']   = vector3(215.37, -810.51, 30.72),
-    ['Paleto Bay']   = vector3(-448.9, 6008.6, 31.72),
-    ['Sandy Shores'] = vector3(1961.48, 3740.75, 32.34),
-    ['Grapeseed']    = vector3(1697.62, 4924.32, 42.06),
-    ['Harmony']      = vector3(297.05, 3086.5, 42.99),
-    ['Grand Senora'] = vector3(2438.0, 3081.0, 48.0),
+    { name = 'Holzhandel Hirschweiler',                coords = vector4(46.5653, 6301.5454, 31.2295, 139.2673),   sourceCargo = { 'Holz' } },
+    { name = 'Schlachterei Hirschweiler',               coords = vector4(-74.7670, 6265.5103, 31.2581, 59.6800),   sourceCargo = { 'Lebensmittel' } },
+    { name = 'Bauer Siggi Hirschweiler',                coords = vector4(417.5191, 6472.0654, 28.8115, 58.1537),  sourceCargo = { 'Lebensmittel' } },
+    { name = 'Holzverarbeitung Hirschweiler',           coords = vector4(-600.0895, 5292.8071, 70.2152, 260.2553), sourceCargo = { 'Holz' } },
+    { name = 'Farbhandel Friederichsen',                coords = vector4(1646.7103, 4837.1064, 42.0292, 95.3194), sourceCargo = { 'Farben' } },
+    { name = 'KfZ Werkstatt Meier',                     coords = vector4(1963.2445, 5177.4312, 47.9211, 290.3256), destCargo = { 'Fahrzeugteile', 'Öle' } },
+    { name = 'Gefahrenstoffzentrum Galileo Park',       coords = vector4(2902.0540, 4369.3184, 50.3478, 294.0421), sourceCargo = { 'Chemikalien' } },
+    { name = 'Garten- & Landschaftsbau Machere',        coords = vector4(2908.5291, 4466.8555, 48.1954, 153.3615), destCargo = { 'Holz', 'Farben', 'Baustoffe' } },
+    { name = 'Baumarkt Thomsen Nord',                   coords = vector4(2680.3562, 3504.5762, 53.3038, 68.0863), destCargo = { 'Baustoffe', 'Farben', 'Holz' } },
+    { name = 'Kiesgrube Nord',                          coords = vector4(2682.2056, 2796.8303, 40.4611, 6.2855),  sourceCargo = { 'Baustoffe' } },
+    { name = 'Kiesgrube Nord - Abbau',                  coords = vector4(2943.4368, 2744.2578, 43.3081, 286.8217), sourceCargo = { 'Baustoffe' } },
+    { name = 'Kohlekraftwerk',                          coords = vector4(2710.9817, 1514.1188, 24.5007, 76.9679), destCargo = { 'Maschinenteile', 'Öle' } },
+    { name = 'Zentrallager Box 9 (Holz)',                coords = vector4(1709.7573, -1503.2196, 113.9467, 70.8459), destCargo = { 'Holz' } },
+    { name = 'Zentrallager Box 2 (Sonstiges)',           coords = vector4(1727.7478, -1535.5013, 113.9467, 249.7921), destCargo = { 'Möbel', 'Elektronik' } },
+    { name = 'Zentrallager Anlieferung Schüttgut',       coords = vector4(1742.9828, -1632.9983, 112.4680, 99.0393), destCargo = { 'Baustoffe' } },
+    { name = 'Zentrallager Anlieferung Gefahrenstoffe',  coords = vector4(1490.6962, -1910.1671, 71.5243, 211.0637), destCargo = { 'Chemikalien' } },
+    { name = 'Zentrallager Anlieferung Altmetalle',      coords = vector4(1568.3628, -2165.1841, 77.5721, 84.1045), destCargo = { 'Maschinenteile' } },
+    { name = 'Zentrallager Abholung Öle',                coords = vector4(1258.2878, -1907.9558, 38.5011, 16.5664), sourceCargo = { 'Öle' } },
+    { name = 'Metallschmelze',                          coords = vector4(1098.6482, -1984.2262, 31.0147, 325.9687), sourceCargo = { 'Maschinenteile' } },
+    { name = 'Zwischenlager Baumarkt',                   coords = vector4(998.3950, -1855.2062, 31.0398, 182.0329), sourceCargo = { 'Baustoffe' } },
+    { name = 'Grosshandel Holzwaren',                    coords = vector4(500.7615, -1965.1077, 24.9851, 125.8696), sourceCargo = { 'Holz' } },
+    { name = 'Anlieferung Shopping Center',               coords = vector4(96.4740, -1808.7917, 27.0821, 229.9650), destCargo = { 'Möbel', 'Elektronik', 'Lebensmittel' } },
+    { name = 'Anlieferung KfZ Werkstatt (Stadt)',        coords = vector4(-195.5794, -1376.9260, 31.2584, 208.8103), destCargo = { 'Fahrzeugteile', 'Öle' } },
+    { name = 'Baustelle Stadt/West',                     coords = vector4(-502.1097, -941.4283, 23.9640, 152.0452), destCargo = { 'Baustoffe' } },
+    { name = 'Baustelle Stadtmitte',                     coords = vector4(-121.6090, -1056.7939, 27.2595, 293.2224), destCargo = { 'Baustoffe' } },
+    { name = 'Baustelle Stadt/Nord',                     coords = vector4(93.9297, -375.4476, 41.9395, 200.3073),  destCargo = { 'Baustoffe' } },
+    { name = 'Baustelle Stadt/ost',                      coords = vector4(1393.6664, -738.7650, 67.1901, 101.5932), destCargo = { 'Baustoffe' } },
+    { name = 'Anlieferung Einkaufszentrum Weststadt',    coords = vector4(-1543.6205, -590.0679, 34.8675, 354.0047), destCargo = { 'Möbel', 'Elektronik', 'Lebensmittel' } },
+    { name = 'Anlieferung 24/7 Supermarkt',               coords = vector4(-2955.2710, 396.4877, 15.0217, 61.8753), destCargo = { 'Lebensmittel' } },
+    { name = 'Abholung KfZ-Teilehandel',                  coords = vector4(963.3997, -1017.6773, 40.8475, 265.3992), sourceCargo = { 'Fahrzeugteile' } },
 }
+
+-- Wertspanne ($ pro km), aus der zufällig der Auftragswert berechnet wird
+-- (Distanz wird automatisch aus den echten Koordinaten der Be-/Entladepunkte
+-- berechnet, keine manuelle Streckenpflege mehr nötig).
+Config.OrderValuePerKm = { min = 180, max = 320 }
+
+-- Wie lange das Be-/Entladen per Tasteninteraktion (E) am NPC dauert (Sekunden).
+Config.LoadUnloadSeconds = 150 -- 2,5 Minuten
+
+-- Ab welcher Entfernung (Meter) der Belade-/Entlade-NPC eines Standorts
+-- überhaupt erst erzeugt wird (Performance) bzw. wieder entfernt wird.
+Config.LocationPedSpawnRadius = 60.0
+-- Ab welcher Entfernung (Meter) die "Drücke E"-Interaktion angezeigt wird.
+Config.LocationInteractRadius = 2.5
 
 -- Durchschnittsgeschwindigkeit (km/h) zur Berechnung der Lieferfrist (Pünktlichkeit)
 Config.AverageSpeedKmh = 65
