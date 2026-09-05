@@ -3,12 +3,14 @@
 --
 -- Ein-/Ausschalten läuft ausschließlich über das Tablet. Danach bleibt das
 -- Bedienfeld auch bei geschlossenem Tablet auf dem Bildschirm sichtbar.
--- Damit man es (ziehen, Kanal/Lautstärke/Stumm/Größe) auch bedienen kann,
--- ohne extra das ganze Tablet zu öffnen (z.B. während der Fahrt), einfach
--- Config.CbRadio.interactKey (Standard: linkes ALT) GEDRÜCKT HALTEN - das
--- gibt für die Dauer den Mauszeiger frei, beim Loslassen ist er wieder weg.
--- Ist das Tablet ohnehin schon offen, ist das Funkgerät automatisch
--- mitbedienbar.
+-- Damit man es (ziehen, Größe ändern, Kanal/Lautstärke/Stumm) auch bedienen
+-- kann, ohne extra das ganze Tablet zu öffnen (z.B. während der Fahrt),
+-- schaltet Config.CbRadio.interactKey den Mauszeiger dafür EIN/AUS (Toggle -
+-- kein Gedrückthalten, damit man nie "hängen" bleiben kann). Zusätzlich
+-- gibt Escape den Mauszeiger IMMER wieder frei, als garantierter Notausstieg.
+-- Bei einem eingehenden Anruf der Disposition wird der Mauszeiger automatisch
+-- kurz freigegeben (wie bei einem klingelnden Telefon) und direkt nach der
+-- Reaktion (Annehmen/Ablehnen) wieder freigegeben, falls er nur dafür an war.
 -- =========================================================
 
 local radioOn = false
@@ -16,6 +18,8 @@ local channel = Config.CbRadio.defaultChannel
 local volume = Config.CbRadio.defaultVolume
 local muted = false
 local interacting = false
+local interactingForCall = false -- true, wenn der Fokus nur wegen eines Anrufs automatisch aktiviert wurde
+local pendingCallChannel = nil
 
 local function pmaVoiceReady()
     return GetResourceState('pma-voice') == 'started'
@@ -40,20 +44,28 @@ local function setInteracting(on)
     SendNUIMessage({ type = 'radioInteract', on = on })
 end
 
--- Halten-Taste (+/- Befehlspaar, wie z.B. auch Sprinten in FiveM
--- funktioniert): beim Drücken Mauszeiger an, beim Loslassen wieder aus.
-RegisterCommand('+cbRadioInteract', function()
+--- Gibt den Mauszeiger wieder frei, falls er nur automatisch wegen eines
+--- Anrufs aktiviert wurde (nicht, wenn der Spieler ihn selbst per Taste an
+--- hatte, oder wenn das Tablet ohnehin offen ist).
+local function releaseCallFocusIfNeeded()
+    if interactingForCall and interacting and not exports['speditions-tablet']:IsTabletOpen() then
+        setInteracting(false)
+    end
+    interactingForCall = false
+end
+
+-- ---------------------------------------------------------
+-- Mauszeiger-Toggle für das Funkgerät
+-- ---------------------------------------------------------
+
+RegisterCommand('cbRadioToggle', function()
     if not radioOn then return end
-    if interacting then return end
     if exports['speditions-tablet']:IsTabletOpen() then return end -- Tablet hat ohnehin schon Fokus
-    setInteracting(true)
+    interactingForCall = false
+    setInteracting(not interacting)
 end, false)
 
-RegisterCommand('-cbRadioInteract', function()
-    if interacting then setInteracting(false) end
-end, false)
-
-RegisterKeyMapping('+cbRadioInteract', 'CB-Funk bedienen (gedrückt halten)', 'keyboard', Config.CbRadio.interactKey or 'LMENU')
+RegisterKeyMapping('cbRadioToggle', 'CB-Funk bedienen (an/aus)', 'keyboard', Config.CbRadio.interactKey or 'F7')
 
 -- ---------------------------------------------------------
 -- NUI-Callbacks (rein clientseitig - pma-voice validiert Kanäle selbst
@@ -64,6 +76,7 @@ RegisterKeyMapping('+cbRadioInteract', 'CB-Funk bedienen (gedrückt halten)', 'k
 RegisterNUICallback('radioPower', function(data, cb)
     radioOn = data.on and true or false
     if not radioOn and interacting then
+        interactingForCall = false
         setInteracting(false)
     end
     applyVoiceState()
@@ -95,9 +108,88 @@ RegisterNUICallback('radioToggleMute', function(_, cb)
     cb('ok')
 end)
 
+RegisterNUICallback('radioAnswerCall', function(_, cb)
+    local channelToJoin = pendingCallChannel
+    pendingCallChannel = nil
+    releaseCallFocusIfNeeded()
+    if channelToJoin then
+        ServerCall('radio:answerCall', {}, function(res)
+            if res and res.ok and pmaVoiceReady() then
+                exports['pma-voice']:setCallChannel(channelToJoin)
+            end
+        end)
+    end
+    cb('ok')
+end)
+
+RegisterNUICallback('radioDeclineCall', function(_, cb)
+    pendingCallChannel = nil
+    releaseCallFocusIfNeeded()
+    ServerCall('radio:declineCall', {}, function() end)
+    cb('ok')
+end)
+
+RegisterNUICallback('radioHangup', function(_, cb)
+    ServerCall('radio:hangup', {}, function() end)
+    cb('ok')
+end)
+
+--- Notausstieg: wird von der NUI bei Escape aufgerufen (siehe app.js) -
+--- gibt den Mauszeiger frei, falls er gerade nur wegen des Funkgeräts aktiv
+--- ist. Kann nur überhaupt ankommen, wenn die NUI ohnehin schon Fokus hat,
+--- also genau dann, wenn es etwas freizugeben gibt.
+RegisterNUICallback('radioForceRelease', function(_, cb)
+    if interacting and not exports['speditions-tablet']:IsTabletOpen() then
+        interactingForCall = false
+        setInteracting(false)
+    end
+    cb('ok')
+end)
+
+-- ---------------------------------------------------------
+-- Anruf-Netevents (unabhängig vom Tablet/NUI-Fokus, damit ein Anruf auch
+-- bei geschlossenem Tablet ankommt und die pma-voice-Anbindung IMMER
+-- korrekt läuft, unabhängig davon, ob die NUI gerade zuschaut)
+-- ---------------------------------------------------------
+
+RegisterNetEvent('speditions-tablet:client:radioIncomingCall', function(callerName, callChannel)
+    if not radioOn then return end
+    pendingCallChannel = callChannel
+    if not interacting then
+        interactingForCall = true
+        setInteracting(true)
+    end
+    SendNUIMessage({ type = 'radioIncomingCall', callerName = callerName })
+end)
+
+--- Wird an BEIDE Gesprächsseiten geschickt, sobald der Anruf angenommen
+--- wurde - die anrufende Seite tritt dem privaten Call-Kanal erst jetzt bei.
+RegisterNetEvent('speditions-tablet:client:radioJoinCall', function(callChannel)
+    if pmaVoiceReady() then exports['pma-voice']:setCallChannel(callChannel) end
+    SendNUIMessage({ type = 'radioCallAnswered' })
+end)
+
+RegisterNetEvent('speditions-tablet:client:radioLeaveCall', function(reason)
+    if pmaVoiceReady() then exports['pma-voice']:setCallChannel(0) end
+    pendingCallChannel = nil
+    releaseCallFocusIfNeeded()
+    SendNUIMessage({ type = 'radioCallEnded', reason = reason })
+end)
+
+-- ---------------------------------------------------------
+-- Sprech-Sound: pma-voice meldet lokal, wenn der Spieler selbst auf dem
+-- Funkkanal zu sprechen beginnt/aufhört (Push-to-Talk).
+-- ---------------------------------------------------------
+
+RegisterNetEvent('pma-voice:radioActive', function(radioTalking)
+    if not radioOn then return end
+    SendNUIMessage({ type = 'radioPtt', talking = radioTalking })
+end)
+
 -- Schaltet den Funk beim Ressourcen-/Verbindungsende sauber ab.
 AddEventHandler('onResourceStop', function(resourceName)
-    if resourceName == GetCurrentResourceName() and radioOn and pmaVoiceReady() then
-        exports['pma-voice']:setRadioChannel(0)
+    if resourceName == GetCurrentResourceName() and pmaVoiceReady() then
+        if radioOn then exports['pma-voice']:setRadioChannel(0) end
+        exports['pma-voice']:setCallChannel(0)
     end
 end)

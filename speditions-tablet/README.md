@@ -105,26 +105,47 @@ Disposition greift wieder. Siehe `Orders.SelfAssign` in `server/sv_orders.lua`.
 ### CB-Funk
 
 Bindet an [pma-voice](https://github.com/AvarianKnight/pma-voice) an (Exports
-`setRadioChannel`/`setRadioVolume`). Ein-/Ausschalten läuft ausschließlich
-über den Knopf oben im Tablet - danach bleibt das Bedienfeld auch bei
-geschlossenem Tablet sichtbar, verschiebbar (Ziehpunkt in der Bezel-Fläche)
-und über den Ziehpunkt unten rechts in der Größe änderbar. Um es zu bedienen
-(ziehen, Größe ändern, Kanal 01-09, Lautstärke, Stumm), während das Tablet
-geschlossen ist (z.B. während der Fahrt), `Config.CbRadio.interactKey`
-(Standard linkes ALT, `LMENU`) GEDRÜCKT HALTEN - das gibt für die Dauer den
-Mauszeiger frei, beim Loslassen ist er wieder weg, ohne das Tablet zu öffnen.
-Ist das Tablet ohnehin offen, ist das Funkgerät automatisch mitbedienbar.
-Sprechen (Push-to-Talk) läuft über pma-voice's eigene Standard-Taste, sobald
-ein Kanal eingestellt ist - dafür baut dieses Skript nichts Eigenes.
+`setRadioChannel`/`setRadioVolume`/`setCallChannel`). Ein-/Ausschalten läuft
+ausschließlich über den Knopf oben im Tablet - danach bleibt das Bedienfeld
+auch bei geschlossenem Tablet sichtbar, verschiebbar (Ziehpunkt in der
+Bezel-Fläche) und über den Ziehpunkt unten rechts in der Größe änderbar. Um
+es zu bedienen (ziehen, Größe ändern, Kanal 01-09, Lautstärke, Stumm),
+während das Tablet geschlossen ist (z.B. während der Fahrt),
+`Config.CbRadio.interactKey` (Standard `F7`) EINMAL DRÜCKEN schaltet den
+Mauszeiger dafür an, nochmal drücken wieder aus - kein Gedrückthalten, damit
+man nie "hängen" bleiben kann. Reagiert die Taste nicht: in den
+FiveM-Einstellungen unter "Tastenbelegung" nach "CB-Funk" suchen, ein
+anderes Skript könnte dieselbe Taste bereits belegt haben. Ist das Tablet
+ohnehin offen, ist das Funkgerät automatisch mitbedienbar. Sprechen
+(Push-to-Talk) läuft über pma-voice's eigene Standard-Taste, sobald ein
+Kanal eingestellt ist - dafür baut dieses Skript nichts Eigenes.
+
+**Sounds:** `html/sounds/ptt.m4a` beim Beginn/Ende des eigenen Sprechens
+(pma-voice-Event `radioActive`), `channel_switch.m4a` beim Kanalwechsel,
+`incoming_call.m4a` als Dauerschleife, solange ein Anruf klingelt - stoppt
+sofort bei Annahme/Ablehnung/Auflegen. Eigene Dateien austauschbar, gleicher
+Dateiname genügt.
+
+**Anrufe:** Die Geschäftsführung/Disponenten können Fahrer über den
+"📞 Anrufen"-Button in der Fahrerübersicht direkt anrufen - nur möglich,
+wenn der Fahrer online, am Tablet erkannt und sein CB-Funk eingeschaltet
+ist. Der Anruf läuft über einen eigenen, privaten pma-voice-Call-Kanal
+(komplett getrennt vom normalen Funkkanal - das gewohnte Mithören auf dem
+eingestellten Kanal wird dadurch nicht gestört). Beim Fahrer klingelt es am
+CB-Funk: die zwei rechten Knöpfe werden zu **Ablehnen (rot)** und
+**Annehmen (grün)**; nach Annahme wird der rote Knopf zum Auflegen. Klingelt
+`Config.CbRadio.callRingSeconds` (Standard 20s) lang niemand ran, wird
+automatisch aufgelegt.
 
 **Hinweis zum Design:** Auf Wunsch orientiert sich das Bedienfeld an einem
 mitgeschickten Foto eines physischen CB-Funkgeräts (Lautstärke-Knopf links,
-Display mit Kanalanzeige, "MUTE CTCSS"-Taste, CH-Wippe unten rechts) - da
-das Originalfoto selbst nicht als Bilddatei in die Ressource übernommen
-werden konnte, ist es als CSS/HTML-Nachbau umgesetzt, keine Bilddatei.
-Die übrigen im Foto vorhandenen, aber nicht benötigten Tasten (AM/FM MENU,
-EMG/VOX, SCAN/MSCAN, MEM/MSAVE) sind rein dekorativ nachgebaut und ohne
-Funktion - es wurden bewusst keine zusätzlichen Bedienelemente ergänzt.
+Display mit Kanalanzeige, "MUTE CTCSS"-Taste, die zwei rechten Knöpfe,
+CH-Wippe unten rechts) - da das Originalfoto selbst nicht als Bilddatei in
+die Ressource übernommen werden konnte, ist es als CSS/HTML-Nachbau
+umgesetzt, keine Bilddatei. Die übrigen im Foto vorhandenen, aber nicht
+benötigten Tasten (AM/FM MENU, EMG/VOX, SCAN/MSCAN, MEM/MSAVE) sind rein
+dekorativ nachgebaut und ohne Funktion - es wurden bewusst keine
+zusätzlichen Bedienelemente ergänzt.
 
 ## Rollen & Berechtigungen
 
@@ -261,6 +282,7 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `server/sv_bootstrap.lua` - automatische Mitarbeitererkennung anhand des
   FiveM-Charakters (Session je Server-Slot), `tablet_grant`-Command.
 - `server/sv_finance.lua` - Transaktions-Ledger, Guthaben, Ein-/Auszahlungen.
+- `server/sv_radio.lua` - CB-Funk ein-/ausschalten, Anrufe (privater pma-voice-Call-Kanal).
 - `server/sv_payroll.lua` - Stundenlöhne, Stempeluhr, Gehaltsauszahlung.
 - `server/sv_vehicles.lua` - Fuhrparkverwaltung.
 - `server/sv_drivers.lua` - Fahrerkarte, Fahrerakte, Statistik.

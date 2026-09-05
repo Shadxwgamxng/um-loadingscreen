@@ -50,6 +50,11 @@ const ERROR_MESSAGES = {
     not_clocked_in: 'Du bist nicht eingestempelt.',
     nothing_to_pay: 'Für diesen Mitarbeiter steht aktuell kein Gehalt aus.',
     dispatcher_available: 'Ein Disponent ist gerade online - Aufträge werden von ihm zugewiesen.',
+    driver_not_online: 'Dieser Fahrer ist gerade nicht online.',
+    driver_radio_off: 'Dieser Fahrer hat sein CB-Funkgerät nicht eingeschaltet.',
+    driver_busy: 'Es läuft bereits ein Anruf mit diesem Fahrer bzw. auf deiner Leitung.',
+    no_incoming_call: 'Kein eingehender Anruf.',
+    no_active_call: 'Kein laufendes Gespräch.',
     insufficient_player_cash: 'Du hast nicht genug Bargeld dabei, um diesen Betrag einzuzahlen.',
     employee_inactive: 'Dieses Mitarbeiterkonto ist deaktiviert.',
     forbidden_role: 'Keine Berechtigung für diese Aktion.',
@@ -294,9 +299,14 @@ window.addEventListener('message', (event) => {
     else if (data.type === 'close') handleClose();
     else if (data.type === 'push') handlePush(data.event, data.data);
     else if (data.type === 'radioInteract') document.getElementById('cb-radio').classList.toggle('cb-radio-focused', !!data.on);
+    else if (data.type === 'radioIncomingCall') radioOnIncomingCall(data.callerName);
+    else if (data.type === 'radioCallAnswered') radioOnCallAnswered();
+    else if (data.type === 'radioCallEnded') radioOnCallEnded(data.reason);
+    else if (data.type === 'radioPtt') document.getElementById('snd-ptt').play().catch(() => {});
 });
 
 document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') nuiPost('radioForceRelease', {}); // Notausstieg, falls das Funkgerät den Mauszeiger noch belegt
     if (!document.getElementById('lock-screen').classList.contains('hidden')) { unlockTablet(); return; }
     if (e.key === 'Escape') requestClose();
 });
@@ -472,7 +482,7 @@ document.getElementById('timeclock-btn').addEventListener('click', async () => {
 // (siehe Config.CbRadio.interactKey, um es dann noch bedienen zu können).
 // ---------------------------------------------------------
 
-const Radio = { on: false, channel: 1, volume: 80, muted: false };
+const Radio = { on: false, channel: 1, volume: 80, muted: false, callState: 'idle' }; // callState: idle|ringing|active
 
 function radioRefreshUi() {
     document.getElementById('cb-channel').textContent = String(Radio.channel).padStart(2, '0');
@@ -482,6 +492,52 @@ function radioRefreshUi() {
     if (notch) notch.style.transform = `translateX(-50%) rotate(${-135 + (Radio.volume / 100) * 270}deg)`;
     document.getElementById('cb-radio-dot').classList.toggle('on', Radio.on);
     document.getElementById('cb-radio-toggle-label').textContent = Radio.on ? `CB-Funk (Kanal ${Radio.channel})` : 'CB-Funk';
+
+    const knobF = document.getElementById('cb-knob-f');
+    const knobSq = document.getElementById('cb-knob-sq');
+    knobF.classList.remove('cb-knob-decline', 'cb-knob-hangup');
+    knobSq.classList.remove('cb-knob-accept');
+    if (Radio.callState === 'ringing') {
+        knobF.classList.add('cb-knob-decline');
+        knobSq.classList.add('cb-knob-accept');
+    } else if (Radio.callState === 'active') {
+        knobF.classList.add('cb-knob-hangup');
+    }
+}
+
+function radioSetCallBanner(text) {
+    const el = document.getElementById('cb-call-banner');
+    if (text) { el.textContent = text; el.classList.remove('hidden'); }
+    else { el.classList.add('hidden'); }
+}
+
+function radioOnIncomingCall(callerName) {
+    Radio.callState = 'ringing';
+    radioSetCallBanner(`📞 Anruf: ${callerName}`);
+    radioRefreshUi();
+    const snd = document.getElementById('snd-call');
+    snd.currentTime = 0;
+    snd.play().catch(() => {});
+}
+
+function radioOnCallAnswered() {
+    // Nur relevant für die anrufende Seite (Disponent) - die Empfängerseite
+    // setzt ihren Zustand bereits direkt beim Klick auf "Annehmen".
+    Radio.callState = 'active';
+    radioSetCallBanner('📞 Im Gespräch');
+    radioRefreshUi();
+    toast('Anruf angenommen', '', 'success');
+    refreshIfViewing(['dispatch-drivers']);
+}
+
+function radioOnCallEnded(reason) {
+    Radio.callState = 'idle';
+    radioSetCallBanner(null);
+    radioRefreshUi();
+    document.getElementById('snd-call').pause();
+    const labels = { declined: 'Anruf abgelehnt', missed: 'Anruf nicht angenommen', hangup: 'Gespräch beendet', radio_off: 'Funk ausgeschaltet', disconnected: 'Verbindung getrennt' };
+    if (labels[reason]) toast(labels[reason], '', 'info');
+    refreshIfViewing(['dispatch-drivers']);
 }
 
 document.getElementById('cb-radio-toggle').addEventListener('click', async () => {
@@ -501,14 +557,46 @@ document.getElementById('cb-radio-toggle').addEventListener('click', async () =>
     radioRefreshUi();
 });
 
+function radioPlayChannelSwitchSound() {
+    const snd = document.getElementById('snd-channel');
+    snd.currentTime = 0;
+    snd.play().catch(() => {});
+}
+
 document.getElementById('cb-ch-up').addEventListener('click', () => {
     Radio.channel = Radio.channel >= 9 ? 1 : Radio.channel + 1;
     nuiPost('radioSetChannel', { channel: Radio.channel });
+    radioPlayChannelSwitchSound();
     radioRefreshUi();
 });
 document.getElementById('cb-ch-down').addEventListener('click', () => {
     Radio.channel = Radio.channel <= 1 ? 9 : Radio.channel - 1;
     nuiPost('radioSetChannel', { channel: Radio.channel });
+    radioPlayChannelSwitchSound();
+    radioRefreshUi();
+});
+
+document.getElementById('cb-knob-f').addEventListener('click', async () => {
+    if (Radio.callState === 'ringing') {
+        await nuiPost('radioDeclineCall', {});
+        Radio.callState = 'idle';
+        radioSetCallBanner(null);
+        document.getElementById('snd-call').pause();
+        radioRefreshUi();
+    } else if (Radio.callState === 'active') {
+        await nuiPost('radioHangup', {});
+        Radio.callState = 'idle';
+        radioSetCallBanner(null);
+        radioRefreshUi();
+    }
+});
+
+document.getElementById('cb-knob-sq').addEventListener('click', async () => {
+    if (Radio.callState !== 'ringing') return;
+    await nuiPost('radioAnswerCall', {});
+    Radio.callState = 'active';
+    radioSetCallBanner('📞 Im Gespräch');
+    document.getElementById('snd-call').pause();
     radioRefreshUi();
 });
 
@@ -538,7 +626,7 @@ document.getElementById('cb-mute-btn').addEventListener('click', () => {
     let scale = 1;
 
     body.addEventListener('mousedown', (e) => {
-        if (e.target.closest('.cb-knob-vol, .cb-btn, .cb-ch-btn, .cb-resize-handle')) return;
+        if (e.target.closest('.cb-knob-vol, #cb-knob-f, #cb-knob-sq, .cb-btn, .cb-ch-btn, .cb-resize-handle')) return;
         dragging = true;
         const rect = radioEl.getBoundingClientRect();
         offsetX = e.clientX - rect.left;
@@ -789,6 +877,7 @@ VIEWS['dispatch-drivers'] = async (root) => {
         <td class="btn-row">
             <button class="btn btn-sm" onclick="Actions.messageDriver(${r.driver_id}, ${JSON.stringify(r.name)})">Nachricht</button>
             <button class="btn btn-sm" onclick="Actions.remindDriver(${r.driver_id})">Lenkzeit erinnern</button>
+            <button class="btn btn-sm" onclick="Actions.callDriver(${r.driver_id}, ${JSON.stringify(r.name)})">📞 Anrufen</button>
         </td>
     </tr>`);
 
@@ -1285,6 +1374,11 @@ Actions.confirmMessageDriver = async (driverId) => {
 Actions.remindDriver = async (driverId) => {
     await call('dispatch:remindDriver', { driverId });
     toast('Erinnerung gesendet', 'Der Fahrer wurde an seine Lenk-/Ruhezeiten erinnert.', 'success');
+};
+
+Actions.callDriver = async (driverId, driverName) => {
+    await call('dispatch:callDriver', { driverId });
+    toast('Anruf gestartet', `Es klingelt bei ${driverName}...`, 'info');
 };
 
 Actions.openDispatchModal = (orderId, requiresPermission) => {

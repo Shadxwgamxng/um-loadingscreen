@@ -196,21 +196,26 @@ Config.MoneyBridge = 'esx' -- 'esx' | 'qbcore' | 'custom'
 -- =========================================================
 -- CB-FUNK
 -- =========================================================
--- Bindet an pma-voice an (exports 'setRadioChannel'/'setRadioVolume').
--- Das Funkgerät wird über das Tablet ein-/ausgeschaltet; danach bleibt das
--- Bedienfeld auch bei geschlossenem Tablet sichtbar. Um es zu bedienen
--- (ziehen, Größe ändern, Kanal/Lautstärke/Stumm), während das Tablet
--- geschlossen ist (z.B. während der Fahrt), `interactKey` GEDRÜCKT HALTEN -
--- das gibt für die Dauer den Mauszeiger frei, beim Loslassen ist er wieder
--- weg. Ist das Tablet bereits offen, ist das Funkgerät automatisch
--- mitbedienbar. Gültige Tastennamen: siehe FiveM-Keymapping-Referenz
+-- Bindet an pma-voice an (exports 'setRadioChannel'/'setRadioVolume'/
+-- 'setCallChannel'). Das Funkgerät wird über das Tablet ein-/ausgeschaltet;
+-- danach bleibt das Bedienfeld auch bei geschlossenem Tablet sichtbar. Um
+-- es zu bedienen (ziehen, Größe ändern, Kanal/Lautstärke/Stumm), während
+-- das Tablet geschlossen ist (z.B. während der Fahrt), `interactKey`
+-- EINMAL DRÜCKEN schaltet den Mauszeiger dafür an, nochmal drücken wieder
+-- aus (kein Gedrückthalten). Ist das Tablet bereits offen, ist das
+-- Funkgerät automatisch mitbedienbar. Reagiert die Taste bei dir nicht:
+-- in den FiveM-Einstellungen unter "Tastenbelegung" nach "CB-Funk" suchen -
+-- ein anderes Skript könnte dieselbe Taste bereits belegt haben, dann hilft
+-- nur eine manuelle Neubelegung dort. Gültige Tastennamen: siehe
+-- FiveM-Keymapping-Referenz
 -- (https://docs.fivem.net/docs/game-references/input-mapper-parameter-ids/keyboard).
 Config.CbRadio = {
     minChannel = 1,
     maxChannel = 9,
     defaultChannel = 1,
     defaultVolume = 80, -- 0-100
-    interactKey = 'LMENU', -- linkes ALT
+    interactKey = 'F7',
+    callRingSeconds = 20, -- wie lange ein Anruf klingelt, bevor automatisch aufgelegt wird
 }
 
 -- =========================================================

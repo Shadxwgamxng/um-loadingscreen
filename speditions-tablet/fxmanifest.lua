@@ -24,6 +24,7 @@ server_scripts {
     'server/sv_payroll.lua',
     'server/sv_vehicles.lua',
     'server/sv_drivers.lua',
+    'server/sv_radio.lua',
     'server/sv_hours.lua',
     'server/sv_orders.lua',
     'server/sv_employees.lua',
@@ -42,5 +43,8 @@ ui_page 'html/index.html'
 files {
     'html/index.html',
     'html/css/style.css',
-    'html/js/app.js'
+    'html/js/app.js',
+    'html/sounds/ptt.m4a',
+    'html/sounds/channel_switch.m4a',
+    'html/sounds/incoming_call.m4a'
 }
