@@ -73,6 +73,7 @@ const ERROR_MESSAGES = {
     order_not_in_transit: 'Auftrag ist nicht unterwegs.',
     order_not_reassignable: 'Auftrag kann nicht neu zugewiesen werden.',
     shift_not_started: 'Du musst zuerst deine Fahrerkarte einstecken (Reiter Fahrerkarte, Fahrt starten), bevor du einen Auftrag annehmen kannst.',
+    shift_update_failed: 'Fahrerkarte konnte nicht gespeichert werden - fehlt evtl. sql/upgrade_v7.sql (Spalten on_shift/shift_started_at in st_drivers)?',
     no_cargo_route_available: 'Aktuell gibt es keine passende Fracht-/Standortkombination für einen neuen Auftrag.',
     order_already_closed: 'Auftrag ist bereits abgeschlossen.',
     not_your_order: 'Das ist nicht dein Auftrag.',
