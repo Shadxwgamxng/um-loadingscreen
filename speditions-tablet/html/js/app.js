@@ -526,28 +526,45 @@ document.getElementById('cb-mute-btn').addEventListener('click', () => {
 });
 
 // Ziehen: nur auslösen, wenn NICHT auf einem der (nicht-dekorativen)
-// Bedienelemente geklickt wird - der Rest des Foto-Nachbaus dient als
-// Ziehfläche.
+// Bedienelemente oder dem Größenziehpunkt geklickt wird - der Rest des
+// Foto-Nachbaus dient als Ziehfläche. Größe ändern: separater Ziehpunkt
+// unten rechts, skaliert das ganze Bedienfeld.
 (() => {
     const radioEl = document.getElementById('cb-radio');
     const body = document.getElementById('cb-radio-drag-handle');
+    const resizeHandle = document.getElementById('cb-resize-handle');
     let dragging = false, offsetX = 0, offsetY = 0;
+    let resizing = false, resizeStartX = 0, startScale = 1;
+    let scale = 1;
 
     body.addEventListener('mousedown', (e) => {
-        if (e.target.closest('.cb-knob-vol, .cb-btn, .cb-ch-btn')) return;
+        if (e.target.closest('.cb-knob-vol, .cb-btn, .cb-ch-btn, .cb-resize-handle')) return;
         dragging = true;
         const rect = radioEl.getBoundingClientRect();
         offsetX = e.clientX - rect.left;
         offsetY = e.clientY - rect.top;
         e.preventDefault();
     });
-    document.addEventListener('mousemove', (e) => {
-        if (!dragging) return;
-        radioEl.style.left = `${e.clientX - offsetX}px`;
-        radioEl.style.top = `${e.clientY - offsetY}px`;
-        radioEl.style.bottom = 'auto';
+
+    resizeHandle.addEventListener('mousedown', (e) => {
+        resizing = true;
+        resizeStartX = e.clientX;
+        startScale = scale;
+        e.preventDefault();
+        e.stopPropagation();
     });
-    document.addEventListener('mouseup', () => { dragging = false; });
+
+    document.addEventListener('mousemove', (e) => {
+        if (dragging) {
+            radioEl.style.left = `${e.clientX - offsetX}px`;
+            radioEl.style.top = `${e.clientY - offsetY}px`;
+            radioEl.style.bottom = 'auto';
+        } else if (resizing) {
+            scale = Math.max(0.6, Math.min(2, startScale + (e.clientX - resizeStartX) / 300));
+            body.style.transform = `scale(${scale})`;
+        }
+    });
+    document.addEventListener('mouseup', () => { dragging = false; resizing = false; });
 })();
 
 radioRefreshUi();

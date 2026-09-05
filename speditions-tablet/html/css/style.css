@@ -559,9 +559,24 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
     border-radius: 10px;
     padding: 12px 14px 10px;
     cursor: grab;
+    position: relative;
+    transform-origin: top left;
 }
 .cb-radio-body:active { cursor: grabbing; }
 .cb-radio-focused .cb-radio-body { box-shadow: 0 0 0 2px var(--accent-2), 0 0 18px rgba(96,165,250,0.35); }
+
+.cb-resize-handle {
+    position: absolute;
+    right: 2px;
+    bottom: 2px;
+    width: 16px;
+    height: 16px;
+    cursor: nwse-resize;
+    background:
+        linear-gradient(135deg, transparent 0 40%, #6b6f76 40% 46%, transparent 46% 60%, #6b6f76 60% 66%, transparent 66% 80%, #6b6f76 80% 86%, transparent 86%);
+    opacity: 0.7;
+}
+.cb-resize-handle:hover { opacity: 1; }
 
 .cb-radio-top { display: flex; align-items: center; gap: 10px; }
 

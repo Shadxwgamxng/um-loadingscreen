@@ -3,10 +3,12 @@
 --
 -- Ein-/Ausschalten läuft ausschließlich über das Tablet. Danach bleibt das
 -- Bedienfeld auch bei geschlossenem Tablet auf dem Bildschirm sichtbar.
--- Damit man es (ziehen, Kanal/Lautstärke/Stumm) auch bedienen kann, ohne
--- extra das ganze Tablet zu öffnen (z.B. während der Fahrt), gibt
--- Config.CbRadio.interactKey kurz den Mauszeiger dafür frei - ist das
--- Tablet ohnehin schon offen, ist das Funkgerät automatisch mitbedienbar.
+-- Damit man es (ziehen, Kanal/Lautstärke/Stumm/Größe) auch bedienen kann,
+-- ohne extra das ganze Tablet zu öffnen (z.B. während der Fahrt), einfach
+-- Config.CbRadio.interactKey (Standard: linkes ALT) GEDRÜCKT HALTEN - das
+-- gibt für die Dauer den Mauszeiger frei, beim Loslassen ist er wieder weg.
+-- Ist das Tablet ohnehin schon offen, ist das Funkgerät automatisch
+-- mitbedienbar.
 -- =========================================================
 
 local radioOn = false
@@ -38,13 +40,20 @@ local function setInteracting(on)
     SendNUIMessage({ type = 'radioInteract', on = on })
 end
 
-RegisterCommand('cbRadioToggle', function()
+-- Halten-Taste (+/- Befehlspaar, wie z.B. auch Sprinten in FiveM
+-- funktioniert): beim Drücken Mauszeiger an, beim Loslassen wieder aus.
+RegisterCommand('+cbRadioInteract', function()
     if not radioOn then return end
+    if interacting then return end
     if exports['speditions-tablet']:IsTabletOpen() then return end -- Tablet hat ohnehin schon Fokus
-    setInteracting(not interacting)
+    setInteracting(true)
 end, false)
 
-RegisterKeyMapping('cbRadioToggle', 'CB-Funk bedienen (Fokus an/aus)', 'keyboard', Config.CbRadio.interactKey or 'F7')
+RegisterCommand('-cbRadioInteract', function()
+    if interacting then setInteracting(false) end
+end, false)
+
+RegisterKeyMapping('+cbRadioInteract', 'CB-Funk bedienen (gedrückt halten)', 'keyboard', Config.CbRadio.interactKey or 'LMENU')
 
 -- ---------------------------------------------------------
 -- NUI-Callbacks (rein clientseitig - pma-voice validiert Kanäle selbst

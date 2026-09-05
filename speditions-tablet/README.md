@@ -107,14 +107,15 @@ Disposition greift wieder. Siehe `Orders.SelfAssign` in `server/sv_orders.lua`.
 Bindet an [pma-voice](https://github.com/AvarianKnight/pma-voice) an (Exports
 `setRadioChannel`/`setRadioVolume`). Ein-/Ausschalten läuft ausschließlich
 über den Knopf oben im Tablet - danach bleibt das Bedienfeld auch bei
-geschlossenem Tablet sichtbar und verschiebbar auf dem Bildschirm. Um es zu
-bedienen (ziehen, Kanal 01-09, Lautstärke, Stumm), während das Tablet
-geschlossen ist (z.B. während der Fahrt), kurz `Config.CbRadio.interactKey`
-(Standard `F7`) drücken - das gibt kurz den Mauszeiger dafür frei, ohne das
-Tablet zu öffnen. Ist das Tablet ohnehin offen, ist das Funkgerät automatisch
-mitbedienbar. Sprechen (Push-to-Talk) läuft über pma-voice's eigene
-Standard-Taste, sobald ein Kanal eingestellt ist - dafür baut dieses Skript
-nichts Eigenes.
+geschlossenem Tablet sichtbar, verschiebbar (Ziehpunkt in der Bezel-Fläche)
+und über den Ziehpunkt unten rechts in der Größe änderbar. Um es zu bedienen
+(ziehen, Größe ändern, Kanal 01-09, Lautstärke, Stumm), während das Tablet
+geschlossen ist (z.B. während der Fahrt), `Config.CbRadio.interactKey`
+(Standard linkes ALT, `LMENU`) GEDRÜCKT HALTEN - das gibt für die Dauer den
+Mauszeiger frei, beim Loslassen ist er wieder weg, ohne das Tablet zu öffnen.
+Ist das Tablet ohnehin offen, ist das Funkgerät automatisch mitbedienbar.
+Sprechen (Push-to-Talk) läuft über pma-voice's eigene Standard-Taste, sobald
+ein Kanal eingestellt ist - dafür baut dieses Skript nichts Eigenes.
 
 **Hinweis zum Design:** Auf Wunsch orientiert sich das Bedienfeld an einem
 mitgeschickten Foto eines physischen CB-Funkgeräts (Lautstärke-Knopf links,
