@@ -10,7 +10,7 @@
 Orders = {}
 
 -- Frachtstatus-Fortschritt NACH der Annahme, automatisch getrieben durch die
--- Tasteninteraktion (E) an den Standort-NPCs (siehe client/cl_orders.lua):
+-- Tasteninteraktion (E) an den Standort-Markern (siehe client/cl_orders.lua):
 -- anfahrt (zum Beladepunkt unterwegs) -> beladen (beladen, zum Zielort
 -- unterwegs) -> entladen (wird gerade entladen) -> abgeschlossen (separat
 -- über Orders.Complete()).
@@ -22,6 +22,22 @@ local function insertOrderHistory(orderId, status, changedBy, note)
         { orderId, status, changedBy, note }
     )
 end
+
+-- Löscht bei JEDEM Ressourcenstart (Server-Neustart, /refresh + /start, oder
+-- ein manueller Ressourcen-Neustart) alle bestehenden Aufträge - auf
+-- ausdrücklichen Wunsch, damit nie "hängende" Aufträge von vor dem Neustart
+-- übrig bleiben. Fahrerstatistik/Transaktionen bleiben davon unberührt.
+CreateThread(function()
+    MySQL.query.await('DELETE FROM st_order_history')
+    MySQL.query.await('DELETE FROM st_order_cancel_requests')
+    MySQL.query.await('DELETE FROM st_order_stops')
+    MySQL.query.await('DELETE FROM st_orders')
+    MySQL.query.await('ALTER TABLE st_orders AUTO_INCREMENT = 1')
+    MySQL.query.await('ALTER TABLE st_order_history AUTO_INCREMENT = 1')
+    MySQL.query.await('ALTER TABLE st_order_cancel_requests AUTO_INCREMENT = 1')
+    MySQL.query.await('ALTER TABLE st_order_stops AUTO_INCREMENT = 1')
+    print('^3[speditions-tablet]^7 Alle Aufträge beim Ressourcenstart zurückgesetzt.')
+end)
 
 --- Prüft, ob ein Fahrer eine bestimmte Fahrerberechtigung besitzt (z.B.
 --- "gefahrgut"). Wird u.a. genutzt, um Gefahrgut-Aufträge NICHT an Fahrer
@@ -150,7 +166,8 @@ end)
 
 local ORDER_JOIN_SELECT = [[
     SELECT o.*, de.name AS driver_name, v.name AS vehicle_name, v.plate AS vehicle_plate,
-           disp.name AS dispatcher_name
+           disp.name AS dispatcher_name,
+           (SELECT id FROM st_order_cancel_requests WHERE order_id = o.id AND status = 'offen' LIMIT 1) AS pending_cancel_request_id
     FROM st_orders o
     LEFT JOIN st_drivers d ON d.id = o.driver_id
     LEFT JOIN st_employees de ON de.id = d.employee_id
@@ -476,6 +493,104 @@ function Orders.Cancel(src, orderId, reason)
     return { ok = true }
 end
 
+local CANCELLABLE_STATUSES = { 'angenommen', 'anfahrt', 'beladen', 'entladen' }
+
+--- Ein Fahrer möchte seinen aktuellen Auftrag abbrechen. Ist gerade ein
+--- Disponent/GF online, wird nur eine Genehmigungsanfrage erzeugt (siehe
+--- Orders.ResolveCancelRequest) - der Auftrag bleibt bis dahin unverändert.
+--- Ist niemand online, wird sofort abgebrochen und dem Unternehmen eine
+--- Vertragsstrafe (Config.OrderCancelPenalty) belastet.
+function Orders.RequestCancelByDriver(src, orderId, reason)
+    local emp, driver, order = requireOwnOrder(src, orderId)
+    if not Utils.InTable(CANCELLABLE_STATUSES, order.status) then
+        error('order_not_cancellable')
+    end
+
+    reason = Utils.SanitizeString(reason, 255) or 'Kein Grund angegeben'
+
+    if isDispatcherAvailable() then
+        local existing = MySQL.single.await(
+            "SELECT id FROM st_order_cancel_requests WHERE order_id = ? AND status = 'offen' LIMIT 1",
+            { orderId }
+        )
+        if existing then error('cancel_already_requested') end
+
+        MySQL.insert.await(
+            'INSERT INTO st_order_cancel_requests (order_id, driver_id, reason) VALUES (?, ?, ?)',
+            { orderId, driver.id, reason }
+        )
+
+        Logs.Write(emp.id, 'order_cancel_requested', ('%s bittet um Genehmigung, Auftrag #%s abzubrechen: %s'):format(emp.name, orderId, reason))
+
+        RPC.PushToRole(Config.Roles.DISPONENT, 'orders:cancelRequested', { orderId = orderId })
+        RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'orders:cancelRequested', { orderId = orderId })
+        Notifications.Send(nil, nil, 'Abbruch-Anfrage', ('%s möchte Auftrag #%s abbrechen: %s'):format(emp.name, orderId, reason), emp.id)
+
+        return { ok = true, pending = true }
+    end
+
+    -- Kein Disponent/GF online: sofortiger Abbruch mit Vertragsstrafe.
+    MySQL.update.await("UPDATE st_orders SET status = 'abgebrochen', completed_at = NOW() WHERE id = ?", { orderId })
+    insertOrderHistory(orderId, 'abgebrochen', emp.id, ('%s hat selbst abgebrochen (kein Disponent online): %s'):format(emp.name, reason))
+
+    if order.vehicle_id then
+        MySQL.update.await("UPDATE st_vehicles SET status = 'verfuegbar' WHERE id = ? AND status = 'im_einsatz'", { order.vehicle_id })
+    end
+
+    Drivers.RecomputeStatistics(driver.id)
+
+    local penalty = Config.OrderCancelPenalty or 500
+    Finance.AddTransaction('vertragsstrafe', -penalty, {
+        relatedOrderId = orderId,
+        driverId = driver.id,
+        description = ('Vertragsstrafe: %s hat Auftrag #%s ohne Freigabe abgebrochen.'):format(emp.name, orderId),
+        createdBy = emp.id,
+    })
+
+    Logs.Write(emp.id, 'order_cancelled_self', ('%s hat Auftrag #%s selbst abgebrochen (kein Disponent online) - %s Vertragsstrafe.'):format(emp.name, orderId, penalty))
+
+    RPC.PushToRole(Config.Roles.DISPONENT, 'orders:activeChanged', { orderId = orderId })
+    RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'orders:activeChanged', { orderId = orderId })
+
+    return { ok = true, pending = false, penalty = penalty }
+end
+
+--- Disponent/GF genehmigt oder lehnt eine Abbruch-Anfrage eines Fahrers ab.
+function Orders.ResolveCancelRequest(src, requestId, approve)
+    local emp = Employees.RequireRole(src, { Config.Roles.DISPONENT, Config.Roles.GESCHAEFTSFUEHRUNG })
+    local req = MySQL.single.await('SELECT * FROM st_order_cancel_requests WHERE id = ?', { requestId })
+    if not req then error('cancel_request_not_found') end
+    if req.status ~= 'offen' then error('cancel_request_already_resolved') end
+
+    if approve then
+        MySQL.update.await(
+            "UPDATE st_order_cancel_requests SET status = 'genehmigt', resolved_at = NOW(), resolved_by = ? WHERE id = ?",
+            { emp.id, requestId }
+        )
+        Orders.Cancel(src, req.order_id, 'Abbruch vom Fahrer angefragt und genehmigt.')
+    else
+        MySQL.update.await(
+            "UPDATE st_order_cancel_requests SET status = 'abgelehnt', resolved_at = NOW(), resolved_by = ? WHERE id = ?",
+            { emp.id, requestId }
+        )
+        Logs.Write(emp.id, 'order_cancel_denied', ('%s hat die Abbruch-Anfrage für Auftrag #%s abgelehnt.'):format(emp.name, req.order_id))
+
+        local driver = Drivers.GetById(req.driver_id)
+        if driver then
+            Notifications.Send(nil, driver.employee_id, 'Abbruch abgelehnt', ('%s hat deine Abbruch-Anfrage für Auftrag #%s abgelehnt.'):format(emp.name, req.order_id), emp.id)
+            local driverSrc = Utils.FindSrcByEmployeeId(driver.employee_id)
+            if driverSrc then
+                Utils.NotifyClient(driverSrc, ('Deine Abbruch-Anfrage für Auftrag #%s wurde abgelehnt.'):format(req.order_id), 'error')
+            end
+        end
+
+        RPC.PushToRole(Config.Roles.DISPONENT, 'orders:activeChanged', { orderId = req.order_id })
+        RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'orders:activeChanged', { orderId = req.order_id })
+    end
+
+    return { ok = true }
+end
+
 -- =========================================================
 -- RPC-Handler
 -- =========================================================
@@ -513,6 +628,12 @@ RPC.Register('dispatch:cancelOrder', function(src, payload)
     local orderId = Utils.SanitizeNumber(payload.orderId, 1)
     if not orderId then error('invalid_payload') end
     return Orders.Cancel(src, orderId, payload.reason)
+end)
+
+RPC.Register('dispatch:resolveCancelRequest', function(src, payload)
+    local requestId = Utils.SanitizeNumber(payload.requestId, 1)
+    if not requestId then error('invalid_payload') end
+    return Orders.ResolveCancelRequest(src, requestId, payload.approve == true)
 end)
 
 RPC.Register('driver:myOrders', function(src)
@@ -575,6 +696,12 @@ RPC.Register('driver:completeOrder', function(src, payload)
     local orderId = Utils.SanitizeNumber(payload.orderId, 1)
     if not orderId then error('invalid_payload') end
     return Orders.Complete(src, orderId)
+end)
+
+RPC.Register('driver:requestCancelOrder', function(src, payload)
+    local orderId = Utils.SanitizeNumber(payload.orderId, 1)
+    if not orderId then error('invalid_payload') end
+    return Orders.RequestCancelByDriver(src, orderId, payload.reason)
 end)
 
 RPC.Register('gf:orders:all', function(src, payload)

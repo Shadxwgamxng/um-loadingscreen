@@ -179,7 +179,13 @@ Config.Locations = {
 -- Wertspanne ($ pro km), aus der zufällig der Auftragswert berechnet wird
 -- (Distanz wird automatisch aus den echten Koordinaten der Be-/Entladepunkte
 -- berechnet, keine manuelle Streckenpflege mehr nötig).
-Config.OrderValuePerKm = { min = 180, max = 320 }
+Config.OrderValuePerKm = { min = 220, max = 380 }
+
+-- Vertragsstrafe (Unternehmensguthaben), wenn ein Fahrer einen Auftrag OHNE
+-- Freigabe eines Disponenten selbst abbricht (nur möglich, wenn gerade kein
+-- Disponent/Geschäftsführung online ist - sonst muss der Abbruch erst
+-- genehmigt werden, siehe Orders.RequestCancelByDriver).
+Config.OrderCancelPenalty = 500
 
 -- Wie lange das Be-/Entladen per Tasteninteraktion (E) am Markierungskreis
 -- dauert (Sekunden).

@@ -72,6 +72,10 @@ const ERROR_MESSAGES = {
     order_not_pending: 'Auftrag befindet sich nicht im richtigen Status.',
     order_not_in_transit: 'Auftrag ist nicht unterwegs.',
     order_not_reassignable: 'Auftrag kann nicht neu zugewiesen werden.',
+    order_not_cancellable: 'Auftrag kann in diesem Status nicht abgebrochen werden.',
+    cancel_already_requested: 'Für diesen Auftrag läuft bereits eine Abbruch-Anfrage.',
+    cancel_request_not_found: 'Abbruch-Anfrage nicht gefunden.',
+    cancel_request_already_resolved: 'Diese Abbruch-Anfrage wurde bereits bearbeitet.',
     shift_not_started: 'Du musst zuerst deine Fahrerkarte einstecken (Reiter Fahrerkarte, Fahrt starten), bevor du einen Auftrag annehmen kannst.',
     shift_update_failed: 'Fahrerkarte konnte nicht gespeichert werden - fehlt evtl. sql/upgrade_v7.sql (Spalten on_shift/shift_started_at in st_drivers)?',
     no_cargo_route_available: 'Aktuell gibt es keine passende Fracht-/Standortkombination für einen neuen Auftrag.',
@@ -686,6 +690,7 @@ function handlePush(event, data) {
         'notifications:new': () => { toast(data.title, data.message, 'info'); refreshIfViewing(['driver-messages', 'driver-orders']); },
         'orders:newOpenOrder': () => { toast('Neuer Auftrag', 'Ein neuer Auftrag ist im Pool verfügbar.', 'info'); refreshIfViewing(['dispatch-pool']); },
         'orders:activeChanged': () => refreshIfViewing(['dispatch-active', 'dispatch-pool', 'driver-orders']),
+        'orders:cancelRequested': () => { toast('Abbruch-Anfrage', 'Ein Fahrer möchte einen Auftrag abbrechen.', 'warning'); refreshIfViewing(['dispatch-active']); },
         'orders:completed': () => { toast('Auftrag abgeschlossen', 'Ein Auftrag wurde erfolgreich abgeschlossen.', 'success'); refreshIfViewing(['dispatch-active', 'dispatch-completed', 'gf-dashboard']); },
         'dispatch:driversChanged': () => refreshIfViewing(['dispatch-drivers']),
         'fleet:changed': () => refreshIfViewing(['gf-fleet', 'dispatch-drivers']),
@@ -782,6 +787,7 @@ VIEWS['driver-orders'] = async (root) => {
     const cargoHint = { anfahrt: '📍 Zum Beladepunkt fahren, dort per E abholen', beladen: '📍 Zum Zielort fahren, dort per E abliefern', entladen: '⏳ Wird entladen...' };
 
     const coordsText = (c) => (c ? `GPS: ${c.x}, ${c.y}` : '');
+    const CANCELLABLE_STATUSES = ['angenommen', 'anfahrt', 'beladen', 'entladen'];
 
     const rows = d.orders.map((o) => {
         let actions = '';
@@ -790,6 +796,11 @@ VIEWS['driver-orders'] = async (root) => {
                         <button class="btn btn-sm btn-danger" onclick="Actions.declineOrder(${o.id})">Ablehnen</button>`;
         } else if (cargoHint[o.status]) {
             actions = `<span class="view-subtitle" style="margin:0;">${cargoHint[o.status]}</span>`;
+        }
+        if (CANCELLABLE_STATUSES.includes(o.status)) {
+            actions += o.pending_cancel_request_id
+                ? `<span class="pill" style="margin-left:6px;">⏳ Abbruch angefragt</span>`
+                : `<button class="btn btn-sm btn-danger" style="margin-left:6px;" onclick="Actions.requestCancelOrder(${o.id})">Abbrechen</button>`;
         }
         const lieferschein = ['angenommen', 'anfahrt', 'beladen', 'entladen'].includes(o.status) ? `
             <tr class="lieferschein-row">
@@ -970,18 +981,24 @@ VIEWS['dispatch-active'] = async (root) => {
     const [active, drivers] = await Promise.all([call('dispatch:activeOrders'), call('dispatch:drivers')]);
     window.__availableDrivers = drivers.drivers;
 
-    const rows = active.orders.map((o) => `<tr>
-        <td>#${o.id}</td>
-        <td>${escapeHtml(o.cargo)}</td>
-        <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
-        <td>${o.driver_name ? escapeHtml(o.driver_name) : '-'}</td>
-        <td>${o.vehicle_name ? `${escapeHtml(o.vehicle_name)} (${escapeHtml(o.vehicle_plate)})` : '-'}</td>
-        <td>${badge(ORDER_STATUS_META[o.status])}</td>
-        <td class="btn-row">
-            ${['disponiert', 'angenommen', 'anfahrt', 'beladen'].includes(o.status) ? `<button class="btn btn-sm" onclick="Actions.openReassignModal(${o.id})">Neu zuweisen</button>` : ''}
-            <button class="btn btn-sm btn-danger" onclick="Actions.cancelOrder(${o.id})">Abbrechen</button>
-        </td>
-    </tr>`);
+    const rows = active.orders.map((o) => {
+        const cancelActions = o.pending_cancel_request_id ? `
+            <button class="btn btn-sm btn-primary" onclick="Actions.resolveCancelRequest(${o.pending_cancel_request_id}, true)">✅ Abbruch genehmigen</button>
+            <button class="btn btn-sm" onclick="Actions.resolveCancelRequest(${o.pending_cancel_request_id}, false)">❌ Ablehnen</button>` : '';
+        return `<tr>
+            <td>#${o.id}</td>
+            <td>${escapeHtml(o.cargo)}</td>
+            <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
+            <td>${o.driver_name ? escapeHtml(o.driver_name) : '-'}</td>
+            <td>${o.vehicle_name ? `${escapeHtml(o.vehicle_name)} (${escapeHtml(o.vehicle_plate)})` : '-'}</td>
+            <td>${badge(ORDER_STATUS_META[o.status])}${o.pending_cancel_request_id ? ' <span class="pill">⏳ Abbruch angefragt</span>' : ''}</td>
+            <td class="btn-row">
+                ${cancelActions}
+                ${['disponiert', 'angenommen', 'anfahrt', 'beladen'].includes(o.status) ? `<button class="btn btn-sm" onclick="Actions.openReassignModal(${o.id})">Neu zuweisen</button>` : ''}
+                <button class="btn btn-sm btn-danger" onclick="Actions.cancelOrder(${o.id})">Abbrechen</button>
+            </td>
+        </tr>`;
+    });
 
     root.innerHTML = `
         <h1 class="view-title">Aktive Aufträge</h1>
@@ -1178,7 +1195,7 @@ VIEWS['gf-fleet'] = async (root) => {
 VIEWS['gf-finance'] = async (root) => {
     const [overview, tx] = await Promise.all([call('gf:finance:overview'), call('gf:finance:transactions', { limit: 40 })]);
 
-    const TX_TYPE_LABELS = { einnahme: 'Einnahme', auszahlung: 'Auszahlung', einzahlung: 'Einzahlung', gehalt: 'Gehalt' };
+    const TX_TYPE_LABELS = { einnahme: 'Einnahme', auszahlung: 'Auszahlung', einzahlung: 'Einzahlung', gehalt: 'Gehalt', vertragsstrafe: 'Vertragsstrafe' };
     const rows = tx.transactions.map((t) => `<tr>
         <td>#${t.id}</td>
         <td>${TX_TYPE_LABELS[t.type] || t.type}${t.driver_name ? ` - ${escapeHtml(t.driver_name)}` : ''}</td>
@@ -1396,6 +1413,34 @@ Actions.selfAssignOrder = async (orderId) => {
     await call('driver:selfAssignOrder', { orderId });
     toast('Auftrag übernommen', `Auftrag #${orderId} wurde dir zugewiesen - du kannst ihn jetzt annehmen.`, 'success');
     showView('driver-orders');
+};
+
+Actions.requestCancelOrder = (orderId) => {
+    openModal('Auftrag abbrechen', `Auftrag #${orderId}`, `
+        <label>Grund</label>
+        <textarea id="cancel-order-reason"></textarea>
+        <p class="card-hint" style="margin-top:8px;">Ist ein Disponent online, muss er den Abbruch erst genehmigen. Ist niemand online, wird sofort abgebrochen - das kostet der Firma eine Vertragsstrafe.</p>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Zurück</button>
+        <button class="btn btn-danger" onclick="Actions.confirmCancelOrderRequest(${orderId})">Abbrechen bestätigen</button>
+    `);
+};
+Actions.confirmCancelOrderRequest = async (orderId) => {
+    const reason = modalInputValue('cancel-order-reason');
+    const r = await call('driver:requestCancelOrder', { orderId, reason });
+    closeModal();
+    if (r.pending) {
+        toast('Abbruch angefragt', 'Warte auf Genehmigung des Disponenten.', 'info');
+    } else {
+        toast('Auftrag abgebrochen', `Vertragsstrafe für die Firma: ${formatMoney(r.penalty)}`, 'error');
+    }
+    showView('driver-orders');
+};
+
+Actions.resolveCancelRequest = async (requestId, approve) => {
+    await call('dispatch:resolveCancelRequest', { requestId, approve });
+    toast(approve ? 'Abbruch genehmigt' : 'Abbruch abgelehnt', '', approve ? 'success' : 'info');
+    showView('dispatch-active');
 };
 
 Actions.debugGenerateOrder = async () => {

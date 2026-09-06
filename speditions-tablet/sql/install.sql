@@ -152,9 +152,26 @@ CREATE TABLE IF NOT EXISTS `st_order_history` (
     CONSTRAINT `fk_oh_order` FOREIGN KEY (`order_id`) REFERENCES `st_orders` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Abbruch-Anfragen von Fahrern (nur relevant, wenn beim Anfragen ein
+-- Disponent/GF online war - sonst wird sofort abgebrochen, siehe
+-- Orders.RequestCancelByDriver).
+CREATE TABLE IF NOT EXISTS `st_order_cancel_requests` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `order_id` INT UNSIGNED NOT NULL,
+    `driver_id` INT UNSIGNED NOT NULL,
+    `reason` VARCHAR(255) NULL,
+    `status` ENUM('offen','genehmigt','abgelehnt') NOT NULL DEFAULT 'offen',
+    `requested_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `resolved_at` DATETIME NULL,
+    `resolved_by` INT UNSIGNED NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_ocr_order` (`order_id`),
+    CONSTRAINT `fk_ocr_order` FOREIGN KEY (`order_id`) REFERENCES `st_orders` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS `st_transactions` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `type` ENUM('einnahme','auszahlung','einzahlung','gehalt') NOT NULL,
+    `type` ENUM('einnahme','auszahlung','einzahlung','gehalt','vertragsstrafe') NOT NULL,
     `amount` DECIMAL(14,2) NOT NULL,
     `related_order_id` INT UNSIGNED NULL,
     `related_payout_id` INT UNSIGNED NULL,

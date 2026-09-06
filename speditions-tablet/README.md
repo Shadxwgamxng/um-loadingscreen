@@ -17,11 +17,13 @@ verwaltet.
 1. Ressource nach `resources/[speditions]/speditions-tablet` kopieren.
 2. `sql/install.sql` in die Datenbank importieren (bei einer bereits
    bestehenden Installation stattdessen der Reihe nach `sql/upgrade_v2.sql`
-   bis `sql/upgrade_v7.sql` ausführen, um Lenk-/Ruhezeiten, Gefahrgut,
-   Ein-/Auszahlungen, Gehälter/Stempeluhr, den Lieferschein und die
-   Fahrerkarten-Pflicht nachzurüsten und das Login-System zu entfernen).
+   bis `sql/upgrade_v8.sql` ausführen, um Lenk-/Ruhezeiten, Gefahrgut,
+   Ein-/Auszahlungen, Gehälter/Stempeluhr, den Lieferschein, die
+   Fahrerkarten-Pflicht und die Abbruch-Anfragen nachzurüsten und das
+   Login-System zu entfernen).
    **`sql/upgrade_v7.sql` löscht dabei alle bestehenden Aufträge** - siehe
-   Kommentar am Anfang der Datei für den Grund.
+   Kommentar am Anfang der Datei für den Grund. **Ab sofort werden Aufträge
+   ohnehin bei JEDEM Ressourcenstart automatisch geleert** (siehe unten).
 3. In `server.cfg`:
    ```
    ensure oxmysql
@@ -301,6 +303,29 @@ Luftlinienentfernung der Koordinaten.
   Disponenten-Oberfläche blendet ungeeignete Fahrer in der Zuweisungsauswahl
   zusätzlich aus.
 
+### Auftrags-Reset bei jedem Neustart
+
+Bei jedem Ressourcenstart (Server-Neustart, `/refresh` + `ensure`, oder ein
+manueller Neustart der Ressource) werden **alle bestehenden Aufträge**
+(inkl. Verlauf und Abbruch-Anfragen) automatisch gelöscht - so startet
+jede Session mit einem sauberen Auftragspool. Fahrerstatistik und
+Transaktions-Ledger bleiben davon unberührt.
+
+### Fahrer bricht Auftrag ab (mit Genehmigung/Vertragsstrafe)
+
+Im Reiter "Aufträge" hat ein Fahrer bei jedem laufenden Auftrag
+(`angenommen`/`anfahrt`/`beladen`/`entladen`) einen Button **"Abbrechen"**:
+
+- **Ist ein Disponent/GF online**: Es wird nur eine Genehmigungsanfrage
+  erzeugt (`st_order_cancel_requests`) - der Auftrag bleibt bis zur
+  Entscheidung unverändert. Der Disponent sieht die Anfrage in "Aktive
+  Aufträge" mit den Buttons "✅ Abbruch genehmigen"/"❌ Ablehnen".
+  Genehmigung führt den normalen Abbruch aus (keine Strafe); Ablehnung
+  benachrichtigt den Fahrer.
+- **Ist niemand online**: Der Auftrag wird sofort abgebrochen, und dem
+  Unternehmensguthaben wird eine **Vertragsstrafe** (`Config.OrderCancelPenalty`,
+  Standard 500$) als eigene Transaktion (`vertragsstrafe`) belastet.
+
 ## Datenbankschema
 
 Siehe `sql/install.sql`. Wichtigste Tabellen:
@@ -316,7 +341,8 @@ st_vehicle_history      Fahrzeugereignisse (erstellt, Wartung, Status, Aufträge
 st_orders               Aufträge inkl. Fahrer-/Fahrzeugzuordnung, Menge/Einheit (Lieferschein)
 st_order_stops          Zwischenstopps (optional/erweiterbar)
 st_order_history        Audit-Trail je Auftragsstatus
-st_transactions         Vollständiges Transaktions-Ledger (Einnahmen/Auszahlungen/Einzahlungen)
+st_order_cancel_requests Abbruch-Anfragen von Fahrern (offen/genehmigt/abgelehnt)
+st_transactions         Vollständiges Transaktions-Ledger (Einnahmen/Auszahlungen/Einzahlungen/Vertragsstrafen)
 st_company_balance      Performance-Cache des aktuellen Guthabens
 st_payouts              Auszahlungen (Betrag, Grund, Zielkonto, ausführender Mitarbeiter)
 st_deposits             Einzahlungen (Betrag, Grund, Herkunft, ausführender Mitarbeiter)
@@ -357,6 +383,7 @@ Alle Stellschrauben befinden sich in `config.lua`:
   Frachtart für den Lieferschein
 - `Config.OrderGeneration` - Intervall und maximale Poolgröße
 - `Config.AllowManualOrderGeneration` - blendet den "Auftrag generieren"-Testbutton für Fahrer ein (Standard `true`, für Live-Betrieb auf `false` stellen)
+- `Config.OrderCancelPenalty` - Vertragsstrafe (Standard 500$), wenn ein Fahrer einen Auftrag ohne Disponenten-Freigabe selbst abbricht
 - `Config.VehicleClasses`, `Config.CargoTypes`, `Config.HazardousCargo`,
   `Config.DriverPermissions`
 - `Config.AverageSpeedKmh`, `Config.DeadlineBufferMinutes` - Grundlage der
@@ -385,7 +412,8 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `server/sv_hours.lua` - Lenk-/Ruhezeiten-Tracking, Warnungen, Erinnerungen.
 - `server/sv_orders.lua` - Auftragsgenerierung & -lebenszyklus
   (disponiert → angenommen → anfahrt → beladen → entladen → abgeschlossen),
-  Gefahrgut-Prüfung, Auto-Wegpunkte, Standort-/Frachtart-Zuordnung + GPS-Koordinaten für Lieferschein.
+  Gefahrgut-Prüfung, Auto-Wegpunkte, Standort-/Frachtart-Zuordnung + GPS-Koordinaten für Lieferschein,
+  Abbruch-Anfragen mit Disponenten-Genehmigung/Vertragsstrafe, Auftrags-Reset bei Ressourcenstart.
 - `server/sv_employees.lua` - Mitarbeiterverwaltung (Einstellen, Rolle/Status ändern).
 - `server/sv_notifications.lua` - Nachrichten Disponent/Fahrer.
 - `client/cl_main.lua` - NUI-Steuerung, RPC-Relay (`ServerCall` auch für
