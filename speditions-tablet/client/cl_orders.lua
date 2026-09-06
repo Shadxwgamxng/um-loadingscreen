@@ -17,6 +17,7 @@ local MARKER_TYPE = 1 -- Cylinder
 local myRole = nil
 local myOrders = {}
 local busy = false
+local lastDebugPrint = 0
 
 local function refreshMyOrders()
     ServerCall('driver:myOrders', nil, function(res)
@@ -59,6 +60,7 @@ end
 --- ab, wenn der Spieler zu weit vom Markierungskreis weggeht, und schaltet
 --- danach automatisch den Auftragsstatus weiter.
 local function startLoadUnload(order, phase, markerCoords)
+    print(('^3[speditions-tablet debug]^7 startLoadUnload gestartet: orderId=%s phase=%s'):format(tostring(order.id), tostring(phase)))
     busy = true
     local playerPed = PlayerPedId()
     local duration = (Config.LoadUnloadSeconds or 150) * 1000
@@ -90,6 +92,7 @@ local function startLoadUnload(order, phase, markerCoords)
 
     ClearPedTasksImmediately(playerPed)
     busy = false
+    print(('^3[speditions-tablet debug]^7 startLoadUnload Schleife beendet: cancelled=%s'):format(tostring(cancelled)))
 
     if cancelled then
         TriggerEvent('speditions-tablet:client:notify', 'Vorgang abgebrochen - zu weit vom Standort entfernt.', 'error')
@@ -99,11 +102,13 @@ local function startLoadUnload(order, phase, markerCoords)
     if phase == 'pickup' then
         -- "beladen" ist der durchgehende Status waehrend der Fahrt zum
         -- Zielort - kein zweiter Zwischenschritt mehr noetig.
-        ServerCall('driver:updateCargoStatus', { orderId = order.id, status = 'beladen' }, function()
+        ServerCall('driver:updateCargoStatus', { orderId = order.id, status = 'beladen' }, function(res)
+            print(('^3[speditions-tablet debug]^7 updateCargoStatus(beladen) Antwort: ok=%s error=%s'):format(tostring(res and res.ok), tostring(res and res.error)))
             refreshMyOrders()
         end)
     else
         ServerCall('driver:updateCargoStatus', { orderId = order.id, status = 'entladen' }, function(res)
+            print(('^3[speditions-tablet debug]^7 updateCargoStatus(entladen) Antwort: ok=%s error=%s'):format(tostring(res and res.ok), tostring(res and res.error)))
             if res and res.ok then
                 ServerCall('driver:completeOrder', { orderId = order.id }, function()
                     refreshMyOrders()
@@ -147,6 +152,15 @@ CreateThread(function()
 
                     if dist <= (Config.LocationMarkerRadius or 60.0) then
                         sleep = 0
+
+                        local now = GetGameTimer()
+                        if now - lastDebugPrint > 2000 then
+                            lastDebugPrint = now
+                            print(('^3[speditions-tablet debug]^7 Standort "%s" (%s) dist=%.1fm interactRadius=%.1fm'):format(
+                                loc.name, phase, dist, Config.LocationInteractRadius or 2.5
+                            ))
+                        end
+
                         DrawMarker(
                             MARKER_TYPE, loc.coords.x, loc.coords.y, loc.coords.z - 1.0,
                             0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.5, 1.5, 1.0,
@@ -159,6 +173,7 @@ CreateThread(function()
                             EndTextCommandDisplayHelp(0, false, true, -1)
 
                             if IsControlJustPressed(0, INTERACT_CONTROL) then
+                                print('^3[speditions-tablet debug]^7 E gedrueckt - rufe startLoadUnload auf')
                                 startLoadUnload(order, phase, markerCoords)
                             end
                         end
