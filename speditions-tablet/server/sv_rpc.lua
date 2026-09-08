@@ -63,6 +63,21 @@ function RPC.PushToRole(role, event, data)
     end
 end
 
+--- Sendet eine Push-Nachricht an alle aktuell angemeldeten Mitarbeiter,
+--- deren Rolle die angegebene Berechtigung besitzt (server/sv_roles.lua) -
+--- anders als RPC.PushToRole erreicht das auch von der Geschäftsführung
+--- frei angelegte Rollen mit derselben Berechtigung, nicht nur die drei
+--- mitgelieferten Basisrollen.
+function RPC.PushToPermission(permissionKey, event, data)
+    for _, playerId in ipairs(GetPlayers()) do
+        local src = tonumber(playerId)
+        local emp = Employees.GetLoggedIn(src)
+        if emp and Roles.HasPermission(emp.role, permissionKey) then
+            RPC.Push(src, event, data)
+        end
+    end
+end
+
 function RPC.PushBroadcast(event, data)
     for _, playerId in ipairs(GetPlayers()) do
         RPC.Push(tonumber(playerId), event, data)

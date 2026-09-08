@@ -5,8 +5,6 @@
 -- Einstellung - die Zielperson muss dafür NICHT online sein.
 -- =========================================================
 
-local VALID_ROLES = { 'fahrer', 'disponent', 'geschaeftsfuehrung' }
-
 function Employees.List()
     return MySQL.query.await([[
         SELECT e.id, e.username, e.name, e.role, e.status, e.hired_at,
@@ -17,18 +15,10 @@ function Employees.List()
     ]])
 end
 
-local function countActiveGf(excludeId)
-    local row = MySQL.single.await(
-        "SELECT COUNT(*) AS c FROM st_employees WHERE role = 'geschaeftsfuehrung' AND status = 'aktiv' AND id != ?",
-        { excludeId or 0 }
-    )
-    return row and tonumber(row.c) or 0
-end
-
 --- Legt ein neues Mitarbeiterkonto mit Login-Name + Passwort an - die
 --- Zielperson muss dafür nicht online sein.
 function Employees.Hire(src, data)
-    local emp = Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'employees_manage')
 
     local username = Utils.SanitizeString(data.username, 50)
     local password = Utils.SanitizeString(data.password, 100)
@@ -36,7 +26,7 @@ function Employees.Hire(src, data)
     local role = data.role
 
     if not username or not password or not name then error('missing_fields') end
-    if not Utils.InTable(VALID_ROLES, role) then error('invalid_role') end
+    if not Roles.Exists(role) then error('invalid_role') end
 
     local existing = MySQL.single.await('SELECT id FROM st_employees WHERE username = ? LIMIT 1', { username })
     if existing then error('employee_already_exists') end
@@ -47,7 +37,7 @@ function Employees.Hire(src, data)
     )
     Employees.SetPassword(employeeId, password)
 
-    if role == Config.Roles.FAHRER then
+    if Roles.HasPermission(role, 'driver_actions') then
         Drivers.EnsureDriverRecord(employeeId)
     end
 
@@ -58,7 +48,7 @@ end
 
 --- Setzt das Passwort eines Mitarbeiters zurück (Geschäftsführung).
 function Employees.ResetPassword(src, employeeId, newPassword)
-    local emp = Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'employees_manage')
     newPassword = Utils.SanitizeString(newPassword, 100)
     if not newPassword then error('missing_fields') end
 
@@ -91,37 +81,45 @@ function Employees.ChangeOwnPassword(src, currentPassword, newPassword)
 end
 
 function Employees.ChangeRole(src, employeeId, newRole)
-    local emp = Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
-    if not Utils.InTable(VALID_ROLES, newRole) then error('invalid_role') end
+    local emp = Employees.RequirePermission(src, 'employees_manage')
+    if not Roles.Exists(newRole) then error('invalid_role') end
 
     local target = MySQL.single.await('SELECT * FROM st_employees WHERE id = ?', { employeeId })
     if not target then error('employee_not_found') end
 
-    if target.role == Config.Roles.GESCHAEFTSFUEHRUNG and newRole ~= Config.Roles.GESCHAEFTSFUEHRUNG then
-        if countActiveGf(employeeId) < 1 then error('last_management_account') end
+    -- Verhindert, dass sich die Geschäftsführung versehentlich komplett
+    -- aussperrt: die letzte aktive Person mit "employees_manage" (i.d.R.
+    -- Geschäftsführung) kann nicht in eine Rolle ohne diese Berechtigung
+    -- verschoben werden, solange niemand sonst sie noch hat.
+    if Roles.HasPermission(target.role, 'employees_manage') and not Roles.HasPermission(newRole, 'employees_manage') then
+        if Roles.CountActiveEmployeesWithPermission('employees_manage', employeeId) < 1 then
+            error('last_management_account')
+        end
     end
 
     MySQL.update.await('UPDATE st_employees SET role = ? WHERE id = ?', { newRole, employeeId })
 
-    if newRole == Config.Roles.FAHRER then
+    if Roles.HasPermission(newRole, 'driver_actions') then
         Drivers.EnsureDriverRecord(employeeId)
     end
 
     Employees.RefreshLoginById(employeeId)
-    Logs.Write(emp.id, 'employee_role_change', ('%s hat die Rolle von %s auf "%s" geändert.'):format(emp.name, target.name, newRole))
+    Logs.Write(emp.id, 'employee_role_change', ('%s hat die Rolle von %s auf "%s" geändert.'):format(emp.name, target.name, Roles.GetLabel(newRole)))
 
     return { ok = true }
 end
 
 function Employees.SetStatus(src, employeeId, status)
-    local emp = Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'employees_manage')
     if not Utils.InTable({ 'aktiv', 'inaktiv' }, status) then error('invalid_status') end
 
     local target = MySQL.single.await('SELECT * FROM st_employees WHERE id = ?', { employeeId })
     if not target then error('employee_not_found') end
 
-    if status == 'inaktiv' and target.role == Config.Roles.GESCHAEFTSFUEHRUNG then
-        if countActiveGf(employeeId) < 1 then error('last_management_account') end
+    if status == 'inaktiv' and Roles.HasPermission(target.role, 'employees_manage') then
+        if Roles.CountActiveEmployeesWithPermission('employees_manage', employeeId) < 1 then
+            error('last_management_account')
+        end
     end
 
     MySQL.update.await('UPDATE st_employees SET status = ? WHERE id = ?', { status, employeeId })
@@ -136,7 +134,7 @@ end
 -- =========================================================
 
 RPC.Register('gf:employees:list', function(src)
-    Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    Employees.RequirePermission(src, 'employees_manage')
     return { employees = Employees.List() }
 end)
 

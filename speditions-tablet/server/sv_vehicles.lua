@@ -36,7 +36,7 @@ end
 Vehicles.LogEvent = logVehicleEvent
 
 function Vehicles.Create(src, data)
-    local emp = Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'fleet_manage')
 
     local name = Utils.SanitizeString(data.name, 100)
     local model = Utils.SanitizeString(data.model, 100)
@@ -59,14 +59,13 @@ function Vehicles.Create(src, data)
 
     logVehicleEvent(vehicleId, 'created', ('Fahrzeug von %s erstellt.'):format(emp.name))
     Logs.Write(emp.id, 'vehicle_create', ('%s hat Fahrzeug %s (%s) erstellt.'):format(emp.name, name, plate))
-    RPC.PushToRole(Config.Roles.DISPONENT, 'fleet:changed', {})
-    RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'fleet:changed', {})
+    RPC.PushToPermission('dispatch', 'fleet:changed', {})
 
     return { vehicleId = vehicleId }
 end
 
 function Vehicles.Update(src, vehicleId, data)
-    local emp = Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'fleet_manage')
 
     local vehicle = Vehicles.GetById(vehicleId)
     if not vehicle then error('vehicle_not_found') end
@@ -101,8 +100,7 @@ function Vehicles.Update(src, vehicleId, data)
     end
 
     Logs.Write(emp.id, 'vehicle_update', ('%s hat Fahrzeug %s (%s) bearbeitet.'):format(emp.name, name, plate))
-    RPC.PushToRole(Config.Roles.DISPONENT, 'fleet:changed', {})
-    RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'fleet:changed', {})
+    RPC.PushToPermission('dispatch', 'fleet:changed', {})
 
     return { ok = true }
 end
@@ -111,7 +109,7 @@ end
 --- Hard-Delete wird serverseitig verweigert, wenn das Fahrzeug bereits in
 --- Aufträgen referenziert wird, um die Fahrzeughistorie nicht zu zerstören.
 function Vehicles.Delete(src, vehicleId, mode)
-    local emp = Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'fleet_manage')
     local vehicle = Vehicles.GetById(vehicleId)
     if not vehicle then error('vehicle_not_found') end
 
@@ -123,8 +121,7 @@ function Vehicles.Delete(src, vehicleId, mode)
         MySQL.update.await('UPDATE st_drivers SET assigned_vehicle_id = NULL WHERE assigned_vehicle_id = ?', { vehicleId })
         MySQL.update.await('DELETE FROM st_vehicles WHERE id = ?', { vehicleId })
         Logs.Write(emp.id, 'vehicle_delete_hard', ('%s hat Fahrzeug %s (%s) endgültig gelöscht.'):format(emp.name, vehicle.name, vehicle.plate))
-        RPC.PushToRole(Config.Roles.DISPONENT, 'fleet:changed', {})
-        RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'fleet:changed', {})
+        RPC.PushToPermission('dispatch', 'fleet:changed', {})
         return { ok = true, mode = 'hard' }
     end
 
@@ -133,15 +130,14 @@ function Vehicles.Delete(src, vehicleId, mode)
     MySQL.update.await("UPDATE st_vehicles SET archived = 1, status = 'ausser_betrieb' WHERE id = ?", { vehicleId })
     logVehicleEvent(vehicleId, 'archived', ('Fahrzeug von %s archiviert.'):format(emp.name))
     Logs.Write(emp.id, 'vehicle_archive', ('%s hat Fahrzeug %s (%s) archiviert.'):format(emp.name, vehicle.name, vehicle.plate))
-    RPC.PushToRole(Config.Roles.DISPONENT, 'fleet:changed', {})
-    RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'fleet:changed', {})
+    RPC.PushToPermission('dispatch', 'fleet:changed', {})
 
     local forced = (mode == 'hard' and hasHistory)
     return { ok = true, mode = 'archive', forced = forced }
 end
 
 function Vehicles.Reactivate(src, vehicleId)
-    local emp = Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'fleet_manage')
     local vehicle = Vehicles.GetById(vehicleId)
     if not vehicle then error('vehicle_not_found') end
     MySQL.update.await("UPDATE st_vehicles SET archived = 0, status = 'verfuegbar' WHERE id = ?", { vehicleId })
@@ -152,7 +148,7 @@ end
 
 --- Weist ein Fahrzeug einem Fahrer zu (oder hebt die Zuweisung auf, wenn driverId = nil).
 function Vehicles.Assign(src, vehicleId, driverId)
-    local emp = Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'fleet_manage')
     local vehicle = Vehicles.GetById(vehicleId)
     if not vehicle then error('vehicle_not_found') end
     if Utils.ToBool(vehicle.archived) then error('vehicle_archived') end
@@ -191,8 +187,7 @@ function Vehicles.Assign(src, vehicleId, driverId)
         Logs.Write(emp.id, 'vehicle_unassign', ('%s hat die Zuweisung von Fahrzeug %s (%s) aufgehoben.'):format(emp.name, vehicle.name, vehicle.plate))
     end
 
-    RPC.PushToRole(Config.Roles.DISPONENT, 'fleet:changed', {})
-    RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'fleet:changed', {})
+    RPC.PushToPermission('dispatch', 'fleet:changed', {})
 
     return { ok = true }
 end
@@ -240,7 +235,7 @@ end
 --- dem tatsächlichen Logout erzwungen (siehe app.js requestLogout()).
 --- Hat der Fahrer kein Fahrzeug zugewiesen, passiert einfach nichts.
 function Vehicles.ReportCondition(src, fuel, notes, needsWorkshop)
-    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local emp = Employees.RequirePermission(src, 'driver_actions')
     local driver = Drivers.EnsureDriverRecord(emp.id)
 
     if not driver.assigned_vehicle_id then
@@ -271,8 +266,7 @@ function Vehicles.ReportCondition(src, fuel, notes, needsWorkshop)
     logVehicleEvent(vehicle.id, 'condition_report', ('%s hat Tankstand (%s%%) und Zustand gemeldet%s.'):format(emp.name, fuel, needsWorkshop and ' (Werkstatt erforderlich)' or ''))
     Logs.Write(emp.id, 'vehicle_condition_report', ('%s hat den Zustand von %s (%s) gemeldet.'):format(emp.name, vehicle.name, vehicle.plate))
 
-    RPC.PushToRole(Config.Roles.DISPONENT, 'fleet:changed', {})
-    RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'fleet:changed', {})
+    RPC.PushToPermission('dispatch', 'fleet:changed', {})
 
     return { ok = true, reported = true }
 end
@@ -282,7 +276,7 @@ end
 -- =========================================================
 
 RPC.Register('gf:vehicles:list', function(src, payload)
-    Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    Employees.RequirePermission(src, 'fleet_manage')
     return { vehicles = Vehicles.List(payload.includeArchived == true) }
 end)
 
@@ -316,7 +310,7 @@ RPC.Register('gf:vehicles:assign', function(src, payload)
 end)
 
 RPC.Register('gf:vehicles:file', function(src, payload)
-    Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    Employees.RequirePermission(src, 'fleet_manage')
     local vehicleId = Utils.SanitizeNumber(payload.vehicleId, 1)
     if not vehicleId then error('invalid_vehicle') end
     return Vehicles.GetFile(vehicleId)

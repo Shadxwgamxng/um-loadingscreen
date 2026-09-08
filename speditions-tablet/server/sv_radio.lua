@@ -61,7 +61,7 @@ end)
 --- wenn der Fahrer online, am Tablet erkannt UND sein Funkgerät
 --- eingeschaltet ist.
 RPC.Register('dispatch:callDriver', function(src, payload)
-    local emp = Employees.RequireRole(src, { Config.Roles.DISPONENT, Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'dispatch')
 
     local driverId = Utils.SanitizeNumber(payload.driverId, 1)
     if not driverId then error('invalid_payload') end

@@ -4,12 +4,33 @@
 
 math.randomseed(os.time())
 
+local function roleLabelMap()
+    local labels = {}
+    for _, role in ipairs(Roles.List()) do labels[role.key] = role.label end
+    return labels
+end
+
+--- Berechtigungen der eigenen Rolle als Array - rein fuer die NUI, um zu
+--- entscheiden, welche Reiter angezeigt werden. Serverseitig wird bei jeder
+--- Aktion ohnehin unabhaengig davon erneut geprueft (Employees.RequirePermission).
+local function ownPermissions(role)
+    local perms = {}
+    for _, r in ipairs(Roles.List()) do
+        if r.key == role then
+            perms = r.permissions
+            break
+        end
+    end
+    return perms
+end
+
 local function sessionPayload(emp)
     return {
         ok = true,
         loggedIn = true,
         employee = { id = emp.id, name = emp.name, role = emp.role, hiredAt = emp.hired_at },
-        roleLabels = Config.RoleLabels,
+        roleLabels = roleLabelMap(),
+        permissions = ownPermissions(emp.role),
         driverPermissions = Config.DriverPermissions,
         vehicleClasses = Config.VehicleClasses,
         vehicleStatuses = Config.VehicleStatus,
@@ -31,12 +52,12 @@ end)
 --- Meldet den Spieler mit Name/Passwort am Tablet an. Erfolg/Misserfolg
 --- wird ausschließlich serverseitig anhand der Datenbank entschieden.
 RPC.Register('session:login', function(src, payload)
-    local result = Employees.Login(src, payload.username, payload.password)
+    Employees.Login(src, payload.username, payload.password)
     local emp = Employees.GetLoggedIn(src)
-    if emp and emp.role == Config.Roles.FAHRER then
+    if emp and Roles.HasPermission(emp.role, 'driver_actions') then
         Drivers.EnsureDriverRecord(emp.id)
     end
-    return result
+    return sessionPayload(emp)
 end)
 
 RPC.Register('session:logout', function(src)
@@ -50,7 +71,7 @@ local function countRows(query, params)
 end
 
 RPC.Register('gf:dashboard', function(src)
-    Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    Employees.RequirePermission(src, 'stats_view')
 
     local overview = Finance.GetOverview()
 
@@ -85,7 +106,7 @@ RPC.Register('gf:dashboard', function(src)
 end)
 
 RPC.Register('gf:stats', function(src)
-    Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    Employees.RequirePermission(src, 'stats_view')
 
     local revenueByDay = MySQL.query.await([[
         SELECT DATE(created_at) AS day, COALESCE(SUM(amount), 0) AS total

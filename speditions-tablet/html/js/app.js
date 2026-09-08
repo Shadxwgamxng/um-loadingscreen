@@ -58,6 +58,7 @@ const ERROR_MESSAGES = {
     insufficient_player_cash: 'Du hast nicht genug Bargeld dabei, um diesen Betrag einzuzahlen.',
     employee_inactive: 'Dieses Mitarbeiterkonto ist deaktiviert.',
     forbidden_role: 'Keine Berechtigung für diese Aktion.',
+    missing_permission: 'Keine Berechtigung für diese Aktion.',
     insufficient_balance: 'Nicht genügend Guthaben für diese Auszahlung.',
     invalid_amount: 'Ungültiger Betrag.',
     missing_reason: 'Bitte einen Grund angeben.',
@@ -87,6 +88,11 @@ const ERROR_MESSAGES = {
     invalid_status: 'Ungültiger Status.',
     invalid_role: 'Ungültige Rolle.',
     invalid_permission: 'Ungültige Berechtigung.',
+    role_not_found: 'Rolle nicht gefunden.',
+    role_is_builtin: 'Die drei mitgelieferten Basisrollen können nicht gelöscht werden.',
+    role_in_use: 'Dieser Rolle sind noch Mitarbeiter zugeordnet - erst umverteilen, dann löschen.',
+    missing_permissions: 'Bitte mindestens eine Berechtigung auswählen.',
+    last_roles_manage_role: 'Diese Rolle ist die letzte mit der Berechtigung "Rollen & Berechtigungen verwalten", der noch Mitarbeiter zugeordnet sind - das würde die Geschäftsführung aussperren.',
     unknown_action: 'Unbekannte Aktion.',
     connection_error: 'Keine Verbindung zum Server.',
     server_error: 'Serverfehler. Bitte später erneut versuchen.',
@@ -194,6 +200,25 @@ function table(headers, rowsHtml) {
     return `<div class="scroll-x"><table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
+// Checkbox-Liste aller Berechtigungen (gruppiert nach Config.Permissions'
+// `group`-Feld) für die Rollen-Anlegen-/Bearbeiten-Modals.
+function permissionCheckboxesHtml(catalog, selectedKeys) {
+    const groups = {};
+    catalog.forEach((p) => {
+        const g = p.group || 'Sonstiges';
+        (groups[g] = groups[g] || []).push(p);
+    });
+    return Object.keys(groups).map((g) => `
+        <div style="margin-top:10px;">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2);margin-bottom:4px;">${escapeHtml(g)}</div>
+            ${groups[g].map((p) => `
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-0);margin:6px 0;">
+                    <input type="checkbox" class="role-perm-checkbox" value="${p.key}" style="width:auto;" ${selectedKeys.includes(p.key) ? 'checked' : ''} />
+                    ${escapeHtml(p.label)}
+                </label>`).join('')}
+        </div>`).join('');
+}
+
 // ---------------------------------------------------------
 // Toasts
 // ---------------------------------------------------------
@@ -241,39 +266,44 @@ function modalInputValue(id) {
 // Navigation
 // ---------------------------------------------------------
 
-const NAV = {
-    fahrer: [
-        { id: 'driver-card', label: 'Fahrerkarte', icon: '🪪' },
-        { id: 'driver-orders', label: 'Aufträge', icon: '📦' },
-        { id: 'driver-history', label: 'Historie', icon: '🕓' },
-        { id: 'driver-earnings', label: 'Einnahmen', icon: '💰' },
-        { id: 'driver-vehicle', label: 'Mein Fahrzeug', icon: '🚛' },
-        { id: 'driver-messages', label: 'Nachrichten', icon: '✉️' },
-    ],
-    disponent: [
-        { id: 'dispatch-drivers', label: 'Fahrerübersicht', icon: '👥' },
-        { id: 'dispatch-pool', label: 'Auftragspool', icon: '📋' },
-        { id: 'dispatch-active', label: 'Aktive Aufträge', icon: '🚚' },
-        { id: 'dispatch-completed', label: 'Abgeschlossen', icon: '✅' },
-        { id: 'dispatch-revenue', label: 'Unternehmensumsatz', icon: '📈' },
-    ],
-    geschaeftsfuehrung: [
-        { id: 'gf-dashboard', label: 'Dashboard', icon: '📊' },
-        { id: 'gf-employees', label: 'Mitarbeiter', icon: '🧑‍💼' },
-        { id: 'gf-drivers', label: 'Fahrerakten', icon: '🪪' },
-        { id: 'gf-fleet', label: 'Fuhrpark', icon: '🚛' },
-        { id: 'gf-finance', label: 'Finanzen', icon: '💰' },
-        { id: 'gf-payouts', label: 'Ein-/Auszahlungen', icon: '🏦' },
-        { id: 'gf-payroll', label: 'Gehälter', icon: '💵' },
-        { id: 'gf-orders', label: 'Aufträge', icon: '📦' },
-        { id: 'gf-log', label: 'Protokoll', icon: '📜' },
-    ],
-};
+// Welche Reiter sichtbar sind, hängt NICHT mehr von der Rolle selbst ab,
+// sondern von deren Berechtigungen (server/sv_roles.lua) - so tauchen auch
+// von der Geschäftsführung frei angelegte Rollen mit den passenden
+// Berechtigungen automatisch mit den richtigen Reitern auf.
+const NAV_ITEMS = [
+    { id: 'driver-card', label: 'Fahrerkarte', icon: '🪪', perm: 'driver_actions' },
+    { id: 'driver-orders', label: 'Aufträge', icon: '📦', perm: 'driver_actions' },
+    { id: 'driver-history', label: 'Historie', icon: '🕓', perm: 'driver_actions' },
+    { id: 'driver-earnings', label: 'Einnahmen', icon: '💰', perm: 'driver_actions' },
+    { id: 'driver-vehicle', label: 'Mein Fahrzeug', icon: '🚛', perm: 'driver_actions' },
+    { id: 'driver-messages', label: 'Nachrichten', icon: '✉️', perm: 'driver_actions' },
+    { id: 'dispatch-drivers', label: 'Fahrerübersicht', icon: '👥', perm: 'dispatch' },
+    { id: 'dispatch-map', label: 'Live-Karte', icon: '🗺️', perm: 'live_map_view' },
+    { id: 'dispatch-pool', label: 'Auftragspool', icon: '📋', perm: 'dispatch' },
+    { id: 'dispatch-active', label: 'Aktive Aufträge', icon: '🚚', perm: 'dispatch' },
+    { id: 'dispatch-completed', label: 'Abgeschlossen', icon: '✅', perm: 'dispatch' },
+    { id: 'dispatch-revenue', label: 'Unternehmensumsatz', icon: '📈', perm: 'dispatch' },
+    { id: 'gf-dashboard', label: 'Dashboard', icon: '📊', perm: 'stats_view' },
+    { id: 'gf-employees', label: 'Mitarbeiter', icon: '🧑‍💼', perm: 'employees_manage' },
+    { id: 'gf-roles', label: 'Rollen', icon: '🛡️', perm: 'roles_manage' },
+    { id: 'gf-drivers', label: 'Fahrerakten', icon: '🪪', perm: 'employees_manage' },
+    { id: 'gf-fleet', label: 'Fuhrpark', icon: '🚛', perm: 'fleet_manage' },
+    { id: 'gf-finance', label: 'Finanzen', icon: '💰', perm: 'finance_view' },
+    { id: 'gf-payouts', label: 'Ein-/Auszahlungen', icon: '🏦', perm: 'finance_payout' },
+    { id: 'gf-payroll', label: 'Gehälter', icon: '💵', perm: 'wages_manage' },
+    { id: 'gf-orders', label: 'Aufträge', icon: '📦', perm: 'stats_view' },
+    { id: 'gf-log', label: 'Protokoll', icon: '📜', perm: 'activity_log_view' },
+];
 
-function buildSidebar(role) {
+function visibleNavItems(permissions) {
+    const perms = permissions || [];
+    return NAV_ITEMS.filter((item) => perms.includes(item.perm));
+}
+
+function buildSidebar(permissions) {
     const sidebar = document.getElementById('sidebar');
     sidebar.innerHTML = '';
-    (NAV[role] || []).forEach((item) => {
+    visibleNavItems(permissions).forEach((item) => {
         const el = document.createElement('div');
         el.className = 'nav-item';
         el.dataset.view = item.id;
@@ -283,7 +313,13 @@ function buildSidebar(role) {
     });
 }
 
+// Manche Ansichten (aktuell nur die Live-Karte) pollen periodisch, solange
+// sie aktiv sind - dieses Intervall wird beim Verlassen der Ansicht
+// automatisch gestoppt.
+let activeViewInterval = null;
+
 async function showView(id) {
+    if (activeViewInterval) { clearInterval(activeViewInterval); activeViewInterval = null; }
     State.currentView = id;
     document.querySelectorAll('.nav-item').forEach((el) => el.classList.toggle('active', el.dataset.view === id));
     const content = document.getElementById('content');
@@ -336,7 +372,7 @@ function requestClose() {
 }
 
 async function closeTabletWithVehicleCheck() {
-    if (State.role === 'fahrer') {
+    if (State.config && Array.isArray(State.config.permissions) && State.config.permissions.includes('driver_actions')) {
         const res = await rpc('driver:vehicle');
         if (res && res.ok && res.result && res.result.vehicle) {
             openVehicleConditionModal(res.result.vehicle);
@@ -442,8 +478,8 @@ function boot(data) {
     document.getElementById('employee-name').textContent = data.employee.name;
     document.getElementById('employee-role').textContent = data.roleLabels[data.employee.role] || data.employee.role;
     document.getElementById('topbar-brand').textContent = State.companyName;
-    buildSidebar(data.employee.role);
-    const first = (NAV[data.employee.role] || [])[0];
+    buildSidebar(data.permissions);
+    const first = visibleNavItems(data.permissions)[0];
     if (first) showView(first.id);
     startTimeclockWidget();
 }
@@ -702,8 +738,97 @@ function handlePush(event, data) {
         'dispatch:driversChanged': () => refreshIfViewing(['dispatch-drivers']),
         'fleet:changed': () => refreshIfViewing(['gf-fleet', 'dispatch-drivers']),
         'finance:balanceChanged': () => refreshIfViewing(['gf-finance', 'gf-dashboard']),
+        'roles:changed': () => refreshAfterRolesChanged(),
     };
     if (map[event]) map[event]();
+}
+
+// Wird ausgeloest, sobald sich irgendeine Rolle aendert (Berechtigungen,
+// Label, neue/geloeschte Rolle) - laedt die eigene Sitzung neu (falls sich
+// die eigenen Berechtigungen geaendert haben, z.B. neue Reiter), und
+// aktualisiert offene Rollen-/Mitarbeiter-/Gehalts-Ansichten.
+async function refreshAfterRolesChanged() {
+    const res = await rpc('session:whoami');
+    if (res && res.ok && res.result && res.result.loggedIn) {
+        const data = res.result;
+        State.employee = data.employee;
+        State.role = data.employee.role;
+        State.config = data;
+        document.getElementById('employee-role').textContent = data.roleLabels[data.employee.role] || data.employee.role;
+        buildSidebar(data.permissions);
+    }
+    refreshIfViewing(['gf-roles', 'gf-employees', 'gf-payroll']);
+}
+
+// ---------------------------------------------------------
+// Live-Karte (Disposition) - schematisches Positionsraster, KEIN echtes
+// Kartenbild (die Ressource bringt keine GTA-Kartengrafik mit) - Fahrer
+// UND Firmenstandorte (Config.Locations, als Orientierungspunkte) werden
+// auf denselben, ungefähren Weltkoordinaten-Bereich der GTA-V-Karte
+// abgebildet, damit die relative Lage zueinander stimmt.
+// ---------------------------------------------------------
+
+const MAP_BOUNDS = { minX: -4300, maxX: 4700, minY: -4300, maxY: 8200 };
+const LIVE_MAP_STATUS_COLOR = { verfuegbar: '#22c55e', im_einsatz: '#3b82f6', pause: '#eab308', offline: '#6b7280' };
+
+function worldToCanvas(x, y, w, h) {
+    const px = ((x - MAP_BOUNDS.minX) / (MAP_BOUNDS.maxX - MAP_BOUNDS.minX)) * w;
+    const py = h - ((y - MAP_BOUNDS.minY) / (MAP_BOUNDS.maxY - MAP_BOUNDS.minY)) * h; // Y invertiert: Norden (GTA Y+) = oben
+    return [px, py];
+}
+
+function drawLiveMap(canvas, data) {
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.strokeStyle = '#1b2a4a';
+    ctx.lineWidth = 1;
+    const gridStep = 64;
+    for (let gx = 0; gx <= w; gx += gridStep) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke(); }
+    for (let gy = 0; gy <= h; gy += gridStep) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke(); }
+
+    ctx.fillStyle = '#4a5b82';
+    (data.locations || []).forEach((loc) => {
+        const [px, py] = worldToCanvas(loc.x, loc.y, w, h);
+        ctx.beginPath();
+        ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    (data.drivers || []).forEach((drv) => {
+        if (drv.waypoint && drv.position) {
+            const [dx, dy] = worldToCanvas(drv.position.x, drv.position.y, w, h);
+            const [wx, wy] = worldToCanvas(drv.waypoint.x, drv.waypoint.y, w, h);
+            ctx.strokeStyle = '#3b82f6';
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath(); ctx.moveTo(dx, dy); ctx.lineTo(wx, wy); ctx.stroke();
+            ctx.setLineDash([]);
+
+            ctx.fillStyle = '#eab308';
+            ctx.beginPath(); ctx.arc(wx, wy, 4, 0, Math.PI * 2); ctx.fill();
+        }
+
+        if (drv.position) {
+            const stale = drv.positionAgeSeconds != null && drv.positionAgeSeconds > 30;
+            const [px, py] = worldToCanvas(drv.position.x, drv.position.y, w, h);
+
+            ctx.fillStyle = stale ? '#6b7280' : (LIVE_MAP_STATUS_COLOR[drv.status] || '#6b7280');
+            ctx.beginPath();
+            ctx.arc(px, py, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#0b1220';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.fillStyle = '#f3f6fb';
+            ctx.font = '11px sans-serif';
+            ctx.fillText(drv.name, px + 9, py + 4);
+        }
+    });
 }
 
 // =========================================================
@@ -965,6 +1090,46 @@ VIEWS['dispatch-drivers'] = async (root) => {
         <div class="section">${table(['Status', 'Fahrer', 'Fahrzeug', 'Fahrzeugstatus', ''], rows)}</div>`;
 };
 
+VIEWS['dispatch-map'] = async (root) => {
+    root.innerHTML = `
+        <h1 class="view-title">Live-Karte</h1>
+        <p class="view-subtitle">Schematisches Live-Positionsraster aller angemeldeten Fahrer (aktualisiert alle 5 Sekunden) - kein echtes Kartenbild, aber Fahrer und Firmenstandorte werden auf denselben Weltkoordinaten abgebildet. Gelber Punkt + gestrichelte Linie: aktuell gesetzter Navi-Wegpunkt aus dem laufenden Auftrag.</p>
+        <div class="live-map-canvas-wrap"><canvas id="live-map-canvas" class="live-map-canvas" width="640" height="890"></canvas></div>
+        <div class="live-map-legend">
+            <span><span class="dot dot-green"></span>Verfügbar</span>
+            <span><span class="dot dot-blue"></span>Im Einsatz</span>
+            <span><span class="dot dot-yellow"></span>Pause</span>
+            <span><span class="dot dot-gray"></span>Offline / keine Positionsdaten</span>
+        </div>
+        <div class="section" style="margin-top:16px;" id="live-map-driver-list"></div>`;
+
+    const canvas = document.getElementById('live-map-canvas');
+    const listEl = document.getElementById('live-map-driver-list');
+
+    const refresh = async () => {
+        const d = await call('dispatch:liveMap');
+        drawLiveMap(canvas, d);
+        listEl.innerHTML = d.drivers.map((drv) => {
+            const orderLabel = drv.order
+                ? `Auftrag #${drv.order.id} - ${escapeHtml(drv.order.cargo)}: ${escapeHtml(drv.order.startLocation)} → ${escapeHtml(drv.order.endLocation)} (${escapeHtml((ORDER_STATUS_META[drv.order.status] && ORDER_STATUS_META[drv.order.status].label) || drv.order.status)})`
+                : 'Kein laufender Auftrag';
+            const posLabel = !drv.position
+                ? 'Keine Positionsdaten (offline)'
+                : (drv.positionAgeSeconds > 30 ? `Zuletzt gesehen vor ${drv.positionAgeSeconds}s` : 'Live');
+            return `<div class="live-map-driver-row">
+                <div>
+                    <div class="live-map-driver-name">${escapeHtml(drv.name)} ${badge(DRIVER_STATUS_META[drv.status])}</div>
+                    <div class="live-map-driver-order">${orderLabel}</div>
+                </div>
+                <div class="card-hint">${posLabel}</div>
+            </div>`;
+        }).join('') || '<div class="card-hint">Keine aktiven Fahrer.</div>';
+    };
+
+    await refresh();
+    activeViewInterval = setInterval(refresh, 5000);
+};
+
 VIEWS['dispatch-pool'] = async (root) => {
     const [pool, drivers] = await Promise.all([call('dispatch:openOrders'), call('dispatch:drivers')]);
     window.__availableDrivers = drivers.drivers;
@@ -1126,17 +1291,14 @@ VIEWS['gf-dashboard'] = async (root) => {
 };
 
 VIEWS['gf-employees'] = async (root) => {
-    const d = await call('gf:employees:list');
+    const [d, rolesRes] = await Promise.all([call('gf:employees:list'), call('roles:list')]);
+    const roleOptions = (e) => rolesRes.roles.map((r) => `<option value="${r.key}" ${e.role === r.key ? 'selected' : ''}>${escapeHtml(r.label)}</option>`).join('');
     const rows = d.employees.map((e) => `<tr>
         <td>#${e.id}</td>
         <td>${escapeHtml(e.name)}</td>
         <td>${escapeHtml(e.username || '-')}</td>
         <td>
-            <select onchange="Actions.changeRole(${e.id}, this.value)">
-                <option value="fahrer" ${e.role === 'fahrer' ? 'selected' : ''}>LKW-Fahrer</option>
-                <option value="disponent" ${e.role === 'disponent' ? 'selected' : ''}>Disponent</option>
-                <option value="geschaeftsfuehrung" ${e.role === 'geschaeftsfuehrung' ? 'selected' : ''}>Geschäftsführung</option>
-            </select>
+            <select onchange="Actions.changeRole(${e.id}, this.value)">${roleOptions(e)}</select>
         </td>
         <td>${badge(EMPLOYMENT_STATUS_META[e.status])}</td>
         <td>${formatDate(e.hired_at)}</td>
@@ -1153,9 +1315,33 @@ VIEWS['gf-employees'] = async (root) => {
         <div class="section">${table(['#', 'Name', 'Login-Name', 'Rolle', 'Status', 'Eingestellt', ''], rows)}</div>`;
 };
 
+VIEWS['gf-roles'] = async (root) => {
+    const d = await call('roles:list');
+    const permLabel = (key) => {
+        const p = d.permissionCatalog.find((x) => x.key === key);
+        return p ? p.label : key;
+    };
+
+    const rows = d.roles.map((r) => `<tr>
+        <td>${escapeHtml(r.label)}${r.isBuiltin ? ' <span class="pill"><span class="dot dot-gray"></span>Basisrolle</span>' : ''}</td>
+        <td style="max-width:420px;">${r.permissions.map((p) => `<span class="pill" style="margin:2px 4px 2px 0;"><span class="dot dot-blue"></span>${escapeHtml(permLabel(p))}</span>`).join('') || '<span class="card-hint">Keine Berechtigungen</span>'}</td>
+        <td class="btn-row">
+            <button class="btn btn-sm" onclick="Actions.openEditRoleModal('${r.key}')">Bearbeiten</button>
+            ${r.isBuiltin ? '' : `<button class="btn btn-sm btn-danger" onclick="Actions.deleteRole('${r.key}', ${JSON.stringify(r.label)})">Löschen</button>`}
+        </td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Rollen</h1>
+        <p class="view-subtitle">Eigene Rollen mit frei wählbaren Berechtigungen anlegen und bearbeiten. Die drei mitgelieferten Basisrollen (Fahrer/Disponent/Geschäftsführung) können nicht gelöscht, ihre Berechtigungen aber angepasst werden.</p>
+        <div class="btn-row" style="margin-bottom:14px;"><button class="btn btn-primary" onclick="Actions.openCreateRoleModal()">+ Rolle anlegen</button></div>
+        <div class="section">${table(['Rolle', 'Berechtigungen', ''], rows)}</div>`;
+};
+
 VIEWS['gf-drivers'] = async (root) => {
-    const d = await call('gf:employees:list');
-    const drivers = d.employees.filter((e) => e.role === 'fahrer');
+    const [d, rolesRes] = await Promise.all([call('gf:employees:list'), call('roles:list')]);
+    const driverRoleKeys = new Set(rolesRes.roles.filter((r) => r.permissions.includes('driver_actions')).map((r) => r.key));
+    const drivers = d.employees.filter((e) => driverRoleKeys.has(e.role));
     const rows = drivers.map((e) => `<tr>
         <td>#${e.id}</td>
         <td>${escapeHtml(e.name)}</td>
@@ -1615,7 +1801,9 @@ Actions.confirmCancelOrder = async (orderId) => {
     showView('dispatch-active');
 };
 
-Actions.openHireModal = () => {
+Actions.openHireModal = async () => {
+    const rolesRes = await call('roles:list');
+    const roleOptions = rolesRes.roles.map((r) => `<option value="${r.key}">${escapeHtml(r.label)}</option>`).join('');
     openModal('Mitarbeiter einstellen', 'Legt ein neues Mitarbeiterkonto mit Login-Name und Passwort an - die Person muss dafür nicht online sein.', `
         <label>Anzeigename</label>
         <input id="hire-name" type="text" />
@@ -1624,11 +1812,7 @@ Actions.openHireModal = () => {
         <label>Passwort</label>
         <input id="hire-password" type="password" autocomplete="off" />
         <label>Rolle</label>
-        <select id="hire-role">
-            <option value="fahrer">LKW-Fahrer</option>
-            <option value="disponent">Disponent</option>
-            <option value="geschaeftsfuehrung">Geschäftsführung</option>
-        </select>
+        <select id="hire-role">${roleOptions}</select>
     `, `
         <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
         <button class="btn btn-primary" onclick="Actions.confirmHire()">Einstellen</button>
@@ -1673,6 +1857,65 @@ Actions.toggleEmployeeStatus = async (employeeId, status) => {
     await call('gf:employees:setStatus', { employeeId, status });
     toast('Status geändert', '', 'success');
     showView('gf-employees');
+};
+
+Actions.openCreateRoleModal = async () => {
+    const d = await call('roles:list');
+    openModal('Rolle anlegen', 'Name und Berechtigungen der neuen Rolle festlegen.', `
+        <label>Name</label>
+        <input id="role-label" type="text" />
+        <div id="role-perm-list">${permissionCheckboxesHtml(d.permissionCatalog, [])}</div>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmCreateRole()">Anlegen</button>
+    `);
+};
+Actions.confirmCreateRole = async () => {
+    const label = modalInputValue('role-label').trim();
+    const permissions = Array.from(document.querySelectorAll('#role-perm-list .role-perm-checkbox:checked')).map((el) => el.value);
+    if (!label) { toast('Fehler', 'Bitte einen Namen eingeben.', 'error'); return; }
+    if (!permissions.length) { toast('Fehler', 'Bitte mindestens eine Berechtigung auswählen.', 'error'); return; }
+    await call('gf:roles:create', { label, permissions });
+    closeModal();
+    toast('Rolle angelegt', '', 'success');
+    showView('gf-roles');
+};
+
+Actions.openEditRoleModal = async (roleKey) => {
+    const d = await call('roles:list');
+    const role = d.roles.find((r) => r.key === roleKey);
+    if (!role) return;
+    openModal(`Rolle bearbeiten - ${escapeHtml(role.label)}`, role.isBuiltin ? 'Mitgelieferte Basisrolle - der Rollenschlüssel bleibt fix, Name und Berechtigungen sind aber anpassbar.' : '', `
+        <label>Name</label>
+        <input id="role-label" type="text" value="${escapeHtml(role.label)}" />
+        <div id="role-perm-list">${permissionCheckboxesHtml(d.permissionCatalog, role.permissions)}</div>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmEditRole('${roleKey}')">Speichern</button>
+    `);
+};
+Actions.confirmEditRole = async (roleKey) => {
+    const label = modalInputValue('role-label').trim();
+    const permissions = Array.from(document.querySelectorAll('#role-perm-list .role-perm-checkbox:checked')).map((el) => el.value);
+    if (!label) { toast('Fehler', 'Bitte einen Namen eingeben.', 'error'); return; }
+    if (!permissions.length) { toast('Fehler', 'Bitte mindestens eine Berechtigung auswählen.', 'error'); return; }
+    await call('gf:roles:update', { roleKey, label, permissions });
+    closeModal();
+    toast('Rolle gespeichert', '', 'success');
+    showView('gf-roles');
+};
+
+Actions.deleteRole = (roleKey, label) => {
+    openModal('Rolle löschen', `Rolle "${escapeHtml(label)}" wirklich löschen? Das ist nur möglich, wenn ihr aktuell kein Mitarbeiter zugeordnet ist.`, '', `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-danger" onclick="Actions.confirmDeleteRole('${roleKey}')">Löschen</button>
+    `);
+};
+Actions.confirmDeleteRole = async (roleKey) => {
+    await call('gf:roles:delete', { roleKey });
+    closeModal();
+    toast('Rolle gelöscht', '', 'success');
+    showView('gf-roles');
 };
 
 Actions.openDriverFile = async (driverId) => {

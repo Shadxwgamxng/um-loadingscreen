@@ -34,7 +34,7 @@ function Finance.AddTransaction(txType, amount, opts)
 
     MySQL.update.await('UPDATE st_company_balance SET balance = balance + ? WHERE id = 1', { amount })
 
-    RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'finance:balanceChanged', { balance = Finance.GetBalance() })
+    RPC.PushToPermission('finance_view', 'finance:balanceChanged', { balance = Finance.GetBalance() })
 
     return txId
 end
@@ -127,7 +127,7 @@ end
 --- Führt eine Auszahlung durch. NUR Geschäftsführung. Betrag wird serverseitig
 --- gegen das tatsächliche Guthaben geprüft - der Client kann hier nichts fälschen.
 function Finance.ExecutePayout(src, amount, reason, target)
-    local emp = Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'finance_payout')
 
     amount = Utils.SanitizeNumber(amount, 0.01)
     reason = Utils.SanitizeString(reason, 255)
@@ -175,7 +175,7 @@ end
 --- Genau wie bei der Auszahlung entscheidet ausschließlich der Server über
 --- den tatsächlich verbuchten Betrag - der Client liefert nur den Wunschwert.
 function Finance.ExecuteDeposit(src, amount, reason, source)
-    local emp = Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'finance_payout')
 
     amount = Utils.SanitizeNumber(amount, 0.01)
     reason = Utils.SanitizeString(reason, 255)
@@ -225,12 +225,12 @@ end
 -- =========================================================
 
 RPC.Register('gf:finance:overview', function(src)
-    Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    Employees.RequirePermission(src, 'finance_view')
     return Finance.GetOverview()
 end)
 
 RPC.Register('gf:finance:transactions', function(src, payload)
-    Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    Employees.RequirePermission(src, 'finance_view')
     return { transactions = Finance.GetTransactions(payload.limit, payload.offset, payload.typeFilter) }
 end)
 
@@ -239,7 +239,7 @@ RPC.Register('gf:payout:execute', function(src, payload)
 end)
 
 RPC.Register('gf:payout:history', function(src, payload)
-    Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    Employees.RequirePermission(src, 'finance_view')
     return { payouts = Finance.GetPayoutHistory(payload.limit) }
 end)
 
@@ -248,13 +248,13 @@ RPC.Register('gf:deposit:execute', function(src, payload)
 end)
 
 RPC.Register('gf:deposit:history', function(src, payload)
-    Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    Employees.RequirePermission(src, 'finance_view')
     return { deposits = Finance.GetDepositHistory(payload.limit) }
 end)
 
 -- Read-only Umsatzübersicht für Disponenten (keine Auszahlungsfunktion!)
 RPC.Register('dispatch:companyOrdersRevenue', function(src)
-    Employees.RequireRole(src, { Config.Roles.DISPONENT, Config.Roles.GESCHAEFTSFUEHRUNG })
+    Employees.RequirePermission(src, 'dispatch')
     local overview = Finance.GetOverview()
     return {
         revenueToday = overview.revenueToday,

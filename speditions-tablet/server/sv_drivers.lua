@@ -32,14 +32,13 @@ end
 local DRIVER_STATUS_VALUES = { 'offline', 'verfuegbar', 'im_einsatz', 'pause' }
 
 function Drivers.SetStatus(src, status)
-    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local emp = Employees.RequirePermission(src, 'driver_actions')
     if not Utils.InTable(DRIVER_STATUS_VALUES, status) then error('invalid_status') end
 
     local driver = Drivers.EnsureDriverRecord(emp.id)
     MySQL.update.await('UPDATE st_drivers SET current_status = ? WHERE id = ?', { status, driver.id })
 
-    RPC.PushToRole(Config.Roles.DISPONENT, 'dispatch:driversChanged', {})
-    RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'dispatch:driversChanged', {})
+    RPC.PushToPermission('dispatch', 'dispatch:driversChanged', {})
 
     return { ok = true, status = status }
 end
@@ -132,7 +131,7 @@ end
 
 --- Vollständige digitale Fahrerkarte für den Fahrer selbst.
 function Drivers.GetOwnCard(src)
-    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local emp = Employees.RequirePermission(src, 'driver_actions')
     local driver = Drivers.EnsureDriverRecord(emp.id)
     local stats = Drivers.GetStatistics(driver.id)
     local vehicle = Drivers.GetVehicle(driver.id)
@@ -163,18 +162,14 @@ end
 --- ohne bei einem harmlosen "nochmal derselbe Wert"-Fall falsch anzuschlagen.
 local function verifyShiftState(driverId, expectedOnShift)
     local row = MySQL.single.await('SELECT on_shift FROM st_drivers WHERE id = ?', { driverId })
-    print(('^3[speditions-tablet debug]^7 verifyShiftState driverId=%s on_shift=%s (type %s) expected=%s'):format(
-        tostring(driverId), tostring(row and row.on_shift), type(row and row.on_shift), tostring(expectedOnShift)
-    ))
     if not row or Utils.ToBool(row.on_shift) ~= expectedOnShift then
         error('shift_update_failed')
     end
 end
 
 function Drivers.StartShift(src)
-    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local emp = Employees.RequirePermission(src, 'driver_actions')
     local driver = Drivers.EnsureDriverRecord(emp.id)
-    print(('^3[speditions-tablet debug]^7 StartShift emp.id=%s driver.id=%s'):format(tostring(emp.id), tostring(driver.id)))
     MySQL.update.await('UPDATE st_drivers SET on_shift = 1, shift_started_at = NOW() WHERE id = ?', { driver.id })
     verifyShiftState(driver.id, true)
     Logs.Write(emp.id, 'shift_started', ('%s hat die Fahrerkarte eingesteckt (Fahrt gestartet).'):format(emp.name))
@@ -183,7 +178,7 @@ end
 
 --- "Fahrerkarte abziehen" - beendet die Schicht.
 function Drivers.EndShift(src)
-    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local emp = Employees.RequirePermission(src, 'driver_actions')
     local driver = Drivers.EnsureDriverRecord(emp.id)
     MySQL.update.await('UPDATE st_drivers SET on_shift = 0, shift_started_at = NULL WHERE id = ?', { driver.id })
     verifyShiftState(driver.id, false)
@@ -214,7 +209,7 @@ function Drivers.GetFile(driverId)
 end
 
 function Drivers.SetNote(src, driverId, note)
-    local emp = Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'employees_manage')
     local driver = Drivers.GetById(driverId)
     if not driver then error('driver_not_found') end
 
@@ -225,7 +220,7 @@ function Drivers.SetNote(src, driverId, note)
 end
 
 function Drivers.SetPermission(src, driverId, permKey, granted)
-    local emp = Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'employees_manage')
     local driver = Drivers.GetById(driverId)
     if not driver then error('driver_not_found') end
 
@@ -284,30 +279,30 @@ RPC.Register('driver:endShift', function(src)
 end)
 
 RPC.Register('driver:history', function(src, payload)
-    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local emp = Employees.RequirePermission(src, 'driver_actions')
     local driver = Drivers.EnsureDriverRecord(emp.id)
     return { history = Drivers.GetHistory(driver.id, payload.limit) }
 end)
 
 RPC.Register('driver:earnings', function(src)
-    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local emp = Employees.RequirePermission(src, 'driver_actions')
     local driver = Drivers.EnsureDriverRecord(emp.id)
     return Finance.GetDriverEarnings(driver.id)
 end)
 
 RPC.Register('driver:vehicle', function(src)
-    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local emp = Employees.RequirePermission(src, 'driver_actions')
     local driver = Drivers.EnsureDriverRecord(emp.id)
     return { vehicle = Drivers.GetVehicle(driver.id) }
 end)
 
 RPC.Register('dispatch:drivers', function(src)
-    Employees.RequireRole(src, { Config.Roles.DISPONENT, Config.Roles.GESCHAEFTSFUEHRUNG })
+    Employees.RequirePermission(src, 'dispatch')
     return { drivers = Drivers.ListForDispatch() }
 end)
 
 RPC.Register('gf:drivers:file', function(src, payload)
-    Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    Employees.RequirePermission(src, 'employees_manage')
     local driverId = Utils.SanitizeNumber(payload.driverId, 1)
     if not driverId then error('invalid_driver') end
     return Drivers.GetFile(driverId)

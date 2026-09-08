@@ -337,6 +337,22 @@ html, body {
 }
 .section-header h3 { margin: 0; font-size: 14.5px; }
 
+.live-map-canvas-wrap {
+    background: var(--bg-0);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 10px;
+    display: flex;
+    justify-content: center;
+}
+.live-map-canvas { border-radius: 8px; max-width: 100%; }
+.live-map-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: 12px; color: var(--text-1); }
+.live-map-legend span.dot { margin-right: 5px; }
+.live-map-driver-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.live-map-driver-row:last-child { border-bottom: none; }
+.live-map-driver-name { font-weight: 600; }
+.live-map-driver-order { color: var(--text-2); font-size: 12px; margin-top: 2px; }
+
 /* ---------- Driver card (Fahrerkarte) ---------- */
 
 .driver-card {

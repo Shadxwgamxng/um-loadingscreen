@@ -13,7 +13,10 @@
 -- Die allererste Rolle kommt aus Config.InitialAccounts (einmalig beim
 -- ersten Ressourcenstart angelegt). Weitere Konten legt die
 -- Geschäftsführung im Tablet an, oder ein Server-Admin über die Konsole:
---   tablet_grant [name] [passwort] [fahrer|disponent|geschaeftsfuehrung] [Anzeigename...]
+--   tablet_grant [name] [passwort] [rollenschluessel] [Anzeigename...]
+-- Rollenschlüssel: die drei mitgelieferten (fahrer/disponent/
+-- geschaeftsfuehrung) oder jeder von der Geschäftsführung selbst
+-- angelegte (server/sv_roles.lua, Reiter "Rollen").
 -- =========================================================
 
 Employees = {}
@@ -77,14 +80,7 @@ function Employees.Login(src, username, password)
     loggedIn[src] = emp
     Logs.Write(emp.id, 'login', ('%s hat sich am Tablet angemeldet.'):format(emp.name))
 
-    return {
-        ok = true,
-        employee = { id = emp.id, name = emp.name, role = emp.role, hiredAt = emp.hired_at },
-        roleLabels = Config.RoleLabels,
-        driverPermissions = Config.DriverPermissions,
-        vehicleClasses = Config.VehicleClasses,
-        vehicleStatuses = Config.VehicleStatus,
-    }
+    return { ok = true }
 end
 
 function Employees.Logout(src)
@@ -130,6 +126,27 @@ function Employees.RequireRole(src, allowedRoles)
     return emp
 end
 
+--- Wirft einen Fehler, falls der Spieler nicht als aktiver Mitarbeiter
+--- angemeldet ist, dessen Rolle die angegebene Berechtigung besitzt
+--- (server/sv_roles.lua legt fest, welche Rolle welche Berechtigungen hat -
+--- inkl. von der Geschäftsführung frei angelegter Rollen). Gibt andernfalls
+--- den Mitarbeiter-Datensatz zurück.
+---@param src number
+---@param permissionKey string
+function Employees.RequirePermission(src, permissionKey)
+    local emp = loggedIn[src]
+    if not emp then
+        error('not_logged_in')
+    end
+    if emp.status ~= 'aktiv' then
+        error('employee_inactive')
+    end
+    if not Roles.HasPermission(emp.role, permissionKey) then
+        error('missing_permission')
+    end
+    return emp
+end
+
 AddEventHandler('playerDropped', function()
     Employees.Logout(source)
 end)
@@ -148,7 +165,7 @@ CreateThread(function()
                 { account.username, account.name or account.username, account.role or Config.Roles.GESCHAEFTSFUEHRUNG, 'aktiv' }
             )
             Employees.SetPassword(employeeId, account.password)
-            if account.role == Config.Roles.FAHRER then
+            if Roles.HasPermission(account.role or Config.Roles.GESCHAEFTSFUEHRUNG, 'driver_actions') then
                 Drivers.EnsureDriverRecord(employeeId)
             end
             print(('^2[speditions-tablet]^7 Erstkonto angelegt: "%s" (Rolle: %s). Bitte Passwort nach dem ersten Login ändern!'):format(account.username, account.role or Config.Roles.GESCHAEFTSFUEHRUNG))
@@ -183,8 +200,10 @@ RegisterCommand('tablet_grant', function(src, args)
     local name = table.concat(args, ' ', 4)
     if name == '' then name = username end
 
-    if not username or not password or not role or not Utils.InTable({ 'fahrer', 'disponent', 'geschaeftsfuehrung' }, role) then
-        reply('Nutzung: tablet_grant [name] [passwort] [fahrer|disponent|geschaeftsfuehrung] [Anzeigename...]')
+    if not username or not password or not role or not Roles.Exists(role) then
+        local validKeys = {}
+        for _, r in ipairs(Roles.List()) do validKeys[#validKeys + 1] = r.key end
+        reply('Nutzung: tablet_grant [name] [passwort] [rollenschluessel] [Anzeigename...] - gueltige Rollenschluessel: ' .. table.concat(validKeys, ', '))
         return
     end
 
@@ -201,7 +220,7 @@ RegisterCommand('tablet_grant', function(src, args)
     Employees.SetPassword(employeeId, password)
     Employees.RefreshLoginById(employeeId)
 
-    if role == Config.Roles.FAHRER then
+    if Roles.HasPermission(role, 'driver_actions') then
         Drivers.EnsureDriverRecord(employeeId)
     end
 

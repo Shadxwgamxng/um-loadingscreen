@@ -59,7 +59,7 @@ local function isDispatcherAvailable()
     for _, playerId in ipairs(GetPlayers()) do
         local src = tonumber(playerId)
         local emp = Employees.GetLoggedIn(src)
-        if emp and Utils.InTable({ Config.Roles.DISPONENT, Config.Roles.GESCHAEFTSFUEHRUNG }, emp.role) then
+        if emp and Roles.HasPermission(emp.role, 'dispatch') then
             return true
         end
     end
@@ -142,8 +142,7 @@ function Orders.GenerateOne()
     )
 
     insertOrderHistory(orderId, 'offen', nil, 'Automatisch generiert.')
-    RPC.PushToRole(Config.Roles.DISPONENT, 'orders:newOpenOrder', { orderId = orderId })
-    RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'orders:newOpenOrder', { orderId = orderId })
+    RPC.PushToPermission('dispatch', 'orders:newOpenOrder', { orderId = orderId })
 
     return orderId
 end
@@ -230,7 +229,7 @@ end
 
 --- Weist einen offenen (oder neu zu disponierenden) Auftrag einem Fahrer zu.
 function Orders.Dispatch(src, orderId, driverId, vehicleId)
-    local emp = Employees.RequireRole(src, { Config.Roles.DISPONENT, Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'dispatch')
 
     local order = Orders.GetById(orderId)
     if not order then error('order_not_found') end
@@ -276,7 +275,7 @@ end
 --- Disposition (Orders.Dispatch). Nach der Selbstzuweisung läuft der
 --- Auftrag wie gewohnt über Orders.AcceptByDriver weiter.
 function Orders.SelfAssign(src, orderId)
-    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local emp = Employees.RequirePermission(src, 'driver_actions')
     local driver = Drivers.EnsureDriverRecord(emp.id)
 
     if isDispatcherAvailable() then error('dispatcher_available') end
@@ -303,14 +302,13 @@ function Orders.SelfAssign(src, orderId)
     )
     insertOrderHistory(orderId, 'disponiert', emp.id, ('%s hat sich den Auftrag selbst zugewiesen (kein Disponent online).'):format(emp.name))
 
-    RPC.PushToRole(Config.Roles.DISPONENT, 'orders:activeChanged', { orderId = orderId })
-    RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'orders:activeChanged', { orderId = orderId })
+    RPC.PushToPermission('dispatch', 'orders:activeChanged', { orderId = orderId })
 
     return { ok = true }
 end
 
 function Orders.Reassign(src, orderId, newDriverId)
-    local emp = Employees.RequireRole(src, { Config.Roles.DISPONENT, Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'dispatch')
 
     local order = Orders.GetById(orderId)
     if not order then error('order_not_found') end
@@ -341,7 +339,7 @@ function Orders.Reassign(src, orderId, newDriverId)
 end
 
 local function requireOwnOrder(src, orderId)
-    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local emp = Employees.RequirePermission(src, 'driver_actions')
     local driver = Drivers.EnsureDriverRecord(emp.id)
     local order = Orders.GetById(orderId)
     if not order then error('order_not_found') end
@@ -372,8 +370,7 @@ function Orders.AcceptByDriver(src, orderId)
 
     Utils.SetClientWaypoint(src, order.start_location, ('Beladepunkt (%s)'):format(order.start_location))
 
-    RPC.PushToRole(Config.Roles.DISPONENT, 'orders:activeChanged', { orderId = orderId })
-    RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'orders:activeChanged', { orderId = orderId })
+    RPC.PushToPermission('dispatch', 'orders:activeChanged', { orderId = orderId })
 
     return { ok = true }
 end
@@ -389,8 +386,7 @@ function Orders.DeclineByDriver(src, orderId, reason)
 
     Drivers.RecomputeStatistics(driver.id)
 
-    RPC.PushToRole(Config.Roles.DISPONENT, 'orders:activeChanged', { orderId = orderId })
-    RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'orders:activeChanged', { orderId = orderId })
+    RPC.PushToPermission('dispatch', 'orders:activeChanged', { orderId = orderId })
 
     return { ok = true }
 end
@@ -419,8 +415,7 @@ function Orders.UpdateCargoStatus(src, orderId, newStatus)
         Utils.SetClientWaypoint(src, order.end_location, ('Zielort (%s)'):format(order.end_location))
     end
 
-    RPC.PushToRole(Config.Roles.DISPONENT, 'orders:activeChanged', { orderId = orderId })
-    RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'orders:activeChanged', { orderId = orderId })
+    RPC.PushToPermission('dispatch', 'orders:activeChanged', { orderId = orderId })
 
     return { ok = true, status = newStatus }
 end
@@ -452,8 +447,7 @@ function Orders.Complete(src, orderId)
 
     Logs.Write(emp.id, 'order_completed', ('%s hat Auftrag #%s abgeschlossen. +%s Unternehmensumsatz.'):format(emp.name, orderId, order.value))
 
-    RPC.PushToRole(Config.Roles.DISPONENT, 'orders:completed', { orderId = orderId })
-    RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'orders:completed', { orderId = orderId })
+    RPC.PushToPermission('dispatch', 'orders:completed', { orderId = orderId })
 
     return { ok = true, value = order.value }
 end
@@ -461,7 +455,7 @@ end
 --- Bricht einen aktiven Auftrag ab (Disponent/GF, z.B. wenn ein Fahrer nicht
 --- mehr reagiert). Fahrzeug wird wieder freigegeben.
 function Orders.Cancel(src, orderId, reason)
-    local emp = Employees.RequireRole(src, { Config.Roles.DISPONENT, Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'dispatch')
     local order = Orders.GetById(orderId)
     if not order then error('order_not_found') end
     if Utils.InTable({ 'abgeschlossen', 'abgebrochen', 'abgelehnt' }, order.status) then
@@ -487,8 +481,7 @@ function Orders.Cancel(src, orderId, reason)
 
     Logs.Write(emp.id, 'order_cancelled', ('%s hat Auftrag #%s abgebrochen: %s'):format(emp.name, orderId, reason))
 
-    RPC.PushToRole(Config.Roles.DISPONENT, 'orders:activeChanged', { orderId = orderId })
-    RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'orders:activeChanged', { orderId = orderId })
+    RPC.PushToPermission('dispatch', 'orders:activeChanged', { orderId = orderId })
 
     return { ok = true }
 end
@@ -522,9 +515,8 @@ function Orders.RequestCancelByDriver(src, orderId, reason)
 
         Logs.Write(emp.id, 'order_cancel_requested', ('%s bittet um Genehmigung, Auftrag #%s abzubrechen: %s'):format(emp.name, orderId, reason))
 
-        RPC.PushToRole(Config.Roles.DISPONENT, 'orders:cancelRequested', { orderId = orderId })
-        RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'orders:cancelRequested', { orderId = orderId })
-        Notifications.Send(nil, nil, 'Abbruch-Anfrage', ('%s möchte Auftrag #%s abbrechen: %s'):format(emp.name, orderId, reason), emp.id)
+        RPC.PushToPermission('dispatch', 'orders:cancelRequested', { orderId = orderId })
+        Notifications.Send('dispatch', nil, 'Abbruch-Anfrage', ('%s möchte Auftrag #%s abbrechen: %s'):format(emp.name, orderId, reason), emp.id)
 
         return { ok = true, pending = true }
     end
@@ -549,15 +541,14 @@ function Orders.RequestCancelByDriver(src, orderId, reason)
 
     Logs.Write(emp.id, 'order_cancelled_self', ('%s hat Auftrag #%s selbst abgebrochen (kein Disponent online) - %s Vertragsstrafe.'):format(emp.name, orderId, penalty))
 
-    RPC.PushToRole(Config.Roles.DISPONENT, 'orders:activeChanged', { orderId = orderId })
-    RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'orders:activeChanged', { orderId = orderId })
+    RPC.PushToPermission('dispatch', 'orders:activeChanged', { orderId = orderId })
 
     return { ok = true, pending = false, penalty = penalty }
 end
 
 --- Disponent/GF genehmigt oder lehnt eine Abbruch-Anfrage eines Fahrers ab.
 function Orders.ResolveCancelRequest(src, requestId, approve)
-    local emp = Employees.RequireRole(src, { Config.Roles.DISPONENT, Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'dispatch')
     local req = MySQL.single.await('SELECT * FROM st_order_cancel_requests WHERE id = ?', { requestId })
     if not req then error('cancel_request_not_found') end
     if req.status ~= 'offen' then error('cancel_request_already_resolved') end
@@ -584,8 +575,7 @@ function Orders.ResolveCancelRequest(src, requestId, approve)
             end
         end
 
-        RPC.PushToRole(Config.Roles.DISPONENT, 'orders:activeChanged', { orderId = req.order_id })
-        RPC.PushToRole(Config.Roles.GESCHAEFTSFUEHRUNG, 'orders:activeChanged', { orderId = req.order_id })
+        RPC.PushToPermission('dispatch', 'orders:activeChanged', { orderId = req.order_id })
     end
 
     return { ok = true }
@@ -596,17 +586,17 @@ end
 -- =========================================================
 
 RPC.Register('dispatch:openOrders', function(src)
-    Employees.RequireRole(src, { Config.Roles.DISPONENT, Config.Roles.GESCHAEFTSFUEHRUNG })
+    Employees.RequirePermission(src, 'dispatch')
     return { orders = Orders.ListOpen() }
 end)
 
 RPC.Register('dispatch:activeOrders', function(src)
-    Employees.RequireRole(src, { Config.Roles.DISPONENT, Config.Roles.GESCHAEFTSFUEHRUNG })
+    Employees.RequirePermission(src, 'dispatch')
     return { orders = Orders.ListActive() }
 end)
 
 RPC.Register('dispatch:completedOrders', function(src, payload)
-    Employees.RequireRole(src, { Config.Roles.DISPONENT, Config.Roles.GESCHAEFTSFUEHRUNG })
+    Employees.RequirePermission(src, 'dispatch')
     return { orders = Orders.ListCompleted(payload.limit) }
 end)
 
@@ -637,7 +627,7 @@ RPC.Register('dispatch:resolveCancelRequest', function(src, payload)
 end)
 
 RPC.Register('driver:myOrders', function(src)
-    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local emp = Employees.RequirePermission(src, 'driver_actions')
     local driver = Drivers.EnsureDriverRecord(emp.id)
     return { orders = Orders.AttachLocationCoords(Orders.MyOrders(driver.id)) }
 end)
@@ -645,7 +635,7 @@ end)
 --- Offener Auftragspool für Fahrer - zum Selbst-Übernehmen, wenn gerade
 --- kein Disponent verfügbar ist (siehe dispatcherAvailable im Ergebnis).
 RPC.Register('driver:openOrders', function(src)
-    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local emp = Employees.RequirePermission(src, 'driver_actions')
     local driver = Drivers.EnsureDriverRecord(emp.id)
     print(('^3[speditions-tablet debug]^7 openOrders emp.id=%s driver.id=%s on_shift=%s (type %s) -> ToBool=%s'):format(
         tostring(emp.id), tostring(driver.id), tostring(driver.on_shift), type(driver.on_shift), tostring(Utils.ToBool(driver.on_shift))
@@ -661,7 +651,7 @@ end)
 --- Nur zum Testen (siehe Config.AllowManualOrderGeneration): erzeugt sofort
 --- einen neuen Pool-Auftrag, unabhängig vom automatischen Intervall.
 RPC.Register('driver:debugGenerateOrder', function(src)
-    Employees.RequireRole(src, { Config.Roles.FAHRER })
+    Employees.RequirePermission(src, 'driver_actions')
     if not Config.AllowManualOrderGeneration then error('unknown_action') end
     local orderId = Orders.GenerateOne()
     if not orderId then error('no_cargo_route_available') end
@@ -705,6 +695,6 @@ RPC.Register('driver:requestCancelOrder', function(src, payload)
 end)
 
 RPC.Register('gf:orders:all', function(src, payload)
-    Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    Employees.RequirePermission(src, 'stats_view')
     return { orders = Orders.ListAll(payload.limit, payload.statusFilter) }
 end)

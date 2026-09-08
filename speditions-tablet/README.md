@@ -17,16 +17,19 @@ verwaltet.
 1. Ressource nach `resources/[speditions]/speditions-tablet` kopieren.
 2. `sql/install.sql` in die Datenbank importieren (bei einer bereits
    bestehenden Installation stattdessen der Reihe nach `sql/upgrade_v2.sql`
-   bis `sql/upgrade_v9.sql` ausführen, um Lenk-/Ruhezeiten, Gefahrgut,
+   bis `sql/upgrade_v10.sql` ausführen, um Lenk-/Ruhezeiten, Gefahrgut,
    Ein-/Auszahlungen, Gehälter/Stempeluhr, den Lieferschein, die
-   Fahrerkarten-Pflicht, die Abbruch-Anfragen und das Tablet-eigene
-   Login (Name + Passwort) nachzurüsten).
+   Fahrerkarten-Pflicht, die Abbruch-Anfragen, das Tablet-eigene Login
+   (Name + Passwort) und die frei anlegbaren Rollen nachzurüsten).
    **`sql/upgrade_v7.sql` löscht dabei alle bestehenden Aufträge** - siehe
    Kommentar am Anfang der Datei für den Grund. **Ab sofort werden Aufträge
    ohnehin bei JEDEM Ressourcenstart automatisch geleert** (siehe unten).
    **`sql/upgrade_v9.sql` setzt bei bestehenden Mitarbeiterkonten noch KEIN
    Passwort** - siehe Kommentar am Anfang der Datei und den Abschnitt
-   "Mitarbeiter anmelden" unten.
+   "Mitarbeiter anmelden" unten. `sql/upgrade_v10.sql` legt die drei
+   mitgelieferten Basisrollen beim nächsten Ressourcenstart automatisch mit
+   ihren bisherigen Berechtigungen an - am Verhalten bestehender
+   Installationen ändert sich dadurch zunächst nichts.
 3. In `server.cfg`:
    ```
    ensure oxmysql
@@ -192,15 +195,56 @@ Auszahlungen, Fahrzeugverwaltung, Guthabenänderungen) werden **ausschließlich
 serverseitig** validiert (`server/*.lua`). Die NUI kann keine Werte wie
 Auszahlungsbeträge oder "Auftrag abgeschlossen" selbst setzen.
 
-| Rolle | Kernrechte |
+Rollen sind **frei anlegbar**: die Geschäftsführung kann im Tablet unter dem
+Reiter **Rollen** (Berechtigung `roles_manage`) eigene, beliebig benannte
+Rollen anlegen und ihnen eine beliebige Auswahl an Einzelberechtigungen aus
+folgendem Katalog zuweisen (`Config.Permissions` in `config.lua`,
+serverseitig durchgesetzt in `server/sv_roles.lua`):
+
+| Berechtigung | Bedeutung |
 |---|---|
-| LKW-Fahrer | Fahrerkarte, Statuswechsel, Aufträge annehmen/ablehnen, Frachtstatus, Einnahmenübersicht (nur Ansicht), eigenes Fahrzeug, Nachrichten |
-| Disponent | Fahrerübersicht, Auftragspool disponieren/neu zuweisen, aktive Aufträge überwachen, Fahrer kontaktieren, Umsatz einsehen (keine Auszahlung, keine Fahrzeugverwaltung) |
-| Geschäftsführung | Mitarbeiter-/Fahrerverwaltung, vollständige Fuhrparkverwaltung, Unternehmensfinanzen, Ein-/Auszahlungen, Statistiken, Aktivitätsprotokoll |
+| `driver_actions` | Fahrerfunktionen (Aufträge fahren, Fahrerkarte, eigene Statistik, Nachrichten empfangen) |
+| `dispatch` | Disposition (Fahrerübersicht, Auftragspool disponieren, Fahrer kontaktieren, Umsatzübersicht) |
+| `live_map_view` | Live-Karte einsehen (Fahrerpositionen, Aufträge, gesetzte Navi-Routen) |
+| `fleet_manage` | Fuhrparkverwaltung (Fahrzeuge anlegen/bearbeiten/löschen/zuweisen) |
+| `employees_manage` | Mitarbeiterverwaltung (einstellen, Rolle/Status ändern, Passwörter zurücksetzen, Fahrerakten) |
+| `roles_manage` | Rollen & Berechtigungen verwalten |
+| `finance_view` | Finanzen einsehen (Umsatz, Transaktionen, Aus-/Einzahlungshistorie) |
+| `finance_payout` | Aus-/Einzahlungen durchführen |
+| `wages_manage` | Gehälter/Stundenlöhne verwalten & auszahlen |
+| `activity_log_view` | Aktivitätsprotokoll einsehen |
+| `stats_view` | Übersicht/Statistik-Dashboard einsehen |
+
+Die drei mitgelieferten Basisrollen (LKW-Fahrer, Disponent, Geschäftsführung,
+Rollenschlüssel fix - u.a. für die automatische Fahrerakten-Anlage relevant)
+starten mit der bisherigen Rechteverteilung als `Config.DefaultRolePermissions`
+(nur einmalige Erstbefüllung, danach ist `st_roles` die Quelle der Wahrheit -
+die Geschäftsführung kann auch ihre Berechtigungen im Tablet anpassen):
+
+| Basisrolle | Berechtigungen |
+|---|---|
+| LKW-Fahrer | `driver_actions` |
+| Disponent | `dispatch`, `live_map_view` |
+| Geschäftsführung | alle außer `driver_actions` |
+
+Welche Reiter im Tablet sichtbar sind, richtet sich ausschließlich nach den
+Berechtigungen der eigenen Rolle (`html/js/app.js`, `NAV_ITEMS`) - eine
+eigene Rolle mit z.B. `dispatch` UND `driver_actions` sieht entsprechend
+sowohl die Fahrer- als auch die Disponenten-Reiter. Serverseitig wird bei
+**jeder** Aktion unabhängig von der NUI erneut geprüft
+(`Employees.RequirePermission`) - die Anzeige der Reiter ist reine
+Bequemlichkeit, kein Sicherheitsmechanismus.
+
+**Schutz vor Selbstaussperrung:** Die letzte aktive Person mit der
+Berechtigung `employees_manage` kann nicht in eine Rolle ohne diese
+Berechtigung verschoben oder deaktiviert werden; ebenso kann `roles_manage`
+nicht aus der letzten Rolle entfernt werden, der noch aktive Mitarbeiter
+zugeordnet sind. Als Notfall-Zugang bleibt immer `tablet_grant` über die
+Server-Konsole (s.o.).
 
 Alle Aktionen der Geschäftsführung sowie sicherheitsrelevante Systemereignisse
-werden in `st_activity_logs` protokolliert und sind nur für die
-Geschäftsführung einsehbar (Tab **Protokoll**).
+werden in `st_activity_logs` protokolliert und sind nur mit der Berechtigung
+`activity_log_view` einsehbar (Tab **Protokoll**).
 
 ## Wichtiges Prinzip: Fahrer-Einnahmen & Ein-/Auszahlungen
 
@@ -345,11 +389,45 @@ Im Reiter "Aufträge" hat ein Fahrer bei jedem laufenden Auftrag
   Unternehmensguthaben wird eine **Vertragsstrafe** (`Config.OrderCancelPenalty`,
   Standard 500$) als eigene Transaktion (`vertragsstrafe`) belastet.
 
+### Live-Karte (Disposition)
+
+Mit der Berechtigung `live_map_view` (Basisrollen: Disponent und
+Geschäftsführung) zeigt der Reiter **Live-Karte** ein live aktualisiertes
+Positionsraster (Polling alle 5 Sekunden, `dispatch:liveMap` in
+`server/sv_tracking.lua`) aller gerade am Tablet angemeldeten Fahrer:
+
+- **Position**: Wird rein **serverseitig** alle 5 Sekunden per
+  `GetEntityCoords` für jeden angemeldeten Mitarbeiter mit der Berechtigung
+  `driver_actions` ermittelt - dafür ist **keinerlei Mitwirkung des
+  Client-Skripts nötig** (kein eigener Heartbeat-Call, dadurch auch kein
+  Risiko von RPC-Fehler-Spam für Mitarbeiter ohne diese Berechtigung).
+  Positionen werden nicht in der Datenbank gespeichert, sondern nur
+  transient im Arbeitsspeicher gehalten und bei jedem Intervall komplett
+  neu aufgebaut - meldet sich ein Fahrer ab oder verlässt den Server,
+  verschwindet er beim nächsten Intervall automatisch von der Karte statt
+  als veraltete "Geisterposition" stehen zu bleiben.
+- **Aufträge**: Zu jedem Fahrer mit einem laufenden Auftrag
+  (`angenommen`/`anfahrt`/`beladen`/`entladen`) zeigt die Karte Frachtart
+  sowie Abhol-/Zielort.
+- **Navi-Route**: Der aktuell gesetzte GPS-Wegpunkt (derselbe, den der
+  Fahrer auch tatsächlich in GTA angezeigt bekommt, s.o.) wird als gelber
+  Punkt mit gestrichelter Linie zur aktuellen Fahrerposition eingezeichnet.
+- **Wichtige Einschränkung**: Es handelt sich bewusst um ein **schematisches
+  Positionsraster, kein echtes Kartenbild** - die Ressource bringt keine
+  GTA-V-Kartengrafik mit (Lizenz-/Copyright-Gründe). Fahrer UND
+  Firmenstandorte (`Config.Locations`, als graue Orientierungspunkte) werden
+  auf denselben ungefähren Weltkoordinaten-Bereich der GTA-V-Karte
+  (`MAP_BOUNDS` in `html/js/app.js`) abgebildet, sodass die relative Lage
+  zueinander stimmt - für ein echtes Kartenbild müsste `drawLiveMap()` in
+  `html/js/app.js` um eine selbst eingebundene Kartengrafik erweitert
+  werden.
+
 ## Datenbankschema
 
 Siehe `sql/install.sql`. Wichtigste Tabellen:
 
 ```
+st_roles                Frei anlegbare Rollen (Rollenschlüssel, Bezeichnung, Berechtigungen als JSON, Basisrolle ja/nein)
 st_employees            Mitarbeiterstammdaten (Login-Name, Passwort-Hash/Salt, Rolle, Status, zuletzt bekannter FiveM-Charakter nur informativ)
 st_drivers              Fahrer-Zusatzdaten (Status, Notizen, Fahrzeugzuweisung, Fahrerkarte eingesteckt/seit)
 st_driver_permissions   Führerscheinklassen / Sonderberechtigungen
@@ -412,6 +490,10 @@ Alle Stellschrauben befinden sich in `config.lua`:
   Ressourcenstart automatisch angelegt werden (Login-Name, Passwort,
   Rolle, Anzeigename) - Passwort danach unbedingt ändern!
 - `Config.AdminAcePermission` - berechtigt zusätzlich zur Server-Konsole zum Vergeben/Zurücksetzen von Mitarbeiterkonten (`tablet_grant`)
+- `Config.Permissions` - Katalog aller Einzelberechtigungen, aus denen die
+  Geschäftsführung im Tablet (Reiter "Rollen") eigene Rollen zusammenstellt;
+  `Config.DefaultRolePermissions` - nur einmalige Erstbefüllung der drei
+  mitgelieferten Basisrollen, danach ist `st_roles` die Quelle der Wahrheit
 - `Config.RequireItem` - Tablet nur per Item öffnen
 - `Config.MoneyBridge` - Framework-Anbindung für Bargeld bei Aus-/Einzahlung
 - `Config.NotificationSound` - Klingelton bei nativen In-Game-Hinweisen
@@ -421,12 +503,21 @@ Alle Stellschrauben befinden sich in `config.lua`:
 
 - `server/sv_rpc.lua` - zentraler, einziger Einstiegspunkt für alle
   NUI-Aktionen (`speditions-tablet:server:rpc`), inkl. serverseitiger
-  Rollenprüfung pro Aktion.
+  Berechtigungsprüfung pro Aktion; `RPC.PushToPermission` für
+  Echtzeit-Updates an alle angemeldeten Mitarbeiter mit einer bestimmten
+  Berechtigung (statt einer fest verdrahteten Rolle).
 - `server/sv_bridge.lua` - Optionale Framework-Anbindung (ESX/QBCore) für
   Bargeld bei Aus-/Einzahlung, inkl. ESX-Objekt für `ESX.RegisterUsableItem`.
 - `server/sv_bootstrap.lua` - Tablet-eigenes Login (Name + Passwort,
   Session je Server-Slot in `loggedIn[src]`), Passwort-Hashing,
-  `tablet_grant`-Command, Erstkonto-Seeding aus `Config.InitialAccounts`.
+  `tablet_grant`-Command, Erstkonto-Seeding aus `Config.InitialAccounts`,
+  `Employees.RequirePermission` (Berechtigungsprüfung pro Aktion).
+- `server/sv_roles.lua` - Rollen & Berechtigungen: frei anlegbare Rollen
+  (Erstellen/Bearbeiten/Löschen), Berechtigungsprüfung (`Roles.HasPermission`),
+  Erstbefüllung der drei Basisrollen aus `Config.DefaultRolePermissions`.
+- `server/sv_tracking.lua` - Live-Karte: liest serverseitig per
+  `GetEntityCoords` die Position jedes angemeldeten Fahrers, verknüpft sie
+  mit dessen laufendem Auftrag/Wegpunkt für den Reiter "Live-Karte".
 - `server/sv_finance.lua` - Transaktions-Ledger, Guthaben, Ein-/Auszahlungen.
 - `server/sv_radio.lua` - CB-Funk ein-/ausschalten, Anrufe (privater pma-voice-Call-Kanal).
 - `server/sv_payroll.lua` - Stundenlöhne, Stempeluhr, Gehaltsauszahlung.
@@ -437,7 +528,8 @@ Alle Stellschrauben befinden sich in `config.lua`:
   (disponiert → angenommen → anfahrt → beladen → entladen → abgeschlossen),
   Gefahrgut-Prüfung, Auto-Wegpunkte, Standort-/Frachtart-Zuordnung + GPS-Koordinaten für Lieferschein,
   Abbruch-Anfragen mit Disponenten-Genehmigung/Vertragsstrafe, Auftrags-Reset bei Ressourcenstart.
-- `server/sv_employees.lua` - Mitarbeiterverwaltung (Einstellen, Rolle/Status ändern).
+- `server/sv_employees.lua` - Mitarbeiterverwaltung (Einstellen, Rolle/Status
+  ändern, beliebige im Tablet angelegte Rollen zuweisbar).
 - `server/sv_notifications.lua` - Nachrichten Disponent/Fahrer.
 - `client/cl_main.lua` - NUI-Steuerung, RPC-Relay (`ServerCall` auch für
   andere Client-Skripte nutzbar) sowie native In-Game-Hinweise/Wegpunkte sind hier verdrahtet.
@@ -446,9 +538,11 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `client/cl_radio.lua` - CB-Funk, bindet an pma-voice an (Kanal/Lautstärke/Stumm, Anzeige "wer spricht").
 - `client/cl_orders.lua` - Bodenmarker an relevanten Standorten aus
   `Config.Locations` (kein NPC), Be-/Entladen per Taste E mit Fortschrittsbalken.
-- `html/` - NUI-Frontend (Sperrbildschirm, rollenbasierte Ansichten, siehe
-  `js/app.js`). Der Client führt dabei keine Geschäftslogik aus - jede Aktion
-  wird serverseitig neu geprüft.
+- `html/` - NUI-Frontend (Sperrbildschirm, berechtigungsbasierte Reiter -
+  `NAV_ITEMS`/`buildSidebar` in `js/app.js` -, Rollenverwaltung, Live-Karte
+  per `<canvas>`). Der Client führt dabei keine Geschäftslogik aus - jede
+  Aktion wird serverseitig neu geprüft, die Reiter-Sichtbarkeit ist reine
+  Bequemlichkeit.
 
 Das System ist modular aufgebaut: neue Auftragstypen, zusätzliche
 Fahrzeugklassen oder weitere Rollen-Berechtigungen lassen sich über

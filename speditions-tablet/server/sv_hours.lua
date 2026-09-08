@@ -90,7 +90,7 @@ end
 --- 1=Warnung gesendet, 2=Überschreitung gemeldet (damit nicht bei jedem
 --- Heartbeat erneut benachrichtigt wird).
 function Hours.Tick(src, seconds)
-    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local emp = Employees.RequirePermission(src, 'driver_actions')
     seconds = Utils.SanitizeNumber(seconds, 1, 300)
     if not seconds then error('invalid_payload') end
 
@@ -140,7 +140,7 @@ end
 --- Ruhezeit beginnt zu laufen (wird bei Hours.Normalize() nach Ablauf der
 --- erforderlichen Pausendauer automatisch verrechnet).
 function Hours.RestStart(src)
-    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local emp = Employees.RequirePermission(src, 'driver_actions')
     local driver = Drivers.EnsureDriverRecord(emp.id)
     local row = Hours.Normalize(Hours.EnsureRow(driver.id))
 
@@ -165,7 +165,7 @@ RPC.Register('driver:drivingStopped', function(src)
 end)
 
 RPC.Register('dispatch:remindDriver', function(src, payload)
-    local emp = Employees.RequireRole(src, { Config.Roles.DISPONENT, Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'dispatch')
     local driverId = Utils.SanitizeNumber(payload.driverId, 1)
     if not driverId then error('invalid_payload') end
 

@@ -5,7 +5,10 @@
 Notifications = {}
 
 --- Speichert eine Nachricht und pusht sie in Echtzeit, falls der Empfänger
---- gerade online ist und das Tablet bereits geöffnet hat.
+--- gerade online ist und das Tablet bereits geöffnet hat. `recipientRole`
+--- ist - falls gesetzt - ein BERECHTIGUNGSSCHLÜSSEL (nicht ein exakter
+--- Rollenschlüssel), damit auch von der Geschäftsführung frei angelegte
+--- Rollen mit derselben Berechtigung die Nachricht erhalten.
 function Notifications.Send(recipientRole, recipientEmployeeId, title, message, senderEmployeeId)
     local id = MySQL.insert.await(
         'INSERT INTO st_notifications (recipient_employee_id, recipient_role, title, message, sender_employee_id) VALUES (?, ?, ?, ?, ?)',
@@ -21,7 +24,7 @@ function Notifications.Send(recipientRole, recipientEmployeeId, title, message, 
             end
         end
     elseif recipientRole then
-        RPC.PushToRole(recipientRole, 'notifications:new', { id = id, title = title, message = message })
+        RPC.PushToPermission(recipientRole, 'notifications:new', { id = id, title = title, message = message })
     end
 
     return id
@@ -52,18 +55,18 @@ end
 -- =========================================================
 
 RPC.Register('driver:messages', function(src, payload)
-    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local emp = Employees.RequirePermission(src, 'driver_actions')
     return { messages = Notifications.List(emp.id, payload.limit) }
 end)
 
 RPC.Register('driver:markMessageRead', function(src, payload)
-    local emp = Employees.RequireRole(src, { Config.Roles.FAHRER })
+    local emp = Employees.RequirePermission(src, 'driver_actions')
     Notifications.MarkRead(emp.id, Utils.SanitizeNumber(payload.notificationId, 1))
     return { ok = true }
 end)
 
 RPC.Register('dispatch:messageDriver', function(src, payload)
-    local emp = Employees.RequireRole(src, { Config.Roles.DISPONENT, Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'dispatch')
     local driverId = Utils.SanitizeNumber(payload.driverId, 1)
     local message = Utils.SanitizeString(payload.message, 500)
     if not driverId or not message then error('invalid_payload') end

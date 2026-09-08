@@ -10,8 +10,6 @@
 
 Payroll = {}
 
-local VALID_ROLES = { 'fahrer', 'disponent', 'geschaeftsfuehrung' }
-
 CreateThread(function()
     for role, rate in pairs(Config.DefaultHourlyWage or {}) do
         local existing = MySQL.single.await('SELECT role FROM st_wage_rates WHERE role = ?', { role })
@@ -36,9 +34,9 @@ function Payroll.GetWageRate(role)
 end
 
 function Payroll.SetWageRate(src, role, hourlyRate)
-    local emp = Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'wages_manage')
 
-    if not Utils.InTable(VALID_ROLES, role) then error('invalid_role') end
+    if not Roles.Exists(role) then error('invalid_role') end
     hourlyRate = Utils.SanitizeNumber(hourlyRate, 0, 100000)
     if not hourlyRate then error('invalid_amount') end
 
@@ -49,7 +47,7 @@ function Payroll.SetWageRate(src, role, hourlyRate)
         MySQL.insert.await('INSERT INTO st_wage_rates (role, hourly_rate) VALUES (?, ?)', { role, hourlyRate })
     end
 
-    Logs.Write(emp.id, 'wage_rate_changed', ('%s hat den Stundenlohn für "%s" auf %s gesetzt.'):format(emp.name, Config.RoleLabels[role] or role, hourlyRate))
+    Logs.Write(emp.id, 'wage_rate_changed', ('%s hat den Stundenlohn für "%s" auf %s gesetzt.'):format(emp.name, Roles.GetLabel(role), hourlyRate))
     return { ok = true }
 end
 
@@ -136,7 +134,7 @@ end
 --- Stempeluhr-Sekunden * Stundenlohn seiner Rolle). Betrag wird
 --- ausschließlich serverseitig berechnet.
 function Payroll.PayEmployee(src, employeeId)
-    local emp = Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    local emp = Employees.RequirePermission(src, 'wages_manage')
 
     employeeId = Utils.SanitizeNumber(employeeId, 1)
     if not employeeId then error('invalid_payload') end
@@ -214,8 +212,10 @@ RPC.Register('me:clockOut', function(src)
 end)
 
 RPC.Register('gf:payroll:rates', function(src)
-    Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
-    return { rates = Payroll.GetWageRates(), roleLabels = Config.RoleLabels }
+    Employees.RequirePermission(src, 'wages_manage')
+    local roleLabels = {}
+    for _, role in ipairs(Roles.List()) do roleLabels[role.key] = role.label end
+    return { rates = Payroll.GetWageRates(), roleLabels = roleLabels }
 end)
 
 RPC.Register('gf:payroll:setRate', function(src, payload)
@@ -223,7 +223,7 @@ RPC.Register('gf:payroll:setRate', function(src, payload)
 end)
 
 RPC.Register('gf:payroll:overview', function(src)
-    Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    Employees.RequirePermission(src, 'wages_manage')
     return { employees = Payroll.GetOverview() }
 end)
 

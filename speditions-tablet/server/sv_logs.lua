@@ -31,7 +31,7 @@ function Logs.GetRecent(limit)
 end
 
 RPC.Register('gf:activityLog', function(src, payload)
-    Employees.RequireRole(src, { Config.Roles.GESCHAEFTSFUEHRUNG })
+    Employees.RequirePermission(src, 'activity_log_view')
     local limit = Utils.SanitizeNumber(payload.limit, 1, 500) or 100
     return { entries = Logs.GetRecent(limit) }
 end)

@@ -2,6 +2,24 @@
 -- speditions-tablet :: Datenbankschema
 -- =========================================================
 
+-- Frei anlegbare Rollen (die drei mitgelieferten Basisrollen plus alles,
+-- was die Geschäftsführung im Tablet unter "Rollen" selbst anlegt).
+-- `permissions` ist ein JSON-Array von Berechtigungsschlüsseln aus
+-- Config.Permissions. Kein echter FOREIGN KEY auf st_employees.role, um
+-- Migrationen einfach zu halten - die Zuordnung/Löschprüfung übernimmt
+-- server/sv_roles.lua.
+CREATE TABLE IF NOT EXISTS `st_roles` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `role_key` VARCHAR(50) NOT NULL,
+    `label` VARCHAR(100) NOT NULL,
+    `permissions` TEXT NOT NULL,
+    `is_builtin` TINYINT(1) NOT NULL DEFAULT 0,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_role_key` (`role_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS `st_employees` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     -- Login-Name (Tablet-eigenes Login, siehe Employees.Login).
@@ -12,7 +30,9 @@ CREATE TABLE IF NOT EXISTS `st_employees` (
     -- Auth-Faktor, wird bei jedem Login aktualisiert.
     `identifier` VARCHAR(64) NULL,
     `name` VARCHAR(100) NOT NULL,
-    `role` ENUM('fahrer','disponent','geschaeftsfuehrung') NOT NULL DEFAULT 'fahrer',
+    -- Verweist auf st_roles.role_key (frei erweiterbar, siehe oben) - kein
+    -- ENUM mehr, seit die Geschäftsführung eigene Rollen anlegen kann.
+    `role` VARCHAR(50) NOT NULL DEFAULT 'fahrer',
     `status` ENUM('aktiv','inaktiv') NOT NULL DEFAULT 'aktiv',
     `hired_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

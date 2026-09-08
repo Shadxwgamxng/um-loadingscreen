@@ -19,6 +19,7 @@ server_scripts {
     'server/sv_rpc.lua',
     'server/sv_bridge.lua',
     'server/sv_bootstrap.lua',
+    'server/sv_roles.lua',
     'server/sv_logs.lua',
     'server/sv_finance.lua',
     'server/sv_payroll.lua',
@@ -27,6 +28,7 @@ server_scripts {
     'server/sv_radio.lua',
     'server/sv_hours.lua',
     'server/sv_orders.lua',
+    'server/sv_tracking.lua',
     'server/sv_employees.lua',
     'server/sv_notifications.lua',
     'server/sv_main.lua'

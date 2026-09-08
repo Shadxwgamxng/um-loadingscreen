@@ -52,8 +52,19 @@ Config.InitialAccounts = {
 Config.AdminAcePermission = 'speditions.admin'
 
 -- =========================================================
--- ROLLEN
+-- ROLLEN & BERECHTIGUNGEN
 -- =========================================================
+-- Fahrer/Disponent/Geschäftsführung sind die drei mitgelieferten
+-- Basisrollen (Rollenschlüssel fix, u.a. für die automatische
+-- Fahrerakten-Anlage und Config.InitialAccounts/tablet_grant relevant).
+-- Zusätzlich kann die Geschäftsführung im Tablet (Reiter "Rollen")
+-- beliebig weitere, frei benannte Rollen mit einer eigenen Auswahl an
+-- Berechtigungen anlegen - siehe server/sv_roles.lua. Welche
+-- Berechtigungen eine Rolle tatsächlich hat, steht ausschließlich in der
+-- Datenbank (st_roles); Config.DefaultRolePermissions unten wirkt nur
+-- EINMALIG als Erstbefüllung der drei Basisrollen (wie bei
+-- Config.DefaultHourlyWage), danach ist die Datenbank die Quelle der
+-- Wahrheit.
 Config.Roles = {
     FAHRER = 'fahrer',
     DISPONENT = 'disponent',
@@ -64,6 +75,34 @@ Config.RoleLabels = {
     fahrer = 'LKW-Fahrer',
     disponent = 'Disponent',
     geschaeftsfuehrung = 'Geschäftsführung',
+}
+
+-- Katalog aller im Tablet verfügbaren Einzelberechtigungen - das ist die
+-- vollständige Auswahl, aus der die Geschäftsführung beim Anlegen/
+-- Bearbeiten einer Rolle wählen kann (Reiter "Rollen").
+Config.Permissions = {
+    { key = 'driver_actions',    label = 'Fahrerfunktionen (Aufträge fahren, Fahrerkarte, eigene Statistik, Nachrichten empfangen)', group = 'Fahrer' },
+    { key = 'dispatch',          label = 'Disposition (Fahrerübersicht, Auftragspool disponieren, Fahrer kontaktieren, Live-Karte)', group = 'Disposition' },
+    { key = 'live_map_view',     label = 'Live-Karte einsehen (Fahrerpositionen, Aufträge, gesetzte Navi-Routen)', group = 'Disposition' },
+    { key = 'fleet_manage',      label = 'Fuhrparkverwaltung (Fahrzeuge anlegen/bearbeiten/löschen/zuweisen)', group = 'Fuhrpark' },
+    { key = 'employees_manage',  label = 'Mitarbeiterverwaltung (einstellen, Rolle/Status ändern, Passwörter zurücksetzen)', group = 'Personal' },
+    { key = 'roles_manage',      label = 'Rollen & Berechtigungen verwalten', group = 'Personal' },
+    { key = 'finance_view',      label = 'Finanzen einsehen (Umsatz, Transaktionen, Aus-/Einzahlungshistorie)', group = 'Finanzen' },
+    { key = 'finance_payout',    label = 'Aus-/Einzahlungen durchführen', group = 'Finanzen' },
+    { key = 'wages_manage',      label = 'Gehälter/Stundenlöhne verwalten & auszahlen', group = 'Finanzen' },
+    { key = 'activity_log_view', label = 'Aktivitätsprotokoll einsehen', group = 'Sonstiges' },
+    { key = 'stats_view',        label = 'Übersicht/Statistik-Dashboard einsehen', group = 'Sonstiges' },
+}
+
+-- Erstbefüllung der drei mitgelieferten Basisrollen (nur beim allerersten
+-- Anlegen der jeweiligen Rolle in st_roles relevant, siehe oben).
+Config.DefaultRolePermissions = {
+    fahrer = { 'driver_actions' },
+    disponent = { 'dispatch', 'live_map_view' },
+    geschaeftsfuehrung = {
+        'dispatch', 'live_map_view', 'fleet_manage', 'employees_manage', 'roles_manage',
+        'finance_view', 'finance_payout', 'wages_manage', 'activity_log_view', 'stats_view',
+    },
 }
 
 -- =========================================================
