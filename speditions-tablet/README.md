@@ -17,13 +17,16 @@ verwaltet.
 1. Ressource nach `resources/[speditions]/speditions-tablet` kopieren.
 2. `sql/install.sql` in die Datenbank importieren (bei einer bereits
    bestehenden Installation stattdessen der Reihe nach `sql/upgrade_v2.sql`
-   bis `sql/upgrade_v8.sql` ausführen, um Lenk-/Ruhezeiten, Gefahrgut,
+   bis `sql/upgrade_v9.sql` ausführen, um Lenk-/Ruhezeiten, Gefahrgut,
    Ein-/Auszahlungen, Gehälter/Stempeluhr, den Lieferschein, die
-   Fahrerkarten-Pflicht und die Abbruch-Anfragen nachzurüsten und das
-   Login-System zu entfernen).
+   Fahrerkarten-Pflicht, die Abbruch-Anfragen und das Tablet-eigene
+   Login (Name + Passwort) nachzurüsten).
    **`sql/upgrade_v7.sql` löscht dabei alle bestehenden Aufträge** - siehe
    Kommentar am Anfang der Datei für den Grund. **Ab sofort werden Aufträge
    ohnehin bei JEDEM Ressourcenstart automatisch geleert** (siehe unten).
+   **`sql/upgrade_v9.sql` setzt bei bestehenden Mitarbeiterkonten noch KEIN
+   Passwort** - siehe Kommentar am Anfang der Datei und den Abschnitt
+   "Mitarbeiter anmelden" unten.
 3. In `server.cfg`:
    ```
    ensure oxmysql
@@ -34,26 +37,36 @@ verwaltet.
    Servers anpassen).
 5. Server starten.
 
-## Mitarbeiter erkennen (kein Login-Bildschirm)
+## Mitarbeiter anmelden (Tablet-eigenes Login)
 
-Das Tablet hat **keinen Login-Bildschirm**. Ein Mitarbeiter wird automatisch
-anhand seines FiveM-Charakters (license-Identifier) erkannt, sobald er das
-Tablet öffnet - hat sein Charakter noch kein Mitarbeiterkonto, zeigt das
-Tablet stattdessen einen Hinweis, dass die Geschäftsführung ihm eine Rolle
-zuweisen muss.
+Das Tablet hat ein **eigenes Login** (Name + Passwort), unabhängig vom
+FiveM-Charakter. Öffnet ein Mitarbeiter das Tablet, erscheint nach dem
+Sperrbildschirm ein Anmeldeformular - erst nach erfolgreichem Login mit
+gültigem Login-Namen und Passwort sieht er die eigentliche Oberfläche.
+Anmeldedaten werden ausschließlich serverseitig geprüft
+(`server/sv_bootstrap.lua`, `Employees.Login`); das Passwort wird gehasht
+(`SHA2` mit individuellem Salt) gespeichert, nie im Klartext. Die Sitzung
+gilt nur für den aktuellen Server-Slot und endet automatisch beim
+Verlassen des Servers oder über den Konto-Chip oben rechts ("Abmelden").
 
-**Erste Rolle vergeben (Ersteinrichtung):** Über die Server-Konsole, während
-die Zielperson online ist (auch nutzbar mit der Ace-Permission
-`speditions.admin`):
-```
-tablet_grant [server-id] [fahrer|disponent|geschaeftsfuehrung] [Anzeigename...]
-```
-Legt das Mitarbeiterkonto für den Charakter dieses Spielers an oder
-aktualisiert dessen Rolle, falls bereits eines existiert.
+**Erstkonto:** Beim allerersten Ressourcenstart wird automatisch das erste
+Konto aus `Config.InitialAccounts` angelegt (Standard: Login-Name `admin`,
+Passwort `ChangeMe123!`, Rolle Geschäftsführung) - **dieses Passwort sofort
+nach der ersten Anmeldung über den Konto-Chip ändern!**
 
 **Weitere Mitarbeiter einstellen** - über das Tablet: Geschäftsführung →
-Tab **Mitarbeiter** → "+ Mitarbeiter einstellen" (die Zielperson muss dafür
-online sein, wird per Dropdown aus den aktuell online Spielern ausgewählt).
+Tab **Mitarbeiter** → "+ Mitarbeiter einstellen" (Anzeigename, Login-Name
+und Passwort werden dabei direkt vergeben, die Zielperson muss dafür
+nicht online sein). Ein Passwort vergessen? Geschäftsführung kann es über
+den Button "Passwort zurücksetzen" in derselben Übersicht neu setzen.
+
+**Alternative über die Server-Konsole** (auch nutzbar mit der
+Ace-Permission `speditions.admin`, Zielperson muss NICHT online sein):
+```
+tablet_grant [name] [passwort] [fahrer|disponent|geschaeftsfuehrung] [Anzeigename...]
+```
+Legt ein neues Mitarbeiterkonto mit diesem Login-Namen/Passwort/Rolle an
+oder aktualisiert Passwort/Rolle, falls der Login-Name bereits existiert.
 
 ## Bedienung
 
@@ -153,18 +166,24 @@ dekorativ nachgebaut und ohne Funktion - es wurden bewusst keine
 zusätzlichen Bedienelemente ergänzt. Das Bedienfeld ist immer voll deckend
 (nicht durchsichtig), unabhängig davon, ob es gerade bedient wird.
 
-**Anzeige "wer spricht":** Auf dem LCD erscheint der Name des/der gerade auf
-dem Kanal sprechenden Spieler. Für den eigenen Spieler nutzt
-`client/cl_radio.lua` das offizielle pma-voice-Event `pma-voice:radioActive`.
-Für ANDERE Spieler bietet pma-voice selbst kein eigenes Export/Event an -
-`cl_radio.lua` hört daher zusätzlich das intern von pma-voice gefeuerte
-Event `pma-voice:setTalkingOnRadio` mit (FiveM-Events sind nicht
-ressourcen-exklusiv, das ist technisch unproblematisch), verifiziert direkt
-im pma-voice-Quellcode (`client/module/radio.lua`). Da es sich dabei um ein
-**internes, nicht offiziell dokumentiertes** Event von pma-voice handelt,
-könnte ein zukünftiges pma-voice-Update dessen Name/Parameter ändern - die
-Anzeige würde dann stillschweigend leer bleiben (kein Fehler, aber auch
-keine automatische Warnung).
+**Anzeige "wer spricht":** Auf dem LCD erscheint der **Tablet-Name** (nicht
+der Steam-/Rockstar-Name) des/der gerade auf dem Kanal sprechenden Spieler -
+also genau der Name, mit dem sich der jeweilige Mitarbeiter am Tablet
+angemeldet hat (`server/sv_radio.lua`, RPC `radio:employeeName`, liest
+`Employees.GetLoggedIn`). Ist ein Sprecher am Tablet gerade nicht
+angemeldet, erscheint ersatzweise "Spieler #<server-id>". Für den eigenen
+Spieler nutzt `client/cl_radio.lua` das offizielle pma-voice-Event
+`pma-voice:radioActive`. Für ANDERE Spieler bietet pma-voice selbst kein
+eigenes Export/Event an - `cl_radio.lua` hört daher zusätzlich das intern
+von pma-voice gefeuerte Event `pma-voice:setTalkingOnRadio` mit
+(FiveM-Events sind nicht ressourcen-exklusiv, das ist technisch
+unproblematisch), verifiziert direkt im pma-voice-Quellcode
+(`client/module/radio.lua`), und löst den Server pro Sprecher (mit
+Client-Cache) zum jeweiligen Tablet-Namen auf. Da es sich bei
+`setTalkingOnRadio` um ein **internes, nicht offiziell dokumentiertes**
+Event von pma-voice handelt, könnte ein zukünftiges pma-voice-Update dessen
+Name/Parameter ändern - die Anzeige würde dann stillschweigend leer
+bleiben (kein Fehler, aber auch keine automatische Warnung).
 
 ## Rollen & Berechtigungen
 
@@ -331,7 +350,7 @@ Im Reiter "Aufträge" hat ein Fahrer bei jedem laufenden Auftrag
 Siehe `sql/install.sql`. Wichtigste Tabellen:
 
 ```
-st_employees            Mitarbeiterstammdaten (Rolle, Status, FiveM-Charakter-Identifier)
+st_employees            Mitarbeiterstammdaten (Login-Name, Passwort-Hash/Salt, Rolle, Status, zuletzt bekannter FiveM-Charakter nur informativ)
 st_drivers              Fahrer-Zusatzdaten (Status, Notizen, Fahrzeugzuweisung, Fahrerkarte eingesteckt/seit)
 st_driver_permissions   Führerscheinklassen / Sonderberechtigungen
 st_driver_statistics    Aggregierte Fahrerstatistik (aus st_orders berechnet)
@@ -389,7 +408,10 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `Config.AverageSpeedKmh`, `Config.DeadlineBufferMinutes` - Grundlage der
   Pünktlichkeitsberechnung
 - `Config.DrivingRules` - Lenk-/Ruhezeiten-Grenzwerte und Heartbeat-Intervall
-- `Config.AdminAcePermission` - berechtigt zusätzlich zur Server-Konsole zum Vergeben von Mitarbeiterrollen (`tablet_grant`)
+- `Config.InitialAccounts` - Erstkonto(s), die beim allerersten
+  Ressourcenstart automatisch angelegt werden (Login-Name, Passwort,
+  Rolle, Anzeigename) - Passwort danach unbedingt ändern!
+- `Config.AdminAcePermission` - berechtigt zusätzlich zur Server-Konsole zum Vergeben/Zurücksetzen von Mitarbeiterkonten (`tablet_grant`)
 - `Config.RequireItem` - Tablet nur per Item öffnen
 - `Config.MoneyBridge` - Framework-Anbindung für Bargeld bei Aus-/Einzahlung
 - `Config.NotificationSound` - Klingelton bei nativen In-Game-Hinweisen
@@ -402,8 +424,9 @@ Alle Stellschrauben befinden sich in `config.lua`:
   Rollenprüfung pro Aktion.
 - `server/sv_bridge.lua` - Optionale Framework-Anbindung (ESX/QBCore) für
   Bargeld bei Aus-/Einzahlung, inkl. ESX-Objekt für `ESX.RegisterUsableItem`.
-- `server/sv_bootstrap.lua` - automatische Mitarbeitererkennung anhand des
-  FiveM-Charakters (Session je Server-Slot), `tablet_grant`-Command.
+- `server/sv_bootstrap.lua` - Tablet-eigenes Login (Name + Passwort,
+  Session je Server-Slot in `loggedIn[src]`), Passwort-Hashing,
+  `tablet_grant`-Command, Erstkonto-Seeding aus `Config.InitialAccounts`.
 - `server/sv_finance.lua` - Transaktions-Ledger, Guthaben, Ein-/Auszahlungen.
 - `server/sv_radio.lua` - CB-Funk ein-/ausschalten, Anrufe (privater pma-voice-Call-Kanal).
 - `server/sv_payroll.lua` - Stundenlöhne, Stempeluhr, Gehaltsauszahlung.

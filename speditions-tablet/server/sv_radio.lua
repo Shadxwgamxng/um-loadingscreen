@@ -32,6 +32,15 @@ local function endCall(callId, reason)
     TriggerClientEvent('speditions-tablet:client:radioLeaveCall', call.targetSrc, reason)
 end
 
+--- Löst einen Server-Slot zum im Tablet hinterlegten Mitarbeiternamen auf -
+--- für die "wer spricht"-Anzeige am CB-Funk (statt des Steam-/Rockstar-Namens).
+RPC.Register('radio:employeeName', function(src, payload)
+    local targetSrc = Utils.SanitizeNumber(payload.serverId, 1)
+    if not targetSrc then error('invalid_payload') end
+    local emp = Employees.GetLoggedIn(targetSrc)
+    return { name = emp and emp.name or nil }
+end)
+
 RPC.Register('me:radio:powerOn', function(src)
     local emp = Employees.RequireRole(src)
     radioOnSrc[src] = true

@@ -38,11 +38,16 @@
                     <div class="boot-spinner"></div>
                 </div>
 
-                <div id="no-account-screen" class="login-screen hidden">
+                <div id="login-screen" class="login-screen hidden">
                     <div class="login-box">
-                        <div class="login-title">Kein Mitarbeiterkonto</div>
-                        <div class="login-subtitle">Dein Charakter ist noch keinem Mitarbeiterkonto zugeordnet. Wende dich an die Geschäftsführung, damit dir eine Rolle zugewiesen wird.</div>
-                        <button id="no-account-retry" class="btn btn-primary" style="width:100%;margin-top:16px;">Erneut versuchen</button>
+                        <div class="login-title">Anmelden</div>
+                        <div class="login-subtitle">Melde dich mit deinem Mitarbeiterkonto am Tablet an.</div>
+                        <label>Name</label>
+                        <input id="login-username" type="text" autocomplete="off" />
+                        <label>Passwort</label>
+                        <input id="login-password" type="password" autocomplete="off" />
+                        <div id="login-error" class="login-error hidden"></div>
+                        <button id="login-submit" class="btn btn-primary" style="width:100%;margin-top:14px;">Anmelden</button>
                     </div>
                 </div>
 
@@ -61,7 +66,7 @@
                                 <span id="timeclock-dot" class="timeclock-dot"></span>
                                 <span id="timeclock-label">Stempeluhr</span>
                             </button>
-                            <div class="employee-chip">
+                            <div class="employee-chip" id="employee-chip" title="Konto (Passwort ändern / Abmelden)">
                                 <span id="employee-name" class="employee-name"></span>
                                 <span id="employee-role" class="role-badge"></span>
                             </div>

@@ -13,11 +13,11 @@
 
 local INTERACT_CONTROL = 51 -- INPUT_CONTEXT ("E")
 local MARKER_TYPE = 1 -- Cylinder
+local CANCEL_GRACE_MS = 1500 -- Schonfrist, bevor die Abstandsprüfung greift (Szenario-Einstiegsanimation kann den Ped kurz verschieben)
 
 local myRole = nil
 local myOrders = {}
 local busy = false
-local lastDebugPrint = 0
 
 local function refreshMyOrders()
     ServerCall('driver:myOrders', nil, function(res)
@@ -55,13 +55,10 @@ local function drawProgressBar(label, pct, secondsLeft)
     EndTextCommandDisplayText(x, y - 0.012)
 end
 
---- Startet das Be-/Entladen: friert den Fahrer in einer Szenario-Animation
---- ein, zeigt Config.LoadUnloadSeconds lang einen Fortschrittsbalken, bricht
---- ab, wenn der Spieler zu weit vom Markierungskreis weggeht, und schaltet
---- danach automatisch den Auftragsstatus weiter.
-local function startLoadUnload(order, phase, markerCoords)
-    print(('^3[speditions-tablet debug]^7 startLoadUnload gestartet: orderId=%s phase=%s'):format(tostring(order.id), tostring(phase)))
-    busy = true
+--- Der eigentliche Be-/Entlade-Ablauf (läuft geschützt in Orders.startLoadUnload
+--- per pcall, damit ein unerwarteter Fehler NIE den Fahrer dauerhaft in
+--- "busy" hängen lässt).
+local function runLoadUnload(order, phase, markerCoords)
     local playerPed = PlayerPedId()
     local duration = (Config.LoadUnloadSeconds or 150) * 1000
     local startedAt = GetGameTimer()
@@ -79,20 +76,22 @@ local function startLoadUnload(order, phase, markerCoords)
         DisableControlAction(0, 23, true) -- Fahrzeug betreten
         DisableControlAction(0, 75, true) -- Fahrzeug verlassen
 
-        if #(GetEntityCoords(playerPed) - markerCoords) > 5.0 then
+        local elapsed = GetGameTimer() - startedAt
+
+        -- Erst nach der Schonfrist prüfen, ob der Spieler zu weit weg ist -
+        -- die Szenario-Einstiegsanimation kann den Ped im allerersten Moment
+        -- kurz verschieben, was sonst einen sofortigen Fehlabbruch auslöst.
+        if elapsed > CANCEL_GRACE_MS and #(GetEntityCoords(playerPed) - markerCoords) > 5.0 then
             cancelled = true
             break
         end
 
-        local elapsed = GetGameTimer() - startedAt
         local pct = math.floor((elapsed / duration) * 100)
         local secondsLeft = math.max(0, math.ceil((duration - elapsed) / 1000))
         drawProgressBar(phase == 'pickup' and 'Wird beladen' or 'Wird entladen', pct, secondsLeft)
     end
 
     ClearPedTasksImmediately(playerPed)
-    busy = false
-    print(('^3[speditions-tablet debug]^7 startLoadUnload Schleife beendet: cancelled=%s'):format(tostring(cancelled)))
 
     if cancelled then
         TriggerEvent('speditions-tablet:client:notify', 'Vorgang abgebrochen - zu weit vom Standort entfernt.', 'error')
@@ -102,13 +101,11 @@ local function startLoadUnload(order, phase, markerCoords)
     if phase == 'pickup' then
         -- "beladen" ist der durchgehende Status waehrend der Fahrt zum
         -- Zielort - kein zweiter Zwischenschritt mehr noetig.
-        ServerCall('driver:updateCargoStatus', { orderId = order.id, status = 'beladen' }, function(res)
-            print(('^3[speditions-tablet debug]^7 updateCargoStatus(beladen) Antwort: ok=%s error=%s'):format(tostring(res and res.ok), tostring(res and res.error)))
+        ServerCall('driver:updateCargoStatus', { orderId = order.id, status = 'beladen' }, function()
             refreshMyOrders()
         end)
     else
         ServerCall('driver:updateCargoStatus', { orderId = order.id, status = 'entladen' }, function(res)
-            print(('^3[speditions-tablet debug]^7 updateCargoStatus(entladen) Antwort: ok=%s error=%s'):format(tostring(res and res.ok), tostring(res and res.error)))
             if res and res.ok then
                 ServerCall('driver:completeOrder', { orderId = order.id }, function()
                     refreshMyOrders()
@@ -117,6 +114,20 @@ local function startLoadUnload(order, phase, markerCoords)
                 refreshMyOrders()
             end
         end)
+    end
+end
+
+--- Startet das Be-/Entladen und garantiert dabei, dass "busy" IMMER wieder
+--- freigegeben wird - auch wenn irgendwo ein unerwarteter Fehler auftritt
+--- (sonst würde der Fahrer bei einem Bug dauerhaft "hängen" bleiben, ohne
+--- dass je wieder ein Marker/Fortschrittsbalken erscheint).
+local function startLoadUnload(order, phase, markerCoords)
+    busy = true
+    local ok, err = pcall(runLoadUnload, order, phase, markerCoords)
+    busy = false
+    if not ok then
+        print(('^1[speditions-tablet]^7 Fehler beim Be-/Entladen: %s'):format(tostring(err)))
+        TriggerEvent('speditions-tablet:client:notify', 'Beim Be-/Entladen ist ein Fehler aufgetreten - bitte erneut versuchen.', 'error')
     end
 end
 
@@ -152,15 +163,6 @@ CreateThread(function()
 
                     if dist <= (Config.LocationMarkerRadius or 60.0) then
                         sleep = 0
-
-                        local now = GetGameTimer()
-                        if now - lastDebugPrint > 2000 then
-                            lastDebugPrint = now
-                            print(('^3[speditions-tablet debug]^7 Standort "%s" (%s) dist=%.1fm interactRadius=%.1fm'):format(
-                                loc.name, phase, dist, Config.LocationInteractRadius or 2.5
-                            ))
-                        end
-
                         DrawMarker(
                             MARKER_TYPE, loc.coords.x, loc.coords.y, loc.coords.z - 1.0,
                             0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.5, 1.5, 1.0,
@@ -173,7 +175,6 @@ CreateThread(function()
                             EndTextCommandDisplayHelp(0, false, true, -1)
 
                             if IsControlJustPressed(0, INTERACT_CONTROL) then
-                                print('^3[speditions-tablet debug]^7 E gedrueckt - rufe startLoadUnload auf')
                                 startLoadUnload(order, phase, markerCoords)
                             end
                         end

@@ -36,14 +36,19 @@ Config.NotificationSound = {
 -- =========================================================
 -- BOOTSTRAP / ERSTEINRICHTUNG
 -- =========================================================
--- Kein Login-Bildschirm: ein Mitarbeiter wird automatisch anhand seines
--- FiveM-Charakters (license) erkannt, sobald er das Tablet öffnet. Die
--- allererste Rolle (z.B. Geschäftsführung) vergibt ein Server-Admin über
--- die Konsole, während die Zielperson online ist:
---   tablet_grant [server-id] [fahrer|disponent|geschaeftsfuehrung] [Anzeigename...]
+-- Das Tablet hat einen eigenen Login (Name + Passwort), unabhängig vom
+-- FiveM-Charakter - ein Mitarbeiter meldet sich beim Öffnen des Tablets mit
+-- seinen Zugangsdaten an (server/sv_bootstrap.lua, Employees.Login).
+-- Erstkonten werden beim allerersten Ressourcenstart aus Config.InitialAccounts
+-- angelegt - Passwort danach unbedingt ändern! Weitere Konten legt die
+-- Geschäftsführung im Tablet an, oder ein Server-Admin über die Konsole:
+--   tablet_grant [name] [passwort] [fahrer|disponent|geschaeftsfuehrung] [Anzeigename...]
+Config.InitialAccounts = {
+    { username = 'admin', password = 'ChangeMe123!', role = 'geschaeftsfuehrung', name = 'Administrator' },
+}
 
 -- Ace-Permission, die zusätzlich zur Server-Konsole berechtigt, per Command
--- Mitarbeiterrollen zu vergeben (/tablet_grant).
+-- Mitarbeiterkonten anzulegen/zurückzusetzen (/tablet_grant).
 Config.AdminAcePermission = 'speditions.admin'
 
 -- =========================================================

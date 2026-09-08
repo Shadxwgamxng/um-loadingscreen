@@ -209,17 +209,35 @@ RegisterNetEvent('pma-voice:radioActive', function(radioTalking)
     sendTalkersUpdate()
 end)
 
+--- Cache: Server-Slot -> im Tablet hinterlegter Mitarbeitername (nicht der
+--- Steam-/Rockstar-Name). Wird pro Slot nur einmal abgefragt, danach aus
+--- dem Cache bedient.
+local employeeNameCache = {}
+
+local function resolveTalkerName(plySource, cb)
+    local cached = employeeNameCache[plySource]
+    if cached then cb(cached) return end
+
+    ServerCall('radio:employeeName', { serverId = plySource }, function(res)
+        local name = (res and res.ok and res.result and res.result.name) or ('Spieler #' .. plySource)
+        employeeNameCache[plySource] = name
+        cb(name)
+    end)
+end
+
 RegisterNetEvent('pma-voice:setTalkingOnRadio', function(plySource, enabled)
     if not radioOn then return end
     if type(plySource) ~= 'number' then return end
 
     if enabled then
-        local playerIndex = GetPlayerFromServerId(plySource)
-        talkers[plySource] = (playerIndex ~= -1 and GetPlayerName(playerIndex)) or ('Spieler #' .. plySource)
+        resolveTalkerName(plySource, function(name)
+            talkers[plySource] = name
+            sendTalkersUpdate()
+        end)
     else
         talkers[plySource] = nil
+        sendTalkersUpdate()
     end
-    sendTalkersUpdate()
 end)
 
 -- Schaltet den Funk beim Ressourcen-/Verbindungsende sauber ab.

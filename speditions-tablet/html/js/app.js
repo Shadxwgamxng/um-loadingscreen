@@ -42,9 +42,9 @@ window.addEventListener('unhandledrejection', (event) => {
 });
 
 const ERROR_MESSAGES = {
-    not_logged_in: 'Dein Charakter hat kein Mitarbeiterkonto.',
-    player_not_online: 'Dieser Spieler ist nicht online.',
-    employee_already_exists: 'Dieser Charakter hat bereits ein Mitarbeiterkonto.',
+    not_logged_in: 'Du bist nicht angemeldet.',
+    invalid_credentials: 'Name oder Passwort falsch.',
+    employee_already_exists: 'Dieser Name ist bereits vergeben.',
     employee_not_found: 'Mitarbeiter nicht gefunden.',
     already_clocked_in: 'Du bist bereits eingestempelt.',
     not_clocked_in: 'Du bist nicht eingestempelt.',
@@ -326,7 +326,10 @@ document.addEventListener('keydown', (e) => {
 });
 
 document.getElementById('lock-screen').addEventListener('click', () => unlockTablet());
-document.getElementById('no-account-retry').addEventListener('click', () => unlockTablet());
+document.getElementById('login-submit').addEventListener('click', () => Actions.login());
+document.getElementById('login-username').addEventListener('keydown', (e) => { if (e.key === 'Enter') Actions.login(); });
+document.getElementById('login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') Actions.login(); });
+document.getElementById('employee-chip').addEventListener('click', () => Actions.openAccountModal());
 
 function requestClose() {
     nuiPost('close', {});
@@ -348,13 +351,17 @@ document.getElementById('close-btn').addEventListener('click', () => closeTablet
 function hideAllScreens() {
     document.getElementById('lock-screen').classList.add('hidden');
     document.getElementById('boot-screen').classList.add('hidden');
-    document.getElementById('no-account-screen').classList.add('hidden');
+    document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('main-ui').classList.add('hidden');
 }
 
-function showNoAccount() {
+function showLoginScreen() {
     hideAllScreens();
-    document.getElementById('no-account-screen').classList.remove('hidden');
+    document.getElementById('login-username').value = '';
+    document.getElementById('login-password').value = '';
+    document.getElementById('login-error').classList.add('hidden');
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('login-username').focus();
 }
 
 function handleOpen(companyName) {
@@ -385,7 +392,7 @@ async function unlockTablet() {
         State.config = data;
         boot(data);
     } else {
-        showNoAccount();
+        showLoginScreen();
     }
 }
 
@@ -1123,6 +1130,7 @@ VIEWS['gf-employees'] = async (root) => {
     const rows = d.employees.map((e) => `<tr>
         <td>#${e.id}</td>
         <td>${escapeHtml(e.name)}</td>
+        <td>${escapeHtml(e.username || '-')}</td>
         <td>
             <select onchange="Actions.changeRole(${e.id}, this.value)">
                 <option value="fahrer" ${e.role === 'fahrer' ? 'selected' : ''}>LKW-Fahrer</option>
@@ -1133,15 +1141,16 @@ VIEWS['gf-employees'] = async (root) => {
         <td>${badge(EMPLOYMENT_STATUS_META[e.status])}</td>
         <td>${formatDate(e.hired_at)}</td>
         <td class="btn-row">
+            <button class="btn btn-sm" onclick="Actions.openResetPasswordModal(${e.id}, '${escapeHtml(e.name)}')">Passwort zurücksetzen</button>
             <button class="btn btn-sm ${e.status === 'aktiv' ? 'btn-danger' : 'btn-primary'}" onclick="Actions.toggleEmployeeStatus(${e.id}, '${e.status === 'aktiv' ? 'inaktiv' : 'aktiv'}')">${e.status === 'aktiv' ? 'Deaktivieren' : 'Aktivieren'}</button>
         </td>
     </tr>`);
 
     root.innerHTML = `
         <h1 class="view-title">Mitarbeiter</h1>
-        <p class="view-subtitle">Verwaltung aller Mitarbeiter, Rollen und Grade. Mitarbeiter werden automatisch anhand ihres FiveM-Charakters erkannt.</p>
+        <p class="view-subtitle">Verwaltung aller Mitarbeiter, Rollen und Grade. Anmeldung erfolgt am Tablet per Name + Passwort.</p>
         <div class="btn-row" style="margin-bottom:14px;"><button class="btn btn-primary" onclick="Actions.openHireModal()">+ Mitarbeiter einstellen</button></div>
-        <div class="section">${table(['#', 'Name', 'Rolle', 'Status', 'Eingestellt', ''], rows)}</div>`;
+        <div class="section">${table(['#', 'Name', 'Login-Name', 'Rolle', 'Status', 'Eingestellt', ''], rows)}</div>`;
 };
 
 VIEWS['gf-drivers'] = async (root) => {
@@ -1370,6 +1379,59 @@ VIEWS['gf-log'] = async (root) => {
 
 const Actions = {};
 
+Actions.login = async () => {
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    const errEl = document.getElementById('login-error');
+    errEl.classList.add('hidden');
+
+    if (!username || !password) {
+        errEl.textContent = 'Bitte Name und Passwort eingeben.';
+        errEl.classList.remove('hidden');
+        return;
+    }
+
+    const res = await rpc('session:login', { username, password });
+    if (!res || !res.ok) {
+        errEl.textContent = translateError(res && res.error);
+        errEl.classList.remove('hidden');
+        return;
+    }
+
+    const data = res.result;
+    State.employee = data.employee;
+    State.role = data.employee.role;
+    State.config = data;
+    boot(data);
+};
+
+Actions.logout = async () => {
+    closeModal();
+    await call('session:logout');
+    document.getElementById('main-ui').classList.add('hidden');
+    showLoginScreen();
+};
+
+Actions.openAccountModal = () => {
+    openModal('Mein Konto', escapeHtml(State.employee.name), `
+        <label>Aktuelles Passwort</label>
+        <input id="account-current-password" type="password" autocomplete="off" />
+        <label>Neues Passwort</label>
+        <input id="account-new-password" type="password" autocomplete="off" />
+    `, `
+        <button class="btn btn-danger" onclick="Actions.logout()">Abmelden</button>
+        <button class="btn btn-primary" onclick="Actions.submitChangePassword()">Passwort ändern</button>
+    `);
+};
+
+Actions.submitChangePassword = async () => {
+    const currentPassword = modalInputValue('account-current-password');
+    const newPassword = modalInputValue('account-new-password');
+    await call('me:changePassword', { currentPassword, newPassword });
+    closeModal();
+    toast('Passwort geändert', '', 'success');
+};
+
 Actions.submitVehicleConditionAndClose = async () => {
     const fuel = Number(document.getElementById('condition-fuel').value);
     const notes = document.getElementById('condition-notes').value.trim();
@@ -1553,17 +1615,14 @@ Actions.confirmCancelOrder = async (orderId) => {
     showView('dispatch-active');
 };
 
-Actions.openHireModal = async () => {
-    const d = await call('gf:employees:onlinePlayers');
-    const options = d.players.length
-        ? d.players.map((p) => `<option value="${p.serverId}">${escapeHtml(p.name)} (ID ${p.serverId})</option>`).join('')
-        : '<option value="">Kein online Spieler ohne Mitarbeiterkonto gefunden</option>';
-
-    openModal('Mitarbeiter einstellen', 'Legt für einen gerade online Spieler ein Mitarbeiterkonto an - dessen FiveM-Charakter wird automatisch erkannt.', `
-        <label>Spieler</label>
-        <select id="hire-target">${options}</select>
-        <label>Name</label>
+Actions.openHireModal = () => {
+    openModal('Mitarbeiter einstellen', 'Legt ein neues Mitarbeiterkonto mit Login-Name und Passwort an - die Person muss dafür nicht online sein.', `
+        <label>Anzeigename</label>
         <input id="hire-name" type="text" />
+        <label>Login-Name</label>
+        <input id="hire-username" type="text" autocomplete="off" />
+        <label>Passwort</label>
+        <input id="hire-password" type="password" autocomplete="off" />
         <label>Rolle</label>
         <select id="hire-role">
             <option value="fahrer">LKW-Fahrer</option>
@@ -1576,14 +1635,32 @@ Actions.openHireModal = async () => {
     `);
 };
 Actions.confirmHire = async () => {
-    const targetId = Number(modalInputValue('hire-target'));
     const name = modalInputValue('hire-name').trim();
+    const username = modalInputValue('hire-username').trim();
+    const password = modalInputValue('hire-password');
     const role = modalInputValue('hire-role');
-    if (!targetId || !name) { toast('Fehler', 'Bitte Spieler und Name auswählen.', 'error'); return; }
-    await call('gf:employees:hire', { targetId, name, role });
+    if (!name || !username || !password) { toast('Fehler', 'Bitte Anzeigename, Login-Name und Passwort ausfüllen.', 'error'); return; }
+    await call('gf:employees:hire', { name, username, password, role });
     closeModal();
     toast('Mitarbeiter eingestellt', '', 'success');
     showView('gf-employees');
+};
+
+Actions.openResetPasswordModal = (employeeId, name) => {
+    openModal('Passwort zurücksetzen', name, `
+        <label>Neues Passwort</label>
+        <input id="reset-password-value" type="password" autocomplete="off" />
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmResetPassword(${employeeId})">Zurücksetzen</button>
+    `);
+};
+Actions.confirmResetPassword = async (employeeId) => {
+    const newPassword = modalInputValue('reset-password-value');
+    if (!newPassword) { toast('Fehler', 'Bitte ein neues Passwort eingeben.', 'error'); return; }
+    await call('gf:employees:resetPassword', { employeeId, newPassword });
+    closeModal();
+    toast('Passwort zurückgesetzt', '', 'success');
 };
 
 Actions.changeRole = async (employeeId, role) => {

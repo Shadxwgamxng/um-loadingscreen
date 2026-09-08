@@ -4,9 +4,13 @@
 
 CREATE TABLE IF NOT EXISTS `st_employees` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    -- FiveM-Charakter (license), über den dieser Mitarbeiter automatisch
-    -- erkannt wird - kein Login-Bildschirm, kein Benutzername/Passwort.
-    `identifier` VARCHAR(64) NOT NULL,
+    -- Login-Name (Tablet-eigenes Login, siehe Employees.Login).
+    `username` VARCHAR(50) NULL,
+    `password_hash` VARCHAR(255) NULL,
+    `password_salt` VARCHAR(32) NULL,
+    -- Zuletzt bekannter FiveM-Charakter (license) - rein informativ, KEIN
+    -- Auth-Faktor, wird bei jedem Login aktualisiert.
+    `identifier` VARCHAR(64) NULL,
     `name` VARCHAR(100) NOT NULL,
     `role` ENUM('fahrer','disponent','geschaeftsfuehrung') NOT NULL DEFAULT 'fahrer',
     `status` ENUM('aktiv','inaktiv') NOT NULL DEFAULT 'aktiv',
@@ -14,7 +18,7 @@ CREATE TABLE IF NOT EXISTS `st_employees` (
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uq_identifier` (`identifier`)
+    UNIQUE KEY `uq_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `st_drivers` (
