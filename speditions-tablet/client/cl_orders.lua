@@ -65,7 +65,7 @@ local function runLoadUnload(order, phase, markerCoords)
     local cancelled = false
 
     ClearPedTasksImmediately(playerPed)
-    TaskStartScenario(playerPed, 'WORLD_HUMAN_CLIPBOARD', 0.0, true)
+    TaskStartScenarioInPlace(playerPed, 'WORLD_HUMAN_CLIPBOARD', 0, true)
 
     while GetGameTimer() - startedAt < duration do
         Wait(0)
