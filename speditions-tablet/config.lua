@@ -343,6 +343,25 @@ Config.DefaultHourlyWage = {
 }
 
 -- =========================================================
+-- WEBSITE-SYNC
+-- =========================================================
+-- Synchronisiert Aufträge/Disposition, Fuhrpark, Fahrerkarte/Lenkzeiten und
+-- Mitarbeiterkonten mit der separaten Speditions-Website (Next.js-Repo
+-- "spedition-webseite"). Standardmäßig AUS - erst aktivieren, wenn baseUrl
+-- und apiKey gesetzt sind (apiKey muss exakt der Website-Umgebungsvariable
+-- TABLET_API_KEY entsprechen). Läuft ausschließlich über ausgehende
+-- HTTP-Requests (Push per Webhook, Befehle per Polling abgeholt) - der
+-- Spielserver muss dafür keinen eingehenden Port öffnen. Siehe
+-- server/sv_website_bridge.lua und den README-Abschnitt "Website-Sync".
+Config.Website = {
+    enabled = false,
+    baseUrl = 'https://deine-domain.de', -- ohne abschließenden Slash
+    apiKey = 'CHANGE_ME',
+    pollIntervalMs = 5000, -- wie oft auf offene Befehle von der Website geprüft wird
+    driverHoursReportIntervalMs = 60000, -- wie oft Lenkzeiten an die Website gemeldet werden
+}
+
+-- =========================================================
 -- LOGGING
 -- =========================================================
 Config.Debug = false

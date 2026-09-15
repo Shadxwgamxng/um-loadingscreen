@@ -7,7 +7,7 @@
 
 function Employees.List()
     return MySQL.query.await([[
-        SELECT e.id, e.username, e.name, e.role, e.status, e.hired_at,
+        SELECT e.id, e.username, e.name, e.role, e.status, e.hired_at, e.discord_id,
                d.id AS driver_id, d.current_status AS driver_current_status
         FROM st_employees e
         LEFT JOIN st_drivers d ON d.employee_id = e.id
@@ -16,13 +16,17 @@ function Employees.List()
 end
 
 --- Legt ein neues Mitarbeiterkonto mit Login-Name + Passwort an - die
---- Zielperson muss dafür nicht online sein.
+--- Zielperson muss dafür nicht online sein. `discordId` ist optional und
+--- nur relevant für Config.Website (Website-Sync) - verknüpft das Konto mit
+--- einem Discord-Nutzer, damit sich das zugehörige Website-Konto per
+--- Discord-OAuth anmelden kann.
 function Employees.Hire(src, data)
     local emp = Employees.RequirePermission(src, 'employees_manage')
 
     local username = Utils.SanitizeString(data.username, 50)
     local password = Utils.SanitizeString(data.password, 100)
     local name = Utils.SanitizeString(data.name, 100)
+    local discordId = Utils.SanitizeString(data.discordId, 32)
     local role = data.role
 
     if not username or not password or not name then error('missing_fields') end
@@ -32,8 +36,8 @@ function Employees.Hire(src, data)
     if existing then error('employee_already_exists') end
 
     local employeeId = MySQL.insert.await(
-        'INSERT INTO st_employees (username, name, role, status) VALUES (?, ?, ?, ?)',
-        { username, name, role, 'aktiv' }
+        'INSERT INTO st_employees (username, name, role, status, discord_id) VALUES (?, ?, ?, ?, ?)',
+        { username, name, role, 'aktiv', discordId }
     )
     Employees.SetPassword(employeeId, password)
 
@@ -42,6 +46,7 @@ function Employees.Hire(src, data)
     end
 
     Logs.Write(emp.id, 'employee_hired', ('%s hat %s ("%s") als "%s" eingestellt.'):format(emp.name, name, username, role))
+    if WebsiteBridge then WebsiteBridge.PushEmployeeUpdate(employeeId) end
 
     return { employeeId = employeeId }
 end
@@ -105,6 +110,7 @@ function Employees.ChangeRole(src, employeeId, newRole)
 
     Employees.RefreshLoginById(employeeId)
     Logs.Write(emp.id, 'employee_role_change', ('%s hat die Rolle von %s auf "%s" geändert.'):format(emp.name, target.name, Roles.GetLabel(newRole)))
+    if WebsiteBridge then WebsiteBridge.PushEmployeeUpdate(employeeId) end
 
     return { ok = true }
 end
@@ -125,6 +131,25 @@ function Employees.SetStatus(src, employeeId, status)
     MySQL.update.await('UPDATE st_employees SET status = ? WHERE id = ?', { status, employeeId })
     Employees.RefreshLoginById(employeeId)
     Logs.Write(emp.id, 'employee_status_change', ('%s hat %s auf Status "%s" gesetzt.'):format(emp.name, target.name, status))
+    if WebsiteBridge then WebsiteBridge.PushEmployeeUpdate(employeeId) end
+
+    return { ok = true }
+end
+
+--- Setzt/ändert die Discord-Nutzer-ID eines Mitarbeiters (nur relevant für
+--- Config.Website/Website-Sync - verknüpft das Konto für den
+--- Discord-OAuth-Login auf der Website). Leerer String hebt die Verknüpfung
+--- wieder auf.
+function Employees.SetDiscordId(src, employeeId, discordId)
+    local emp = Employees.RequirePermission(src, 'employees_manage')
+    discordId = Utils.SanitizeString(discordId, 32)
+
+    local target = MySQL.single.await('SELECT * FROM st_employees WHERE id = ?', { employeeId })
+    if not target then error('employee_not_found') end
+
+    MySQL.update.await('UPDATE st_employees SET discord_id = ? WHERE id = ?', { discordId, employeeId })
+    Logs.Write(emp.id, 'employee_discord_link', ('%s hat die Discord-ID von %s aktualisiert.'):format(emp.name, target.name))
+    if WebsiteBridge then WebsiteBridge.PushEmployeeUpdate(employeeId) end
 
     return { ok = true }
 end
@@ -162,5 +187,11 @@ RPC.Register('gf:employees:setStatus', function(src, payload)
     local employeeId = Utils.SanitizeNumber(payload.employeeId, 1)
     if not employeeId then error('invalid_payload') end
     return Employees.SetStatus(src, employeeId, payload.status)
+end)
+
+RPC.Register('gf:employees:setDiscordId', function(src, payload)
+    local employeeId = Utils.SanitizeNumber(payload.employeeId, 1)
+    if not employeeId then error('invalid_payload') end
+    return Employees.SetDiscordId(src, employeeId, payload.discordId)
 end)
 

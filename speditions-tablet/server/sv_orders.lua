@@ -266,6 +266,52 @@ function Orders.Dispatch(src, orderId, driverId, vehicleId)
         Utils.NotifyClient(driverSrc, ('Neuer Auftrag #%s: %s -> %s. Oeffne dein Tablet fuer Details.'):format(orderId, order.start_location, order.end_location), 'info')
     end
 
+    if WebsiteBridge then WebsiteBridge.PushOrderUpdate(orderId) end
+
+    return { ok = true }
+end
+
+--- System-Variante von Orders.Dispatch für den Website-Sync: kein
+--- Spieler-`src` vorhanden (daher keine Employees.RequirePermission-Prüfung -
+--- wird ausschließlich aus einem bereits API-Key-geprüften Website-Befehl
+--- heraus aufgerufen, siehe server/sv_website_bridge.lua). Die Website
+--- kennt nur das Kennzeichen, keine Tablet-interne Fahrer-ID - der Fahrer
+--- wird deshalb über die aktuelle Fahrzeugzuweisung ermittelt.
+function Orders.DispatchFromWebsite(orderId, vehiclePlate)
+    local order = Orders.GetById(orderId)
+    if not order then error('order_not_found') end
+    if order.status ~= 'offen' then error('order_not_open') end
+
+    local vehicle = MySQL.single.await('SELECT * FROM st_vehicles WHERE plate = ?', { vehiclePlate })
+    if not vehicle then error('vehicle_not_found') end
+    if Utils.ToBool(vehicle.archived) then error('vehicle_archived') end
+    if Config.VehicleBlockedForDispatch[vehicle.status] then error('vehicle_unavailable') end
+
+    local driver = MySQL.single.await(
+        'SELECT d.*, e.name, e.status AS emp_status FROM st_drivers d JOIN st_employees e ON e.id = d.employee_id WHERE d.assigned_vehicle_id = ?',
+        { vehicle.id }
+    )
+    if not driver or driver.emp_status ~= 'aktiv' then error('driver_not_found') end
+    if not driverHasPermission(driver.id, order.requires_permission) then
+        error('driver_missing_permission')
+    end
+
+    MySQL.update.await(
+        "UPDATE st_orders SET driver_id = ?, vehicle_id = ?, dispatcher_id = NULL, status = 'disponiert' WHERE id = ?",
+        { driver.id, vehicle.id, orderId }
+    )
+    insertOrderHistory(orderId, 'disponiert', nil, ('Von der Website aus an %s disponiert.'):format(driver.name))
+
+    Notifications.Send(nil, driver.employee_id, 'Neuer Auftrag', ('Dir wurde Auftrag #%s zugewiesen (%s -> %s).'):format(orderId, order.start_location, order.end_location), nil)
+    local driverSrc = Utils.FindSrcByEmployeeId(driver.employee_id)
+    if driverSrc then
+        Utils.NotifyClient(driverSrc, ('Neuer Auftrag #%s: %s -> %s. Oeffne dein Tablet fuer Details.'):format(orderId, order.start_location, order.end_location), 'info')
+    end
+
+    Logs.Write(nil, 'order_dispatched_website', ('Auftrag #%s wurde von der Website aus an %s disponiert.'):format(orderId, driver.name))
+    RPC.PushToPermission('dispatch', 'orders:activeChanged', { orderId = orderId })
+    if WebsiteBridge then WebsiteBridge.PushOrderUpdate(orderId) end
+
     return { ok = true }
 end
 
@@ -350,9 +396,6 @@ end
 function Orders.AcceptByDriver(src, orderId)
     local emp, driver, order = requireOwnOrder(src, orderId)
     if order.status ~= 'disponiert' then error('order_not_pending') end
-    print(('^3[speditions-tablet debug]^7 driver.id=%s on_shift=%s (type %s) -> ToBool=%s'):format(
-        tostring(driver.id), tostring(driver.on_shift), type(driver.on_shift), tostring(Utils.ToBool(driver.on_shift))
-    ))
     if not Utils.ToBool(driver.on_shift) then error('shift_not_started') end
 
     local minutes = (tonumber(order.distance_km) / (Config.AverageSpeedKmh or 65)) * 60 + (Config.DeadlineBufferMinutes or 8)
@@ -371,6 +414,7 @@ function Orders.AcceptByDriver(src, orderId)
     Utils.SetClientWaypoint(src, order.start_location, ('Beladepunkt (%s)'):format(order.start_location))
 
     RPC.PushToPermission('dispatch', 'orders:activeChanged', { orderId = orderId })
+    if WebsiteBridge then WebsiteBridge.PushOrderUpdate(orderId) end
 
     return { ok = true }
 end
@@ -387,6 +431,7 @@ function Orders.DeclineByDriver(src, orderId, reason)
     Drivers.RecomputeStatistics(driver.id)
 
     RPC.PushToPermission('dispatch', 'orders:activeChanged', { orderId = orderId })
+    if WebsiteBridge then WebsiteBridge.PushOrderUpdate(orderId) end
 
     return { ok = true }
 end
@@ -416,6 +461,7 @@ function Orders.UpdateCargoStatus(src, orderId, newStatus)
     end
 
     RPC.PushToPermission('dispatch', 'orders:activeChanged', { orderId = orderId })
+    if WebsiteBridge then WebsiteBridge.PushOrderUpdate(orderId) end
 
     return { ok = true, status = newStatus }
 end
@@ -448,6 +494,7 @@ function Orders.Complete(src, orderId)
     Logs.Write(emp.id, 'order_completed', ('%s hat Auftrag #%s abgeschlossen. +%s Unternehmensumsatz.'):format(emp.name, orderId, order.value))
 
     RPC.PushToPermission('dispatch', 'orders:completed', { orderId = orderId })
+    if WebsiteBridge then WebsiteBridge.PushOrderUpdate(orderId) end
 
     return { ok = true, value = order.value }
 end
@@ -482,6 +529,38 @@ function Orders.Cancel(src, orderId, reason)
     Logs.Write(emp.id, 'order_cancelled', ('%s hat Auftrag #%s abgebrochen: %s'):format(emp.name, orderId, reason))
 
     RPC.PushToPermission('dispatch', 'orders:activeChanged', { orderId = orderId })
+    if WebsiteBridge then WebsiteBridge.PushOrderUpdate(orderId) end
+
+    return { ok = true }
+end
+
+--- System-Variante von Orders.Cancel für den Website-Sync (kein Spieler
+--- `src`, keine Berechtigungsprüfung - siehe Orders.DispatchFromWebsite).
+function Orders.CancelFromWebsite(orderId)
+    local order = Orders.GetById(orderId)
+    if not order then error('order_not_found') end
+    if Utils.InTable({ 'abgeschlossen', 'abgebrochen', 'abgelehnt' }, order.status) then
+        error('order_already_closed')
+    end
+
+    MySQL.update.await("UPDATE st_orders SET status = 'abgebrochen', completed_at = NOW() WHERE id = ?", { orderId })
+    insertOrderHistory(orderId, 'abgebrochen', nil, 'Von der Website aus abgebrochen.')
+
+    if order.vehicle_id then
+        MySQL.update.await("UPDATE st_vehicles SET status = 'verfuegbar' WHERE id = ? AND status = 'im_einsatz'", { order.vehicle_id })
+    end
+
+    if order.driver_id then
+        Drivers.RecomputeStatistics(order.driver_id)
+        local driver = Drivers.GetById(order.driver_id)
+        if driver then
+            Notifications.Send(nil, driver.employee_id, 'Auftrag abgebrochen', ('Auftrag #%s wurde über die Website abgebrochen.'):format(orderId), nil)
+        end
+    end
+
+    Logs.Write(nil, 'order_cancelled_website', ('Auftrag #%s wurde von der Website aus abgebrochen.'):format(orderId))
+    RPC.PushToPermission('dispatch', 'orders:activeChanged', { orderId = orderId })
+    if WebsiteBridge then WebsiteBridge.PushOrderUpdate(orderId) end
 
     return { ok = true }
 end
@@ -542,6 +621,7 @@ function Orders.RequestCancelByDriver(src, orderId, reason)
     Logs.Write(emp.id, 'order_cancelled_self', ('%s hat Auftrag #%s selbst abgebrochen (kein Disponent online) - %s Vertragsstrafe.'):format(emp.name, orderId, penalty))
 
     RPC.PushToPermission('dispatch', 'orders:activeChanged', { orderId = orderId })
+    if WebsiteBridge then WebsiteBridge.PushOrderUpdate(orderId) end
 
     return { ok = true, pending = false, penalty = penalty }
 end

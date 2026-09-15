@@ -13,6 +13,12 @@ CREATE TABLE IF NOT EXISTS `st_roles` (
     `role_key` VARCHAR(50) NOT NULL,
     `label` VARCHAR(100) NOT NULL,
     `permissions` TEXT NOT NULL,
+    -- Ordnet dieser Rolle eine der 9 festen Rollen der Speditions-Website
+    -- zu (nur relevant, wenn Config.Website.enabled = true) - NULL heißt
+    -- "noch nicht zugeordnet", die Synchronisation von Mitarbeitern mit
+    -- dieser Rolle schlägt dann fehl, bis die Geschäftsführung im
+    -- Rollen-Editor eine Website-Rolle auswählt.
+    `website_role_key` VARCHAR(30) NULL,
     `is_builtin` TINYINT(1) NOT NULL DEFAULT 0,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -29,6 +35,11 @@ CREATE TABLE IF NOT EXISTS `st_employees` (
     -- Zuletzt bekannter FiveM-Charakter (license) - rein informativ, KEIN
     -- Auth-Faktor, wird bei jedem Login aktualisiert.
     `identifier` VARCHAR(64) NULL,
+    -- Optional: verknüpft dieses Konto mit einem Discord-Nutzer, damit sich
+    -- das zugehörige Konto auf der Speditions-Website per Discord-OAuth
+    -- anmelden kann (nur relevant, wenn Config.Website.enabled = true) -
+    -- ebenfalls rein informativ, KEIN Auth-Faktor im Tablet selbst.
+    `discord_id` VARCHAR(32) NULL,
     `name` VARCHAR(100) NOT NULL,
     -- Verweist auf st_roles.role_key (frei erweiterbar, siehe oben) - kein
     -- ENUM mehr, seit die Geschäftsführung eigene Rollen anlegen kann.

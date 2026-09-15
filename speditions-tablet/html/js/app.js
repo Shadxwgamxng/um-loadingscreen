@@ -172,6 +172,20 @@ const EMPLOYMENT_STATUS_META = {
     inaktiv: { label: 'Inaktiv', dot: 'gray' },
 };
 
+// Die 9 festen Rollen der Speditions-Website (src/lib/roles.ts dort) - nur
+// für die Website-Sync-Rollenzuordnung im Reiter "Rollen" (Config.Website).
+const WEBSITE_ROLE_LABELS = {
+    geschaeftsfuehrung: 'Geschäftsführer',
+    prokurist: 'Prokurist',
+    betriebsleiter: 'Betriebsleiter',
+    chefdisponent: 'Chefdisponent',
+    disponent: 'Disponent',
+    lager: 'Lager',
+    fuhrpark: 'Fuhrpark & Werkstatt',
+    buchhaltung: 'Buchhaltung',
+    fahrer: 'Fahrer',
+};
+
 function badge(meta) {
     if (!meta) return '-';
     return `<span class="pill"><span class="dot dot-${meta.dot}"></span>${meta.label}</span>`;
@@ -1302,6 +1316,9 @@ VIEWS['gf-employees'] = async (root) => {
         </td>
         <td>${badge(EMPLOYMENT_STATUS_META[e.status])}</td>
         <td>${formatDate(e.hired_at)}</td>
+        <td>
+            <button class="btn btn-sm" onclick="Actions.openSetDiscordIdModal(${e.id}, '${escapeHtml(e.name)}', ${JSON.stringify(e.discord_id || '')})">${e.discord_id ? escapeHtml(e.discord_id) : 'nicht verknüpft'}</button>
+        </td>
         <td class="btn-row">
             <button class="btn btn-sm" onclick="Actions.openResetPasswordModal(${e.id}, '${escapeHtml(e.name)}')">Passwort zurücksetzen</button>
             <button class="btn btn-sm ${e.status === 'aktiv' ? 'btn-danger' : 'btn-primary'}" onclick="Actions.toggleEmployeeStatus(${e.id}, '${e.status === 'aktiv' ? 'inaktiv' : 'aktiv'}')">${e.status === 'aktiv' ? 'Deaktivieren' : 'Aktivieren'}</button>
@@ -1310,9 +1327,9 @@ VIEWS['gf-employees'] = async (root) => {
 
     root.innerHTML = `
         <h1 class="view-title">Mitarbeiter</h1>
-        <p class="view-subtitle">Verwaltung aller Mitarbeiter, Rollen und Grade. Anmeldung erfolgt am Tablet per Name + Passwort.</p>
+        <p class="view-subtitle">Verwaltung aller Mitarbeiter, Rollen und Grade. Anmeldung erfolgt am Tablet per Name + Passwort. Die Discord-ID ist nur für den Website-Sync relevant (Config.Website) - verknüpft das Konto mit dem Discord-Login der Speditions-Website.</p>
         <div class="btn-row" style="margin-bottom:14px;"><button class="btn btn-primary" onclick="Actions.openHireModal()">+ Mitarbeiter einstellen</button></div>
-        <div class="section">${table(['#', 'Name', 'Login-Name', 'Rolle', 'Status', 'Eingestellt', ''], rows)}</div>`;
+        <div class="section">${table(['#', 'Name', 'Login-Name', 'Rolle', 'Status', 'Eingestellt', 'Discord-ID', ''], rows)}</div>`;
 };
 
 VIEWS['gf-roles'] = async (root) => {
@@ -1322,9 +1339,16 @@ VIEWS['gf-roles'] = async (root) => {
         return p ? p.label : key;
     };
 
+    const websiteRoleOptions = (r) => `<option value="">— keine —</option>` + Object.keys(WEBSITE_ROLE_LABELS).map((key) =>
+        `<option value="${key}" ${r.websiteRoleKey === key ? 'selected' : ''}>${escapeHtml(WEBSITE_ROLE_LABELS[key])}</option>`
+    ).join('');
+
     const rows = d.roles.map((r) => `<tr>
         <td>${escapeHtml(r.label)}${r.isBuiltin ? ' <span class="pill"><span class="dot dot-gray"></span>Basisrolle</span>' : ''}</td>
         <td style="max-width:420px;">${r.permissions.map((p) => `<span class="pill" style="margin:2px 4px 2px 0;"><span class="dot dot-blue"></span>${escapeHtml(permLabel(p))}</span>`).join('') || '<span class="card-hint">Keine Berechtigungen</span>'}</td>
+        <td>
+            <select onchange="Actions.setRoleWebsiteMapping('${r.key}', this.value)">${websiteRoleOptions(r)}</select>
+        </td>
         <td class="btn-row">
             <button class="btn btn-sm" onclick="Actions.openEditRoleModal('${r.key}')">Bearbeiten</button>
             ${r.isBuiltin ? '' : `<button class="btn btn-sm btn-danger" onclick="Actions.deleteRole('${r.key}', ${JSON.stringify(r.label)})">Löschen</button>`}
@@ -1333,9 +1357,9 @@ VIEWS['gf-roles'] = async (root) => {
 
     root.innerHTML = `
         <h1 class="view-title">Rollen</h1>
-        <p class="view-subtitle">Eigene Rollen mit frei wählbaren Berechtigungen anlegen und bearbeiten. Die drei mitgelieferten Basisrollen (Fahrer/Disponent/Geschäftsführung) können nicht gelöscht, ihre Berechtigungen aber angepasst werden.</p>
+        <p class="view-subtitle">Eigene Rollen mit frei wählbaren Berechtigungen anlegen und bearbeiten. Die drei mitgelieferten Basisrollen (Fahrer/Disponent/Geschäftsführung) können nicht gelöscht, ihre Berechtigungen aber angepasst werden. Die Spalte "Website-Rolle" ordnet diese Rolle - nur relevant bei aktiviertem Website-Sync (Config.Website) - einer der 9 Rollen der Speditions-Website zu, damit Mitarbeiter mit dieser Rolle dorthin synchronisiert werden können.</p>
         <div class="btn-row" style="margin-bottom:14px;"><button class="btn btn-primary" onclick="Actions.openCreateRoleModal()">+ Rolle anlegen</button></div>
-        <div class="section">${table(['Rolle', 'Berechtigungen', ''], rows)}</div>`;
+        <div class="section">${table(['Rolle', 'Berechtigungen', 'Website-Rolle', ''], rows)}</div>`;
 };
 
 VIEWS['gf-drivers'] = async (root) => {
@@ -1813,6 +1837,8 @@ Actions.openHireModal = async () => {
         <input id="hire-password" type="password" autocomplete="off" />
         <label>Rolle</label>
         <select id="hire-role">${roleOptions}</select>
+        <label>Discord-ID <span style="font-weight:400;color:var(--text-2);">(optional, nur für Website-Sync)</span></label>
+        <input id="hire-discord-id" type="text" autocomplete="off" placeholder="z.B. 123456789012345678" />
     `, `
         <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
         <button class="btn btn-primary" onclick="Actions.confirmHire()">Einstellen</button>
@@ -1823,8 +1849,9 @@ Actions.confirmHire = async () => {
     const username = modalInputValue('hire-username').trim();
     const password = modalInputValue('hire-password');
     const role = modalInputValue('hire-role');
+    const discordId = modalInputValue('hire-discord-id').trim();
     if (!name || !username || !password) { toast('Fehler', 'Bitte Anzeigename, Login-Name und Passwort ausfüllen.', 'error'); return; }
-    await call('gf:employees:hire', { name, username, password, role });
+    await call('gf:employees:hire', { name, username, password, role, discordId });
     closeModal();
     toast('Mitarbeiter eingestellt', '', 'success');
     showView('gf-employees');
@@ -1845,6 +1872,23 @@ Actions.confirmResetPassword = async (employeeId) => {
     await call('gf:employees:resetPassword', { employeeId, newPassword });
     closeModal();
     toast('Passwort zurückgesetzt', '', 'success');
+};
+
+Actions.openSetDiscordIdModal = (employeeId, name, currentDiscordId) => {
+    openModal('Discord-ID verknüpfen', `${escapeHtml(name)} - nur relevant für den Website-Sync (Config.Website): verknüpft das Konto mit dem Discord-Login der Speditions-Website.`, `
+        <label>Discord-Nutzer-ID</label>
+        <input id="discord-id-value" type="text" autocomplete="off" placeholder="z.B. 123456789012345678" value="${escapeHtml(currentDiscordId || '')}" />
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmSetDiscordId(${employeeId})">Speichern</button>
+    `);
+};
+Actions.confirmSetDiscordId = async (employeeId) => {
+    const discordId = modalInputValue('discord-id-value').trim();
+    await call('gf:employees:setDiscordId', { employeeId, discordId });
+    closeModal();
+    toast('Discord-ID gespeichert', '', 'success');
+    showView('gf-employees');
 };
 
 Actions.changeRole = async (employeeId, role) => {
@@ -1916,6 +1960,12 @@ Actions.confirmDeleteRole = async (roleKey) => {
     closeModal();
     toast('Rolle gelöscht', '', 'success');
     showView('gf-roles');
+};
+
+Actions.setRoleWebsiteMapping = async (roleKey, websiteRoleKey) => {
+    if (!websiteRoleKey) return; // "— keine —" ausgewählt: keine Aktion, Zuordnung bleibt wie sie war
+    await call('gf:roles:setWebsiteRole', { roleKey, websiteRoleKey });
+    toast('Website-Rolle zugeordnet', '', 'success');
 };
 
 Actions.openDriverFile = async (driverId) => {

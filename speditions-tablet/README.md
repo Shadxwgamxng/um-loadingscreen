@@ -17,10 +17,11 @@ verwaltet.
 1. Ressource nach `resources/[speditions]/speditions-tablet` kopieren.
 2. `sql/install.sql` in die Datenbank importieren (bei einer bereits
    bestehenden Installation stattdessen der Reihe nach `sql/upgrade_v2.sql`
-   bis `sql/upgrade_v10.sql` ausführen, um Lenk-/Ruhezeiten, Gefahrgut,
+   bis `sql/upgrade_v11.sql` ausführen, um Lenk-/Ruhezeiten, Gefahrgut,
    Ein-/Auszahlungen, Gehälter/Stempeluhr, den Lieferschein, die
    Fahrerkarten-Pflicht, die Abbruch-Anfragen, das Tablet-eigene Login
-   (Name + Passwort) und die frei anlegbaren Rollen nachzurüsten).
+   (Name + Passwort), die frei anlegbaren Rollen und den optionalen
+   Website-Sync (siehe unten) nachzurüsten).
    **`sql/upgrade_v7.sql` löscht dabei alle bestehenden Aufträge** - siehe
    Kommentar am Anfang der Datei für den Grund. **Ab sofort werden Aufträge
    ohnehin bei JEDEM Ressourcenstart automatisch geleert** (siehe unten).
@@ -531,6 +532,8 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `server/sv_employees.lua` - Mitarbeiterverwaltung (Einstellen, Rolle/Status
   ändern, beliebige im Tablet angelegte Rollen zuweisbar).
 - `server/sv_notifications.lua` - Nachrichten Disponent/Fahrer.
+- `server/sv_website_bridge.lua` - Optionaler Website-Sync (siehe eigener
+  Abschnitt unten), komplett inaktiv solange `Config.Website.enabled = false`.
 - `client/cl_main.lua` - NUI-Steuerung, RPC-Relay (`ServerCall` auch für
   andere Client-Skripte nutzbar) sowie native In-Game-Hinweise/Wegpunkte sind hier verdrahtet.
 - `client/cl_hours.lua` - Erkennt per Kennzeichen-Abgleich, ob der Fahrer
@@ -548,3 +551,60 @@ Das System ist modular aufgebaut: neue Auftragstypen, zusätzliche
 Fahrzeugklassen oder weitere Rollen-Berechtigungen lassen sich über
 `config.lua` und zusätzliche RPC-Handler erweitern, ohne bestehende Module
 anzufassen.
+
+## Website-Sync (optional)
+
+Das Tablet kann optional mit einer separaten, extern gehosteten
+Speditions-Website synchronisiert werden, sodass Aufträge/Disposition,
+Fuhrpark und Fahrerkarte/Lenkzeiten auf beiden Seiten sichtbar sind und die
+Website auch steuernd eingreifen kann (z.B. einem im Spiel erstellten
+Auftrag ein Fahrzeug zuweisen). Das Feature ist standardmäßig **deaktiviert**
+und greift nicht in irgendetwas ein, solange es nicht aktiv eingeschaltet
+wird.
+
+**Architektur**: Beide Richtungen laufen über ausgehende HTTP-Requests vom
+FiveM-Server - der Spielserver muss dafür keinen eingehenden Port öffnen:
+
+- **Push** (Tablet → Website): bei jeder relevanten Änderung (Auftrag
+  disponiert/angenommen/abgeschlossen, Fahrzeug angelegt/geändert,
+  Mitarbeiter eingestellt/Rolle geändert, periodische Lenkzeiten-Meldung)
+  schickt `server/sv_website_bridge.lua` sofort einen Webhook an
+  `.../api/tablet/webhook`.
+- **Pull** (Website → Tablet): alle `Config.Website.pollIntervalMs` fragt
+  das Tablet `.../api/tablet/commands` ab und führt dort hinterlegte
+  Dispositionsbefehle (z.B. "Fahrzeug zuweisen", "Auftrag abbrechen") über
+  die bestehende Orders-Logik aus; das Ergebnis wird per
+  `.../api/tablet/commands/{id}/ack` zurückgemeldet.
+
+**Einrichtung**:
+
+1. `sql/upgrade_v11.sql` importieren (ergänzt `st_employees.discord_id` und
+   `st_roles.website_role_key`) - bei einer Neuinstallation ist das bereits
+   in `sql/install.sql` enthalten.
+2. Auf der Website die Umgebungsvariable `TABLET_API_KEY` auf einen langen
+   Zufallsstring setzen.
+3. In `config.lua` den `Config.Website`-Block ausfüllen:
+   ```lua
+   Config.Website = {
+       enabled = true,
+       baseUrl = 'https://deine-domain.de', -- Basis-URL der Website, ohne trailing slash
+       apiKey = '<derselbe Wert wie TABLET_API_KEY>',
+       pollIntervalMs = 5000,
+       driverHoursReportIntervalMs = 60000,
+   }
+   ```
+4. Im Reiter "Rollen" jeder Tablet-Rolle, deren Mitarbeiter auf der Website
+   erscheinen sollen, über das neue Dropdown "Website-Rolle" eine der 9
+   festen Website-Rollen zuordnen. **Ohne diese Zuordnung wird kein
+   Mitarbeiter dieser Rolle synchronisiert** - es gibt keine Rätselraten-
+   Automatik, welche Website-Rolle gemeint sein könnte.
+5. Optional: im Mitarbeiter-Bereich je Konto eine Discord-ID hinterlegen, um
+   das Tablet-Konto mit dem zugehörigen Discord-OAuth-Login auf der Website
+   zu verknüpfen.
+
+**Bekannte Einschränkungen**: die wöchentliche Lenkzeit wird nicht gesynct
+(das Tablet führt dafür keine Historie, nur den aktuellen Tag); der grobe,
+6-stufige Auftragsstatus der Website ist eine vereinfachte Abbildung des
+10-stufigen Tablet-Status; Live-Karte/Position wird bewusst nicht
+übertragen. Ein Website-Ausfall blockiert niemals das Tablet - fehlgeschlagene
+Requests werden nur geloggt.

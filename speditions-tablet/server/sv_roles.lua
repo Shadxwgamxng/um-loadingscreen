@@ -44,6 +44,7 @@ local function reload()
             label = row.label,
             permissions = decodePermissions(row.permissions),
             isBuiltin = Utils.ToBool(row.is_builtin),
+            websiteRoleKey = row.website_role_key,
         }
     end
     cache = fresh
@@ -84,7 +85,10 @@ function Roles.List()
         local perms = {}
         for permKey in pairs(role.permissions) do perms[#perms + 1] = permKey end
         table.sort(perms)
-        out[#out + 1] = { id = role.id, key = role.key, label = role.label, permissions = perms, isBuiltin = role.isBuiltin }
+        out[#out + 1] = {
+            id = role.id, key = role.key, label = role.label, permissions = perms,
+            isBuiltin = role.isBuiltin, websiteRoleKey = role.websiteRoleKey,
+        }
     end
     table.sort(out, function(a, b) return a.id < b.id end)
     return out
@@ -99,6 +103,40 @@ function Roles.GetLabel(roleKey)
     ensureLoaded()
     local role = cache[roleKey]
     return role and role.label or roleKey
+end
+
+--- Rollenschlüssel der Speditions-Website (src/lib/roles.ts, RoleKey) - fix
+--- vorgegeben dort, deshalb hier als Konstante statt aus der DB geladen.
+--- Nur relevant für Config.Website (Website-Sync), siehe server/sv_website_bridge.lua.
+local WEBSITE_ROLE_KEYS = {
+    'geschaeftsfuehrung', 'prokurist', 'betriebsleiter', 'chefdisponent',
+    'disponent', 'lager', 'fuhrpark', 'buchhaltung', 'fahrer',
+}
+
+--- Liefert die Website-Rolle, die einer Tablet-Rolle zugeordnet ist, oder
+--- nil, falls noch keine Zuordnung gesetzt wurde.
+function Roles.GetWebsiteRoleKey(roleKey)
+    ensureLoaded()
+    local role = cache[roleKey]
+    return role and role.websiteRoleKey or nil
+end
+
+--- Ordnet einer Tablet-Rolle eine der 9 festen Website-Rollen zu (Reiter
+--- "Rollen" im Tablet) - notwendig, damit Employees.Hire/ChangeRole für
+--- Mitarbeiter mit dieser Rolle überhaupt an die Website synchronisiert
+--- werden kann (siehe server/sv_website_bridge.lua).
+function Roles.SetWebsiteRoleKey(src, roleKey, websiteRoleKey)
+    local emp = Employees.RequirePermission(src, 'roles_manage')
+    ensureLoaded()
+    local role = cache[roleKey]
+    if not role then error('role_not_found') end
+    if not Utils.InTable(WEBSITE_ROLE_KEYS, websiteRoleKey) then error('invalid_website_role') end
+
+    MySQL.update.await('UPDATE st_roles SET website_role_key = ? WHERE role_key = ?', { websiteRoleKey, roleKey })
+    reload()
+    RPC.PushBroadcast('roles:changed', {})
+    Logs.Write(emp.id, 'role_website_mapping', ('%s hat die Rolle "%s" mit der Website-Rolle "%s" verknüpft.'):format(emp.name, role.label, websiteRoleKey))
+    return { ok = true }
 end
 
 --- Prüft, ob eine Rolle eine bestimmte Berechtigung besitzt. Zentrale
@@ -260,4 +298,11 @@ RPC.Register('gf:roles:delete', function(src, payload)
     local roleKey = Utils.SanitizeString(payload.roleKey, 50)
     if not roleKey then error('invalid_payload') end
     return Roles.Delete(src, roleKey)
+end)
+
+RPC.Register('gf:roles:setWebsiteRole', function(src, payload)
+    local roleKey = Utils.SanitizeString(payload.roleKey, 50)
+    local websiteRoleKey = Utils.SanitizeString(payload.websiteRoleKey, 30)
+    if not roleKey or not websiteRoleKey then error('invalid_payload') end
+    return Roles.SetWebsiteRoleKey(src, roleKey, websiteRoleKey)
 end)

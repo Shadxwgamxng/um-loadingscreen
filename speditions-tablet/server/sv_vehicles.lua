@@ -60,6 +60,7 @@ function Vehicles.Create(src, data)
     logVehicleEvent(vehicleId, 'created', ('Fahrzeug von %s erstellt.'):format(emp.name))
     Logs.Write(emp.id, 'vehicle_create', ('%s hat Fahrzeug %s (%s) erstellt.'):format(emp.name, name, plate))
     RPC.PushToPermission('dispatch', 'fleet:changed', {})
+    if WebsiteBridge then WebsiteBridge.PushVehicleUpdate(vehicleId) end
 
     return { vehicleId = vehicleId }
 end
@@ -101,6 +102,7 @@ function Vehicles.Update(src, vehicleId, data)
 
     Logs.Write(emp.id, 'vehicle_update', ('%s hat Fahrzeug %s (%s) bearbeitet.'):format(emp.name, name, plate))
     RPC.PushToPermission('dispatch', 'fleet:changed', {})
+    if WebsiteBridge then WebsiteBridge.PushVehicleUpdate(vehicleId) end
 
     return { ok = true }
 end
@@ -131,6 +133,7 @@ function Vehicles.Delete(src, vehicleId, mode)
     logVehicleEvent(vehicleId, 'archived', ('Fahrzeug von %s archiviert.'):format(emp.name))
     Logs.Write(emp.id, 'vehicle_archive', ('%s hat Fahrzeug %s (%s) archiviert.'):format(emp.name, vehicle.name, vehicle.plate))
     RPC.PushToPermission('dispatch', 'fleet:changed', {})
+    if WebsiteBridge then WebsiteBridge.PushVehicleUpdate(vehicleId) end
 
     local forced = (mode == 'hard' and hasHistory)
     return { ok = true, mode = 'archive', forced = forced }
@@ -267,6 +270,7 @@ function Vehicles.ReportCondition(src, fuel, notes, needsWorkshop)
     Logs.Write(emp.id, 'vehicle_condition_report', ('%s hat den Zustand von %s (%s) gemeldet.'):format(emp.name, vehicle.name, vehicle.plate))
 
     RPC.PushToPermission('dispatch', 'fleet:changed', {})
+    if WebsiteBridge then WebsiteBridge.PushVehicleUpdate(vehicle.id) end
 
     return { ok = true, reported = true }
 end
