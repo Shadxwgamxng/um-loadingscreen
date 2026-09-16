@@ -99,6 +99,7 @@ const ERROR_MESSAGES = {
     unknown_action: 'Unbekannte Aktion.',
     connection_error: 'Keine Verbindung zum Server.',
     server_error: 'Serverfehler. Bitte später erneut versuchen.',
+    player_not_found: 'Konnte deine Spielerposition gerade nicht ermitteln - bitte erneut versuchen.',
 };
 
 function translateError(code) {
@@ -1055,31 +1056,129 @@ VIEWS['dispatch-drivers'] = async (root) => {
 // Marker über einem echten Kartenbild (statt eines abstrakten Schemas).
 // Das Kartenbild selbst liefert diese Ressource NICHT mit (Rockstars
 // GTA-V-Kartengrafik ist urheberrechtlich geschützt) - lege eine eigene
-// Datei unter html/img/map.jpg ab (siehe README "Live-Karte"). MAP_BOUNDS
-// sind grobe, community-übliche Weltkoordinaten-Extents der vollständigen
-// Karte - passt dein Kartenausschnitt nicht exakt, bei Bedarf hier
-// nachjustieren.
+// Datei unter html/img/map.jpg ab (siehe README "Live-Karte").
+//
+// DEFAULT_MAP_BOUNDS sind nur eine grobe Schätzung und passen mit hoher
+// Wahrscheinlichkeit NICHT zu deinem konkreten Kartenausschnitt - benutze
+// stattdessen das Kalibrierungswerkzeug unten (Button "🧭 Karte
+// kalibrieren"), das echte, zu deinem Bild passende Werte berechnet.
+// Persistiert werden diese über Config.LiveMap.bounds (config.lua),
+// gepusht als liveMapBounds in der Session (server/sv_main.lua).
 // ---------------------------------------------------------
 
-const MAP_BOUNDS = { minX: -4300, maxX: 4700, minY: -4300, maxY: 8200 };
+const DEFAULT_MAP_BOUNDS = { minX: -4300, maxX: 4700, minY: -4300, maxY: 8200 };
 const LIVE_MAP_POLL_MS = 3000; // sollte grob Config.LiveMap.trackingIntervalMs (Lua) entsprechen
 
+// Vorschau-Override aus dem Kalibrierungswerkzeug - gilt nur für die
+// laufende Sitzung (nicht gespeichert), bis die berechneten Werte in
+// config.lua eingetragen und die Ressource neu gestartet wurde.
+let mapBoundsOverride = null;
+let calibrationActive = false;
+let calibrationPoints = [];
+let calibrationResult = null;
+
+function getMapBounds() {
+    return mapBoundsOverride || (State.config && State.config.liveMapBounds) || DEFAULT_MAP_BOUNDS;
+}
+
 function worldToMapPercent(x, y) {
-    const px = ((x - MAP_BOUNDS.minX) / (MAP_BOUNDS.maxX - MAP_BOUNDS.minX)) * 100;
-    const py = 100 - ((y - MAP_BOUNDS.minY) / (MAP_BOUNDS.maxY - MAP_BOUNDS.minY)) * 100; // Y invertiert: Norden (GTA Y+) = oben
+    const b = getMapBounds();
+    const px = ((x - b.minX) / (b.maxX - b.minX)) * 100;
+    const py = 100 - ((y - b.minY) / (b.maxY - b.minY)) * 100; // Y invertiert: Norden (GTA Y+) = oben
     return [px, py];
 }
 
+//- Löst minX/maxX/minY/maxY aus zwei Kalibrierungspunkten (je Bildposition
+//- in Prozent + zugehörige Weltkoordinate) - lineare Umkehrung von
+//- worldToMapPercent. Erfordert einen spürbaren Abstand zwischen den beiden
+//- Punkten in BEIDEN Achsen, sonst ist das Ergebnis numerisch unzuverlässig.
+function solveBoundsFromCalibration(p1, p2) {
+    if (Math.abs(p2.x - p1.x) < 50 || Math.abs(p2.y - p1.y) < 50) return null;
+
+    const slopeX = (p2.px - p1.px) / (p2.x - p1.x);
+    const interceptX = p1.px - slopeX * p1.x;
+    const minX = -interceptX / slopeX;
+    const maxX = minX + 100 / slopeX;
+
+    const slopeY = (p2.py - p1.py) / (p2.y - p1.y);
+    const interceptY = p1.py - slopeY * p1.y;
+    const k = -slopeY;
+    const minY = (interceptY - 100) / k;
+    const maxY = minY + 100 / k;
+
+    return { minX: Math.round(minX), maxX: Math.round(maxX), minY: Math.round(minY), maxY: Math.round(maxY) };
+}
+
+function renderCalibrationPanel() {
+    const el = document.getElementById('live-map-calibration');
+    if (!el) return;
+
+    if (!calibrationActive) {
+        el.innerHTML = `<button class="btn btn-sm" onclick="Actions.toggleMapCalibration()">🧭 Karte kalibrieren</button>`;
+        return;
+    }
+
+    if (calibrationResult) {
+        const snippet = `Config.LiveMap.bounds = { minX = ${calibrationResult.minX}, maxX = ${calibrationResult.maxX}, minY = ${calibrationResult.minY}, maxY = ${calibrationResult.maxY} }`;
+        el.innerHTML = `
+            <div class="card" style="margin-top:10px;">
+                <div class="card-title">Kalibrierung abgeschlossen</div>
+                <p class="card-hint">Vorschau ist bereits aktiv (nur für diese Sitzung). Trage die Werte unten in <code>config.lua</code> ein und starte die Ressource neu, damit sie dauerhaft gelten - und trage dieselben vier Zahlen in <code>MAP_BOUNDS</code> auf der Website ein.</p>
+                <textarea readonly style="width:100%;font-family:monospace;font-size:11.5px;margin-top:8px;" rows="2" onclick="this.select()">${escapeHtml(snippet)}</textarea>
+                <div class="btn-row" style="margin-top:10px;">
+                    <button class="btn btn-sm btn-ghost" onclick="Actions.resetMapCalibration()">Neu kalibrieren</button>
+                    <button class="btn btn-sm" onclick="Actions.toggleMapCalibration()">Fertig</button>
+                </div>
+            </div>`;
+        return;
+    }
+
+    const stepNum = calibrationPoints.length + 1;
+    el.innerHTML = `
+        <div class="card" style="margin-top:10px;">
+            <div class="card-title">Kalibrierung - Punkt ${stepNum} von 2</div>
+            <p class="card-hint">Klicke auf der Karte oben auf eine Stelle, die du im Spiel eindeutig wiederfindest (z.B. Flughafen-Tower, Bergspitze) - je weiter die beiden Punkte auseinander liegen, desto genauer wird das Ergebnis.</p>
+            <div id="live-map-calibration-pending"></div>
+            <div class="btn-row" style="margin-top:8px;">
+                <button class="btn btn-sm btn-ghost" onclick="Actions.toggleMapCalibration()">Abbrechen</button>
+            </div>
+        </div>`;
+}
+
+function renderCalibrationPendingPoint(px, py) {
+    const el = document.getElementById('live-map-calibration-pending');
+    if (!el) return;
+    el.innerHTML = `
+        <p class="card-hint">Bildposition erfasst (${px.toFixed(1)}%, ${py.toFixed(1)}%). Geh jetzt im Spiel an genau diese Stelle und drücke:</p>
+        <div class="btn-row">
+            <button class="btn btn-sm btn-primary" onclick="Actions.useCurrentPositionForCalibration(${px}, ${py})">📍 Aktuelle Position übernehmen</button>
+        </div>
+        <p class="card-hint" style="margin-top:6px;">Oder die Weltkoordinaten manuell eintragen, falls bekannt:</p>
+        <div class="btn-row" style="align-items:center;">
+            <input id="calib-x" type="number" step="0.01" placeholder="X" style="width:100px;" />
+            <input id="calib-y" type="number" step="0.01" placeholder="Y" style="width:100px;" />
+            <button class="btn btn-sm" onclick="Actions.confirmManualCalibrationPoint(${px}, ${py})">Übernehmen</button>
+        </div>`;
+}
+
 VIEWS['dispatch-map'] = async (root) => {
+    calibrationActive = false;
+    calibrationPoints = [];
+    calibrationResult = null;
+
     root.innerHTML = `
         <h1 class="view-title">Live-Karte</h1>
         <p class="view-subtitle">Zeigt ausschließlich gerade eingestempelte Fahrer (aktualisiert alle ${Math.round(LIVE_MAP_POLL_MS / 1000)}s).</p>
         <div class="live-map-wrap">
-            <img class="live-map-img" src="img/map.jpg" alt="Karte" onerror="this.closest('.live-map-wrap').classList.add('live-map-img-missing')" />
+            <img id="live-map-img" class="live-map-img" src="img/map.jpg" alt="Karte" onerror="this.closest('.live-map-wrap').classList.add('live-map-img-missing')" onclick="Actions.mapImageClicked(event)" />
             <div class="live-map-img-fallback-hint">Kein Kartenbild gefunden - lege eine Datei unter <code>html/img/map.jpg</code> ab (siehe README).</div>
             <div id="live-map-markers" class="live-map-markers"></div>
+            <div id="live-map-calibration-markers" class="live-map-markers"></div>
         </div>
+        <div id="live-map-calibration"></div>
         <div class="section" style="margin-top:16px;" id="live-map-driver-list"></div>`;
+
+    renderCalibrationPanel();
 
     const markersEl = document.getElementById('live-map-markers');
     const listEl = document.getElementById('live-map-driver-list');
@@ -1115,6 +1214,79 @@ VIEWS['dispatch-map'] = async (root) => {
 
     await refresh();
     activeViewInterval = setInterval(refresh, LIVE_MAP_POLL_MS);
+};
+
+Actions.toggleMapCalibration = () => {
+    calibrationActive = !calibrationActive;
+    calibrationPoints = [];
+    calibrationResult = null;
+    renderCalibrationMarkers();
+    document.querySelector('.live-map-wrap').classList.toggle('calibrating', calibrationActive);
+    renderCalibrationPanel();
+};
+
+Actions.resetMapCalibration = () => {
+    calibrationPoints = [];
+    calibrationResult = null;
+    renderCalibrationMarkers();
+    renderCalibrationPanel();
+};
+
+function renderCalibrationMarkers(pending) {
+    const markersEl = document.getElementById('live-map-calibration-markers');
+    if (!markersEl) return;
+    const confirmed = calibrationPoints.map((p) => `<div class="live-map-marker" style="left:${p.px}%;top:${p.py}%;">
+        <div class="live-map-dot" style="background:#22c55e;"></div>
+    </div>`).join('');
+    const pendingHtml = pending ? `<div class="live-map-marker" style="left:${pending.px}%;top:${pending.py}%;">
+        <div class="live-map-dot" style="background:#eab308;"></div>
+    </div>` : '';
+    markersEl.innerHTML = confirmed + pendingHtml;
+}
+
+Actions.mapImageClicked = (event) => {
+    if (!calibrationActive || calibrationResult) return;
+    const img = document.getElementById('live-map-img');
+    const rect = img.getBoundingClientRect();
+    const px = ((event.clientX - rect.left) / rect.width) * 100;
+    const py = ((event.clientY - rect.top) / rect.height) * 100;
+
+    renderCalibrationMarkers({ px, py });
+    renderCalibrationPendingPoint(px, py);
+};
+
+function commitCalibrationPoint(px, py, x, y) {
+    calibrationPoints.push({ px, py, x, y });
+    if (calibrationPoints.length >= 2) {
+        const result = solveBoundsFromCalibration(calibrationPoints[0], calibrationPoints[1]);
+        if (!result) {
+            toast('Kalibrierung fehlgeschlagen', 'Die beiden Punkte liegen zu nah beieinander - bitte zwei deutlich weiter auseinanderliegende Stellen wählen.', 'error');
+            calibrationPoints = [];
+            renderCalibrationMarkers();
+            renderCalibrationPanel();
+            return;
+        }
+        calibrationResult = result;
+        mapBoundsOverride = result;
+        toast('Kalibrierung berechnet', 'Vorschau ist aktiv - die Marker-Positionen oben nutzen jetzt die neuen Werte.', 'success');
+    }
+    renderCalibrationMarkers();
+    renderCalibrationPanel();
+}
+
+Actions.useCurrentPositionForCalibration = async (px, py) => {
+    const pos = await call('dispatch:currentPosition');
+    commitCalibrationPoint(px, py, pos.x, pos.y);
+};
+
+Actions.confirmManualCalibrationPoint = (px, py) => {
+    const x = Number(modalInputValue('calib-x'));
+    const y = Number(modalInputValue('calib-y'));
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        toast('Fehler', 'Bitte X und Y eintragen.', 'error');
+        return;
+    }
+    commitCalibrationPoint(px, py, x, y);
 };
 
 VIEWS['dispatch-pool'] = async (root) => {

@@ -506,10 +506,25 @@ Lieferauftrag inkl. Route, falls einer läuft (`server/sv_tracking.lua`).
   geschützt und darf nicht mitverteilt werden). Lege eine eigene
   Kartengrafik unter `html/img/map.jpg` ab (siehe
   `html/img/KARTENBILD_HIER_ABLEGEN.txt`) - ohne diese Datei zeigt der
-  Reiter stattdessen einen Hinweistext statt eines kaputten Bildes. Die
-  Umrechnung von Weltkoordinaten auf Bildposition nutzt grobe,
-  community-übliche Grenzwerte (`MAP_BOUNDS` in `html/js/app.js`) - passt
-  dein Kartenausschnitt nicht exakt dazu, dort nachjustieren.
+  Reiter stattdessen einen Hinweistext statt eines kaputten Bildes.
+- **Kartenbild kalibrieren (wichtig!)**: `Config.LiveMap.bounds` legt fest,
+  welcher Weltkoordinaten-Bereich auf dein Kartenbild abgebildet wird - die
+  mitgelieferten Standardwerte sind nur eine grobe Schätzung und passen mit
+  hoher Wahrscheinlichkeit **nicht** zu deinem konkreten Bildausschnitt
+  (Marker landen dann an der falschen Stelle). Benutze stattdessen den
+  Button **"🧭 Karte kalibrieren"** im Reiter "Live-Karte": klicke auf der
+  Karte auf eine Stelle, die du im Spiel eindeutig wiederfindest (z.B.
+  Flughafen-Tower, eine markante Bergspitze), geh dann im Spiel genau
+  dorthin und bestätige mit "Aktuelle Position übernehmen" (oder trag die
+  Koordinaten manuell ein, falls bekannt) - wiederhole das für eine zweite,
+  möglichst weit entfernte Stelle. Das Werkzeug berechnet daraus
+  automatisch die vier `Config.LiveMap.bounds`-Werte, zeigt sie fertig zum
+  Reinkopieren an UND wendet sie sofort als Vorschau an (nur für die
+  laufende Sitzung), damit du die Treffgenauigkeit direkt an den
+  Live-Markern prüfen kannst, bevor du sie in `config.lua` einträgst und die
+  Ressource neu startest. Trag danach dieselben vier Zahlen auch in
+  `MAP_BOUNDS` auf der Website ein (falls Website-Sync genutzt wird), damit
+  ein Fahrer auf beiden Karten an derselben Stelle erscheint.
 - **Website-Push (optional)**: Ist `Config.Website.enabled = true` (siehe
   "Website-Sync" unten), meldet derselbe Tracking-Thread jeden Tick per
   HTTP an die externe Website (`driver_position.update`/`-.remove`
@@ -580,7 +595,10 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `Config.TrailerTypes` - Katalog der fünf Anhängertypen (Reiter "Anhänger");
   `Config.CargoTrailerType` - welche Frachtart welchen Anhängertyp verlangt
 - `Config.LiveMap.trackingIntervalMs` - Tracking-Intervall der Live-Karte
-  (Standard 3000ms), gilt für die Tablet-NUI UND den Website-Push
+  (Standard 3000ms), gilt für die Tablet-NUI UND den Website-Push;
+  `Config.LiveMap.bounds` - Weltkoordinaten-Grenzen deines Kartenbilds, am
+  einfachsten über das Kalibrierungswerkzeug im Reiter "Live-Karte" ermittelt
+  (siehe oben)
 - `Config.OrderGeneration` - Intervall und maximale Poolgröße
 - `Config.AllowManualOrderGeneration` - blendet den "Auftrag generieren"-Testbutton für Fahrer ein (Standard `true`, für Live-Betrieb auf `false` stellen)
 - `Config.OrderCancelPenalty` - Vertragsstrafe (Standard 500$), wenn ein Fahrer einen Auftrag ohne Disponenten-Freigabe selbst abbricht

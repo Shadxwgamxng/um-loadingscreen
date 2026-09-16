@@ -146,3 +146,18 @@ RPC.Register('dispatch:liveMap', function(src)
     end
     return { drivers = out }
 end)
+
+--- Liefert die aktuelle Position des aufrufenden Spielers serverseitig -
+--- Grundlage für den "Aktuelle Position übernehmen"-Button im
+--- Kartenkalibrierungs-Werkzeug (Reiter "Live-Karte"). Eigene RPC statt
+--- Wiederverwendung von 'gf:locations:currentPosition' (server/sv_locations.lua),
+--- weil die Kalibrierung nur die Berechtigung live_map_view braucht, nicht
+--- locations_manage - ein Disponent ohne Orte-Verwaltung soll die
+--- Live-Karte trotzdem kalibrieren können.
+RPC.Register('dispatch:currentPosition', function(src)
+    Employees.RequirePermission(src, 'live_map_view')
+    local ped = GetPlayerPed(src)
+    if not ped or ped == 0 then error('player_not_found') end
+    local coords = GetEntityCoords(ped)
+    return { x = coords.x, y = coords.y }
+end)
