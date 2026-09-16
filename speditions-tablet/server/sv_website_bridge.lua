@@ -36,15 +36,19 @@ local function apiRequest(method, path, bodyTable, cb)
 
     PerformHttpRequest(url, function(statusCode, responseText, _responseHeaders)
         local ok = type(statusCode) == 'number' and statusCode >= 200 and statusCode < 300
-        if not ok then
-            print(('^1[speditions-tablet]^7 Website-Sync: %s %s fehlgeschlagen (HTTP %s).'):format(method, path, tostring(statusCode)))
-        end
-        if not cb then return end
+
         local decoded = nil
         if responseText and responseText ~= '' then
             local success, result = pcall(json.decode, responseText)
             if success then decoded = result end
         end
+
+        if not ok then
+            local reason = (decoded and decoded.error) or (responseText ~= '' and responseText) or 'keine Antwort (Server nicht erreichbar/Timeout?)'
+            print(('^1[speditions-tablet]^7 Website-Sync: %s %s fehlgeschlagen (HTTP %s): %s'):format(method, path, tostring(statusCode), tostring(reason)))
+        end
+
+        if not cb then return end
         cb(ok, statusCode, decoded)
     end, method, body, headers)
 end
