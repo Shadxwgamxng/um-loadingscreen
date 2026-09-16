@@ -281,6 +281,7 @@ function Drivers.EndShift(src)
         Vehicles.AssignInternal(emp, driver.assigned_vehicle_id, nil)
     end
     Logs.Write(emp.id, 'shift_ended', ('%s hat die Fahrerkarte abgezogen (Fahrt beendet).'):format(emp.name))
+    if Tracking then Tracking.RemoveDriver(emp.id) end
     return { ok = true }
 end
 

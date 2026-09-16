@@ -308,6 +308,7 @@ const NAV_ITEMS = [
     { id: 'driver-vehicle', label: 'Mein Fahrzeug', icon: '🚛', perm: 'driver_actions' },
     { id: 'driver-messages', label: 'Nachrichten', icon: '✉️', perm: 'driver_actions' },
     { id: 'dispatch-drivers', label: 'Fahrerübersicht', icon: '👥', perm: 'dispatch' },
+    { id: 'dispatch-map', label: 'Live-Karte', icon: '🗺️', perm: 'live_map_view' },
     { id: 'dispatch-pool', label: 'Auftragspool', icon: '📋', perm: 'dispatch' },
     { id: 'dispatch-active', label: 'Aktive Aufträge', icon: '🚚', perm: 'dispatch' },
     { id: 'dispatch-completed', label: 'Abgeschlossen', icon: '✅', perm: 'dispatch' },
@@ -1047,6 +1048,73 @@ VIEWS['dispatch-drivers'] = async (root) => {
         <h1 class="view-title">Fahrerübersicht</h1>
         <p class="view-subtitle">Alle aktiven Fahrer mit Status und aktuellem Fahrzeug.</p>
         <div class="section">${table(['Status', 'Fahrer', 'Fahrzeug', 'Fahrzeugstatus', ''], rows)}</div>`;
+};
+
+// ---------------------------------------------------------
+// Live-Karte - zeigt AUSSCHLIESSLICH gerade eingestempelte Fahrer als
+// Marker über einem echten Kartenbild (statt eines abstrakten Schemas).
+// Das Kartenbild selbst liefert diese Ressource NICHT mit (Rockstars
+// GTA-V-Kartengrafik ist urheberrechtlich geschützt) - lege eine eigene
+// Datei unter html/img/map.jpg ab (siehe README "Live-Karte"). MAP_BOUNDS
+// sind grobe, community-übliche Weltkoordinaten-Extents der vollständigen
+// Karte - passt dein Kartenausschnitt nicht exakt, bei Bedarf hier
+// nachjustieren.
+// ---------------------------------------------------------
+
+const MAP_BOUNDS = { minX: -4300, maxX: 4700, minY: -4300, maxY: 8200 };
+const LIVE_MAP_POLL_MS = 3000; // sollte grob Config.LiveMap.trackingIntervalMs (Lua) entsprechen
+
+function worldToMapPercent(x, y) {
+    const px = ((x - MAP_BOUNDS.minX) / (MAP_BOUNDS.maxX - MAP_BOUNDS.minX)) * 100;
+    const py = 100 - ((y - MAP_BOUNDS.minY) / (MAP_BOUNDS.maxY - MAP_BOUNDS.minY)) * 100; // Y invertiert: Norden (GTA Y+) = oben
+    return [px, py];
+}
+
+VIEWS['dispatch-map'] = async (root) => {
+    root.innerHTML = `
+        <h1 class="view-title">Live-Karte</h1>
+        <p class="view-subtitle">Zeigt ausschließlich gerade eingestempelte Fahrer (aktualisiert alle ${Math.round(LIVE_MAP_POLL_MS / 1000)}s).</p>
+        <div class="live-map-wrap">
+            <img class="live-map-img" src="img/map.jpg" alt="Karte" onerror="this.closest('.live-map-wrap').classList.add('live-map-img-missing')" />
+            <div class="live-map-img-fallback-hint">Kein Kartenbild gefunden - lege eine Datei unter <code>html/img/map.jpg</code> ab (siehe README).</div>
+            <div id="live-map-markers" class="live-map-markers"></div>
+        </div>
+        <div class="section" style="margin-top:16px;" id="live-map-driver-list"></div>`;
+
+    const markersEl = document.getElementById('live-map-markers');
+    const listEl = document.getElementById('live-map-driver-list');
+
+    const refresh = async () => {
+        const d = await call('dispatch:liveMap');
+
+        markersEl.innerHTML = d.drivers.map((drv) => {
+            const [px, py] = worldToMapPercent(drv.x, drv.y);
+            return `<div class="live-map-marker" style="left:${px}%;top:${py}%;" title="${escapeHtml(drv.name)}">
+                <div class="live-map-dot"></div>
+                <div class="live-map-marker-label">${escapeHtml(drv.name)}</div>
+            </div>`;
+        }).join('');
+
+        listEl.innerHTML = d.drivers.map((drv) => {
+            const orderLabel = drv.order
+                ? `Auftrag - ${escapeHtml(drv.order.cargo)}: ${escapeHtml(drv.order.startLocation)} → ${escapeHtml(drv.order.endLocation)} (${escapeHtml((ORDER_STATUS_META[drv.order.status] && ORDER_STATUS_META[drv.order.status].label) || drv.order.status)})`
+                : 'Kein laufender Auftrag';
+            const vehicleLabel = drv.vehicleLabel || drv.vehiclePlate
+                ? `${escapeHtml(drv.vehicleLabel || 'Fahrzeug')}${drv.vehiclePlate ? ` - ${escapeHtml(drv.vehiclePlate)}` : ''}`
+                : 'Kein Fahrzeug erkannt';
+            return `<div class="live-map-driver-row">
+                <div>
+                    <div class="live-map-driver-name">${escapeHtml(drv.name)}</div>
+                    <div class="live-map-driver-order">${vehicleLabel}</div>
+                    <div class="live-map-driver-order">${orderLabel}</div>
+                </div>
+                <div class="card-hint">${drv.x}, ${drv.y}</div>
+            </div>`;
+        }).join('') || '<div class="card-hint">Aktuell ist niemand eingestempelt.</div>';
+    };
+
+    await refresh();
+    activeViewInterval = setInterval(refresh, LIVE_MAP_POLL_MS);
 };
 
 VIEWS['dispatch-pool'] = async (root) => {

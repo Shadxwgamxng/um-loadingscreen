@@ -156,6 +156,22 @@ CreateThread(function()
     WebsiteBridge.PushLocations()
 end)
 
+--- Meldet Position/Fahrzeug/Auftrag eines eingestempelten Fahrers an die
+--- Website-Live-Karte - aufgerufen aus server/sv_tracking.lua bei jedem
+--- Tracking-Tick (Config.LiveMap.trackingIntervalMs), ausschließlich für
+--- Fahrer, die gerade tatsächlich getrackt werden (siehe dort).
+function WebsiteBridge.PushDriverPosition(data)
+    if not websiteConfigured() then return end
+    WebsiteBridge.PushEvent('driver_position.update', data)
+end
+
+--- Entfernt einen Fahrer sofort von der Website-Live-Karte (Schichtende
+--- oder Disconnect) - siehe Tracking.RemoveDriver.
+function WebsiteBridge.PushDriverPositionRemove(tabletEmployeeId)
+    if not websiteConfigured() then return end
+    WebsiteBridge.PushEvent('driver_position.remove', { tabletEmployeeId = tabletEmployeeId })
+end
+
 -- =========================================================
 -- Periodische Lenkzeiten-Meldung
 -- =========================================================

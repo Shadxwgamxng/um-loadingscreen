@@ -245,6 +245,7 @@ serverseitig durchgesetzt in `server/sv_roles.lua`):
 |---|---|
 | `driver_actions` | Fahrerfunktionen (Aufträge fahren, Fahrerkarte, eigene Statistik, Nachrichten empfangen) |
 | `dispatch` | Disposition (Fahrerübersicht, Auftragspool disponieren, Fahrer kontaktieren, Umsatzübersicht) |
+| `live_map_view` | Live-Karte einsehen (Position, Fahrzeug, Auftrag jedes eingestempelten Fahrers) |
 | `fleet_manage` | Fuhrparkverwaltung (Fahrzeuge anlegen/bearbeiten/löschen/zuweisen) UND Anhängerverwaltung (Reiter "Anhänger": anlegen/bearbeiten/löschen/an-/umkuppeln) |
 | `locations_manage` | Orte verwalten (Reiter "Orte": Be-/Entladepunkte anlegen/bearbeiten/löschen) |
 | `employees_manage` | Mitarbeiterverwaltung (einstellen, Rolle/Status ändern, Passwörter zurücksetzen, Fahrerakten) |
@@ -264,7 +265,7 @@ die Geschäftsführung kann auch ihre Berechtigungen im Tablet anpassen):
 | Basisrolle | Berechtigungen |
 |---|---|
 | LKW-Fahrer | `driver_actions` |
-| Disponent | `dispatch` |
+| Disponent | `dispatch`, `live_map_view` |
 | Geschäftsführung | alle außer `driver_actions` |
 
 Welche Reiter im Tablet sichtbar sind, richtet sich ausschließlich nach den
@@ -482,6 +483,40 @@ Im Reiter "Aufträge" hat ein Fahrer bei jedem laufenden Auftrag
   Unternehmensguthaben wird eine **Vertragsstrafe** (`Config.OrderCancelPenalty`,
   Standard 500$) als eigene Transaktion (`vertragsstrafe`) belastet.
 
+### Live-Karte (Reiter "Live-Karte", Berechtigung `live_map_view`)
+
+Zeigt **ausschließlich gerade eingestempelte** Fahrer (`st_drivers.on_shift = 1`)
+in Echtzeit - alle anderen (nicht eingeloggte, eingeloggte aber nicht
+eingestempelte) verursachen keinerlei Server-Last, es wird für sie nicht
+getrackt. Pro Fahrer: Name, aktuelle Position (In-Game-Koordinaten), das
+Fahrzeug, in dem er gerade tatsächlich sitzt bzw. ersatzweise sein für die
+Schicht zugewiesenes Fahrzeug (Typ/Kennzeichen), sowie sein aktueller
+Lieferauftrag inkl. Route, falls einer läuft (`server/sv_tracking.lua`).
+
+- **Tracking-Intervall**: `Config.LiveMap.trackingIntervalMs` (Standard
+  3000ms) - ein serverseitiger Thread liest für jeden eingestempelten und
+  gerade verbundenen Fahrer Position (`GetEntityCoords`) und Fahrzeug
+  (`GetVehiclePedIsIn`) aus und hält das Ergebnis rein im Arbeitsspeicher
+  (keine Datenbanktabelle, keine Historie).
+- **Sofortiges Entfernen**: Beim "Fahrerkarte abziehen" (`Drivers.EndShift`)
+  und bei Disconnect wird der Fahrer sofort von der Karte entfernt - nicht
+  erst beim nächsten Tracking-Tick.
+- **Eigenes Kartenbild nötig**: Diese Ressource liefert **kein**
+  GTA-V-Kartenbild mit (Rockstars Kartengrafik ist urheberrechtlich
+  geschützt und darf nicht mitverteilt werden). Lege eine eigene
+  Kartengrafik unter `html/img/map.jpg` ab (siehe
+  `html/img/KARTENBILD_HIER_ABLEGEN.txt`) - ohne diese Datei zeigt der
+  Reiter stattdessen einen Hinweistext statt eines kaputten Bildes. Die
+  Umrechnung von Weltkoordinaten auf Bildposition nutzt grobe,
+  community-übliche Grenzwerte (`MAP_BOUNDS` in `html/js/app.js`) - passt
+  dein Kartenausschnitt nicht exakt dazu, dort nachjustieren.
+- **Website-Push (optional)**: Ist `Config.Website.enabled = true` (siehe
+  "Website-Sync" unten), meldet derselbe Tracking-Thread jeden Tick per
+  HTTP an die externe Website (`driver_position.update`/`-.remove`
+  Events) - Grundlage für eine identische Live-Karte dort. Ohne
+  Website-Sync passiert serverseitig nichts weiter, die Tablet-eigene
+  Live-Karte funktioniert unabhängig davon.
+
 ## Datenbankschema
 
 Siehe `sql/install.sql`. Wichtigste Tabellen:
@@ -544,6 +579,8 @@ Alle Stellschrauben befinden sich in `config.lua`:
   Frachtart für den Lieferschein
 - `Config.TrailerTypes` - Katalog der fünf Anhängertypen (Reiter "Anhänger");
   `Config.CargoTrailerType` - welche Frachtart welchen Anhängertyp verlangt
+- `Config.LiveMap.trackingIntervalMs` - Tracking-Intervall der Live-Karte
+  (Standard 3000ms), gilt für die Tablet-NUI UND den Website-Push
 - `Config.OrderGeneration` - Intervall und maximale Poolgröße
 - `Config.AllowManualOrderGeneration` - blendet den "Auftrag generieren"-Testbutton für Fahrer ein (Standard `true`, für Live-Betrieb auf `false` stellen)
 - `Config.OrderCancelPenalty` - Vertragsstrafe (Standard 500$), wenn ein Fahrer einen Auftrag ohne Disponenten-Freigabe selbst abbricht
@@ -587,6 +624,10 @@ Alle Stellschrauben befinden sich in `config.lua`:
   Erstbefüllung aus `Config.SeedLocations`, "Aktuelle Position übernehmen"
   (ermittelt serverseitig per `GetEntityCoords`/`GetEntityHeading`),
   `locations:changed`-Broadcast an alle angemeldeten Mitarbeiter.
+- `server/sv_tracking.lua` - Live-Karte: trackt ausschließlich eingestempelte
+  Fahrer (Position, Fahrzeug, aktiver Auftrag), rein im Arbeitsspeicher;
+  bedient sowohl die Tablet-NUI (RPC `dispatch:liveMap`) als auch den
+  optionalen HTTP-Push an die Website (`WebsiteBridge.PushDriverPosition`).
 - `server/sv_finance.lua` - Transaktions-Ledger, Guthaben, Ein-/Auszahlungen.
 - `server/sv_radio.lua` - CB-Funk ein-/ausschalten, Anrufe (privater pma-voice-Call-Kanal).
 - `server/sv_payroll.lua` - Stundenlöhne, Stempeluhr, Gehaltsauszahlung.
@@ -652,6 +693,12 @@ FiveM-Server - der Spielserver muss dafür keinen eingehenden Port öffnen:
   zusätzlich `locations.sync` gepusht - meldet die gültigen Standortnamen/
   Frachtarten (`Locations.List()`/`Config.CargoTypes`), Grundlage für die
   Standort-Auswahl beim Anlegen neuer Aufträge auf der Website.
+  Zusätzlich meldet `server/sv_tracking.lua` bei jedem Tracking-Tick
+  (`Config.LiveMap.trackingIntervalMs`) Position/Fahrzeug/Auftrag jedes
+  gerade eingestempelten Fahrers per `driver_position.update` - beim
+  Schichtende oder Disconnect sofort ein `driver_position.remove`, statt bis
+  zum nächsten Tick zu warten. Grundlage für eine identische Live-Karte auf
+  der Website (siehe "Live-Karte" oben).
 - **Pull** (Website → Tablet): alle `Config.Website.pollIntervalMs` fragt
   das Tablet `.../api/tablet/commands` ab und führt dort hinterlegte
   Befehle aus; das Ergebnis wird per `.../api/tablet/commands/{id}/ack`

@@ -97,6 +97,7 @@ Config.RoleLabels = {
 Config.Permissions = {
     { key = 'driver_actions',    label = 'Fahrerfunktionen (Aufträge fahren, Fahrerkarte, eigene Statistik, Nachrichten empfangen)', group = 'Fahrer' },
     { key = 'dispatch',          label = 'Disposition (Fahrerübersicht, Auftragspool disponieren, Fahrer kontaktieren)', group = 'Disposition' },
+    { key = 'live_map_view',     label = 'Live-Karte einsehen (Position, Fahrzeug, Auftrag jedes eingestempelten Fahrers)', group = 'Disposition' },
     { key = 'fleet_manage',      label = 'Fuhrparkverwaltung (Fahrzeuge anlegen/bearbeiten/löschen/zuweisen)', group = 'Fuhrpark' },
     { key = 'locations_manage',  label = 'Orte verwalten (Be-/Entladepunkte anlegen/bearbeiten/löschen)', group = 'Fuhrpark' },
     { key = 'employees_manage',  label = 'Mitarbeiterverwaltung (einstellen, Rolle/Status ändern, Passwörter zurücksetzen)', group = 'Personal' },
@@ -112,11 +113,21 @@ Config.Permissions = {
 -- Anlegen der jeweiligen Rolle in st_roles relevant, siehe oben).
 Config.DefaultRolePermissions = {
     fahrer = { 'driver_actions' },
-    disponent = { 'dispatch' },
+    disponent = { 'dispatch', 'live_map_view' },
     geschaeftsfuehrung = {
-        'dispatch', 'fleet_manage', 'locations_manage', 'employees_manage', 'roles_manage',
+        'dispatch', 'live_map_view', 'fleet_manage', 'locations_manage', 'employees_manage', 'roles_manage',
         'finance_view', 'finance_payout', 'wages_manage', 'activity_log_view', 'stats_view',
     },
+}
+
+-- Live-Karte (Reiter "Live-Karte" im Tablet, optional auch auf der externen
+-- Website - siehe Config.Website weiter unten): Tracking-Intervall für
+-- Position/Fahrzeug/Auftrag JEDES eingestempelten (on_shift) Fahrers.
+-- server/sv_tracking.lua. Kürzer = "flüssigere" Live-Karte, aber mehr
+-- Server-/HTTP-Last (bei aktivem Website-Sync ein HTTP-Push pro Fahrer und
+-- Intervall) - 3000ms ist ein guter Mittelwert.
+Config.LiveMap = {
+    trackingIntervalMs = 3000,
 }
 
 -- =========================================================
