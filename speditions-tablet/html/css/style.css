@@ -337,60 +337,12 @@ html, body {
 }
 .section-header h3 { margin: 0; font-size: 14.5px; }
 
-/* ---------- Live-Karte ---------- */
+/* ---------- Gehälter ---------- */
 
-.live-map-wrap {
-    position: relative;
-    background: var(--bg-0);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    max-height: 70vh;
-    overflow-y: auto;
-}
-.live-map-img { display: block; width: 100%; height: auto; }
-.live-map-wrap.calibrating .live-map-img { cursor: crosshair; }
-.live-map-img-fallback-hint {
-    display: none;
-    padding: 40px 20px;
-    text-align: center;
-    font-size: 13px;
-    color: var(--text-2);
-}
-.live-map-img-fallback-hint code { color: var(--text-1); }
-.live-map-wrap.live-map-img-missing .live-map-img { display: none; }
-.live-map-wrap.live-map-img-missing .live-map-img-fallback-hint { display: block; }
-.live-map-wrap.live-map-img-missing .live-map-markers { position: static; height: 0; }
-.live-map-markers { position: absolute; inset: 0; pointer-events: none; }
-.live-map-marker {
-    position: absolute;
-    transform: translate(-50%, -50%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-}
-.live-map-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: #3b82f6;
-    border: 2px solid #0b1220;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
-}
-.live-map-marker-label {
-    font-size: 10.5px;
-    font-weight: 600;
-    color: #fff;
-    background: rgba(11, 18, 32, 0.75);
-    padding: 1px 5px;
-    border-radius: 4px;
-    white-space: nowrap;
-}
-.live-map-driver-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
-.live-map-driver-row:last-child { border-bottom: none; }
-.live-map-driver-name { font-weight: 600; }
-.live-map-driver-order { color: var(--text-2); font-size: 12px; margin-top: 2px; }
+.wage-rate-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.wage-rate-row { display: flex; align-items: center; gap: 8px; }
+.wage-rate-row label { flex: 0 0 auto; margin: 0; min-width: 90px; font-size: 13px; }
+.wage-rate-row input { flex: 1; min-width: 70px; }
 
 /* ---------- Driver card (Fahrerkarte) ---------- */
 

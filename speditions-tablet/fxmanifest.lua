@@ -27,7 +27,6 @@ server_scripts {
     'server/sv_vehicles.lua',
     'server/sv_trailers.lua',
     'server/sv_drivers.lua',
-    'server/sv_tracking.lua',
     'server/sv_radio.lua',
     'server/sv_hours.lua',
     'server/sv_orders.lua',
@@ -52,11 +51,5 @@ files {
     'html/js/app.js',
     'html/sounds/ptt.m4a',
     'html/sounds/channel_switch.m4a',
-    'html/sounds/incoming_call.m4a',
-    -- Eigenes Kartenbild für die Live-Karte (siehe html/img/KARTENBILD_HIER_ABLEGEN.txt) -
-    -- Glob deckt gängige Formate ab, falls map.jpg nicht exakt passt.
-    'html/img/*.jpg',
-    'html/img/*.jpeg',
-    'html/img/*.png',
-    'html/img/*.webp'
+    'html/sounds/incoming_call.m4a'
 }

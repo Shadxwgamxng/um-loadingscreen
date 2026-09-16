@@ -32,6 +32,19 @@ end
 -- das setzt die Markierung beim Ausschalten wieder zurück).
 local warnedPmaVoiceMissing = false
 
+--- Ruft einen pma-voice-Export geschützt auf und loggt einen etwaigen Fehler
+--- MIT unserem eigenen Präfix (statt eines generischen "SCRIPT ERROR" ohne
+--- erkennbaren Bezug zu dieser Ressource) - macht sonst stillschweigend
+--- fehlschlagende Exports (z.B. weil ein pma-voice-Fork eine Funktion anders
+--- benannt hat) erstmals sichtbar.
+local function safePmaVoiceCall(exportName, ...)
+    local ok, err = pcall(function(...) exports['pma-voice'][exportName](exports['pma-voice'], ...) end, ...)
+    if not ok then
+        print(('^1[speditions-tablet]^7 CB-Funk: pma-voice-Export "%s" ist fehlgeschlagen: %s'):format(exportName, tostring(err)))
+    end
+    return ok
+end
+
 --- Überträgt den aktuellen Zustand an pma-voice. Wird bei jeder Änderung
 --- (an/aus, Kanal, Lautstärke, Stumm) neu aufgerufen.
 local function applyVoiceState()
@@ -50,13 +63,36 @@ local function applyVoiceState()
     end
     warnedPmaVoiceMissing = false
 
+    -- WICHTIG: pma-voice erfordert zusätzlich zum Kanal, dass "radioEnabled"
+    -- per setVoiceProperty gesetzt ist, bevor es einen Sendeversuch
+    -- (Push-to-Talk) überhaupt als Funkverkehr erkennt (isRadioEnabled() in
+    -- pma-voice selbst) - auf vielen Servern ist das normalerweise an ein
+    -- Funkgerät-Item in einem Inventarsystem gekoppelt. Da dieses Tablet
+    -- absichtlich ohne Framework/Inventar auskommt, aktivieren/deaktivieren
+    -- wir es hier selbst passend zum eigenen An/Aus-Schalter - ohne das
+    -- würde pma-voice jeden Sendeversuch stillschweigend ignorieren, obwohl
+    -- der Kanal korrekt gesetzt ist (macht sich NICHT durch eine Fehler-
+    -- meldung bemerkbar, sondern schlicht dadurch, dass pma-voice nie
+    -- "aktiven Funkverkehr" erkennt).
+    safePmaVoiceCall('setVoiceProperty', 'radioEnabled', radioOn)
+
     if radioOn then
-        exports['pma-voice']:setRadioChannel(channel)
-        exports['pma-voice']:setRadioVolume(muted and 0 or volume)
+        safePmaVoiceCall('setRadioChannel', channel)
+        safePmaVoiceCall('setRadioVolume', muted and 0 or volume)
     else
-        exports['pma-voice']:setRadioChannel(0)
+        safePmaVoiceCall('setRadioChannel', 0)
     end
 end
+
+--- Meldet sich der Server über pma-voice ab, hat der zuletzt gewählte Kanal
+--- NICHT gegriffen (z.B. weil voice_enableRadios=0 gesetzt ist oder ein
+--- radioEnabled-Item-System eines anderen Skripts dazwischenfunkt) - ohne
+--- diesen Listener würde man das nie erfahren, das Funkgerät wirkt dann
+--- einfach nur wirkungslos.
+RegisterNetEvent('pma-voice:radioChangeRejected', function()
+    print('^1[speditions-tablet]^7 CB-Funk: pma-voice hat die Kanalwahl ABGELEHNT (Event pma-voice:radioChangeRejected) - moegliche Ursachen: Convar voice_enableRadios steht auf 0, oder ein weiteres, hier installiertes Skript (z.B. ein Funkgeraet-Item-System) blockiert den Kanalwechsel.')
+    TriggerEvent('speditions-tablet:client:notify', 'CB-Funk: pma-voice hat die Kanalwahl abgelehnt - siehe Serverkonsole.', 'error')
+end)
 
 local function setInteracting(on)
     interacting = on

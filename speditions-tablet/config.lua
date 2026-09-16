@@ -97,7 +97,6 @@ Config.RoleLabels = {
 Config.Permissions = {
     { key = 'driver_actions',    label = 'Fahrerfunktionen (Aufträge fahren, Fahrerkarte, eigene Statistik, Nachrichten empfangen)', group = 'Fahrer' },
     { key = 'dispatch',          label = 'Disposition (Fahrerübersicht, Auftragspool disponieren, Fahrer kontaktieren)', group = 'Disposition' },
-    { key = 'live_map_view',     label = 'Live-Karte einsehen (Position, Fahrzeug, Auftrag jedes eingestempelten Fahrers)', group = 'Disposition' },
     { key = 'fleet_manage',      label = 'Fuhrparkverwaltung (Fahrzeuge anlegen/bearbeiten/löschen/zuweisen)', group = 'Fuhrpark' },
     { key = 'locations_manage',  label = 'Orte verwalten (Be-/Entladepunkte anlegen/bearbeiten/löschen)', group = 'Fuhrpark' },
     { key = 'employees_manage',  label = 'Mitarbeiterverwaltung (einstellen, Rolle/Status ändern, Passwörter zurücksetzen)', group = 'Personal' },
@@ -113,35 +112,14 @@ Config.Permissions = {
 -- Anlegen der jeweiligen Rolle in st_roles relevant, siehe oben).
 Config.DefaultRolePermissions = {
     fahrer = { 'driver_actions' },
-    disponent = { 'dispatch', 'live_map_view' },
+    disponent = { 'dispatch' },
+    -- driver_actions dabei: die Geschäftsführung soll alles können, was ein
+    -- LKW-Fahrer auch kann (Fahrerkarte, Aufträge fahren, eigene Statistik,
+    -- Nachrichten empfangen) - zusätzlich zu den GF-eigenen Funktionen.
     geschaeftsfuehrung = {
-        'dispatch', 'live_map_view', 'fleet_manage', 'locations_manage', 'employees_manage', 'roles_manage',
+        'driver_actions', 'dispatch', 'fleet_manage', 'locations_manage', 'employees_manage', 'roles_manage',
         'finance_view', 'finance_payout', 'wages_manage', 'activity_log_view', 'stats_view',
     },
-}
-
--- Live-Karte (Reiter "Live-Karte" im Tablet, optional auch auf der externen
--- Website - siehe Config.Website weiter unten): Tracking-Intervall für
--- Position/Fahrzeug/Auftrag JEDES eingestempelten (on_shift) Fahrers.
--- server/sv_tracking.lua. Kürzer = "flüssigere" Live-Karte, aber mehr
--- Server-/HTTP-Last (bei aktivem Website-Sync ein HTTP-Push pro Fahrer und
--- Intervall) - 3000ms ist ein guter Mittelwert.
--- bounds: Weltkoordinaten-Grenzen DEINES Kartenbilds (html/img/map.jpg) -
--- ohne exakte Kalibrierung landen die Fahrer-Marker an der falschen Stelle
--- auf dem Bild. Die Standardwerte unten sind nur eine grobe Schätzung und
--- passen mit hoher Wahrscheinlichkeit NICHT zu deinem konkreten Bildausschnitt.
--- Im Reiter "Live-Karte" gibt es dafür ein Kalibrierungswerkzeug (Button
--- "🧭 Karte kalibrieren", nur mit Berechtigung live_map_view sichtbar): an
--- zwei im Bild eindeutig wiedererkennbaren Stellen jeweils draufklicken UND
--- im Spiel an genau dieser Stelle stehend "Aktuelle Position übernehmen"
--- drücken - das Werkzeug berechnet daraus automatisch die vier Werte unten
--- und zeigt sie fertig zum Reinkopieren an (inkl. einer Live-Vorschau, bevor
--- du sie tatsächlich hier einträgst). Trag danach dieselben vier Werte auch
--- in der Website ein (falls Website-Sync genutzt wird), damit ein Fahrer auf
--- beiden Karten an derselben Stelle erscheint.
-Config.LiveMap = {
-    trackingIntervalMs = 3000,
-    bounds = { minX = -4300, maxX = 4700, minY = -4300, maxY = 8200 },
 }
 
 -- =========================================================

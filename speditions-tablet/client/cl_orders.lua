@@ -19,6 +19,7 @@ local myHasDriverActions = false
 local myOrders = {}
 local busy = false
 local locations = {}
+local locationsLoaded = false
 
 local function inTable(list, value)
     if type(list) ~= 'table' then return false end
@@ -35,13 +36,23 @@ local function refreshMyOrders()
 end
 
 --- Orte kommen seit der Umstellung auf st_locations (Reiter "Orte") nicht
---- mehr aus der statischen Config.Locations, sondern werden einmal beim
---- Ressourcenstart vom Server geladen und bei Änderungen (Ort angelegt/
---- bearbeitet/gelöscht) automatisch aktualisiert (siehe
---- 'locations:changed'-Broadcast unten).
+--- mehr aus der statischen Config.Locations, sondern werden vom Server
+--- geladen und bei Änderungen (Ort angelegt/bearbeitet/gelöscht) automatisch
+--- aktualisiert (siehe 'locations:changed'-Broadcast unten).
+--- WICHTIG: 'locations:list' verlangt eine aktive Tablet-Anmeldung
+--- (Employees.RequireRole) - beim allerersten Aufruf direkt nach
+--- Ressourcenstart ist noch niemand angemeldet, der Aufruf schlägt also so
+--- gut wie immer fehl. locationsLoaded sorgt dafür, dass der Poll-Loop
+--- unten es alle 3s erneut versucht, bis es einmal geklappt hat - sonst
+--- blieb `locations` für die gesamte Spielsitzung leer und damit jeder
+--- Bodenmarker/Wegpunkt komplett aus, sobald der Fahrer sich erst NACH
+--- diesem einen fehlgeschlagenen Versuch einloggt (der Normalfall).
 local function refreshLocations()
     ServerCall('locations:list', nil, function(res)
-        locations = (res and res.ok and res.result and res.result.locations) or {}
+        if res and res.ok and res.result then
+            locations = res.result.locations or {}
+            locationsLoaded = true
+        end
     end)
 end
 
@@ -170,6 +181,7 @@ CreateThread(function()
         end)
         if myHasDriverActions then
             refreshMyOrders()
+            if not locationsLoaded then refreshLocations() end
         else
             myOrders = {}
         end
