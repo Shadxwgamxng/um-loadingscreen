@@ -139,6 +139,25 @@ function Roles.SetWebsiteRoleKey(src, roleKey, websiteRoleKey)
     return { ok = true }
 end
 
+--- Umkehrung von Roles.GetWebsiteRoleKey für den Website-Sync-Rückkanal
+--- (Employees.HireFromWebsite): findet die Tablet-Rolle(n), die einer
+--- Website-Rolle zugeordnet sind. Eindeutig nur, wenn GENAU eine Tablet-
+--- Rolle diese Website-Rolle trägt - bei keiner oder mehreren Treffern
+--- kann nicht automatisch entschieden werden, welche Tablet-Rolle gemeint
+--- ist (die Geschäftsführung muss die Zuordnung im Rollen-Editor eindeutig
+--- machen). Gibt roleKey, matchCount zurück.
+function Roles.FindTabletRoleForWebsiteKey(websiteRoleKey)
+    ensureLoaded()
+    local matchKey, matchCount = nil, 0
+    for key, role in pairs(cache) do
+        if role.websiteRoleKey == websiteRoleKey then
+            matchKey = key
+            matchCount = matchCount + 1
+        end
+    end
+    return matchKey, matchCount
+end
+
 --- Prüft, ob eine Rolle eine bestimmte Berechtigung besitzt. Zentrale
 --- Prüffunktion für Employees.RequirePermission und RPC.PushToPermission.
 function Roles.HasPermission(roleKey, permissionKey)

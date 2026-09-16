@@ -561,32 +561,51 @@ anzufassen.
 ## Website-Sync (optional)
 
 Das Tablet kann optional mit einer separaten, extern gehosteten
-Speditions-Website synchronisiert werden, sodass Aufträge/Disposition,
-Fuhrpark und Fahrerkarte/Lenkzeiten auf beiden Seiten sichtbar sind und die
-Website auch steuernd eingreifen kann (z.B. einem im Spiel erstellten
-Auftrag ein Fahrzeug zuweisen). Das Feature ist standardmäßig **deaktiviert**
-und greift nicht in irgendetwas ein, solange es nicht aktiv eingeschaltet
-wird.
+Speditions-Website synchronisiert werden - **gleichwertig in beide
+Richtungen**: weder das Tablet noch die Website ist die alleinige Quelle
+der Wahrheit, beide Seiten können Aufträge/Fahrzeuge/Mitarbeiter anlegen
+bzw. bearbeiten, die jeweils andere Seite zieht nach. Das Feature ist
+standardmäßig **deaktiviert** und greift nicht in irgendetwas ein, solange
+es nicht aktiv eingeschaltet wird.
 
 **Architektur**: Beide Richtungen laufen über ausgehende HTTP-Requests vom
 FiveM-Server - der Spielserver muss dafür keinen eingehenden Port öffnen:
 
 - **Push** (Tablet → Website): bei jeder relevanten Änderung (Auftrag
-  disponiert/angenommen/abgeschlossen, Fahrzeug angelegt/geändert,
-  Mitarbeiter eingestellt/Rolle geändert, periodische Lenkzeiten-Meldung)
-  schickt `server/sv_website_bridge.lua` sofort einen Webhook an
-  `.../api/tablet/webhook`.
+  disponiert/angenommen/abgeschlossen/**neu angelegt**, Fahrzeug
+  angelegt/geändert, Mitarbeiter eingestellt/Rolle geändert, periodische
+  Lenkzeiten-Meldung) schickt `server/sv_website_bridge.lua` sofort einen
+  Webhook an `.../api/tablet/webhook`. Einmalig beim Ressourcenstart wird
+  zusätzlich `locations.sync` gepusht - meldet die gültigen Standortnamen/
+  Frachtarten (`Config.Locations`/`Config.CargoTypes`), Grundlage für die
+  Standort-Auswahl beim Anlegen neuer Aufträge auf der Website.
 - **Pull** (Website → Tablet): alle `Config.Website.pollIntervalMs` fragt
   das Tablet `.../api/tablet/commands` ab und führt dort hinterlegte
-  Dispositionsbefehle (z.B. "Fahrzeug zuweisen", "Auftrag abbrechen") über
-  die bestehende Orders-Logik aus; das Ergebnis wird per
-  `.../api/tablet/commands/{id}/ack` zurückgemeldet.
+  Befehle aus; das Ergebnis wird per `.../api/tablet/commands/{id}/ack`
+  zurückgemeldet. Befehlstypen:
+  - `assign_order`/`cancel_order` - Fahrzeug zuweisen/Auftrag abbrechen bei
+    einem bereits im Tablet existierenden Auftrag.
+  - `create_order` - ein auf der Website neu angelegter Auftrag landet im
+    offenen Tablet-Auftragspool (`Orders.CreateFromWebsite`), genau wie ein
+    automatisch generierter - ein Disponent im Spiel muss ihn noch
+    disponieren. Start-/Zielort müssen exakt einem `Config.Locations`-Namen
+    entsprechen (siehe `locations.sync` oben).
+  - `update_vehicle` - Statusänderung an einem von der Website aus
+    bearbeiteten, bereits Tablet-verknüpften Fahrzeug
+    (`Vehicles.UpdateFromWebsite`, Kennzeichen als gemeinsamer Schlüssel).
+  - `create_employee` - ein auf der Website neu angelegtes Konto bekommt
+    auch ein Tablet-Login (`Employees.HireFromWebsite`). Erfordert, dass
+    im Rollen-Editor **genau eine** Tablet-Rolle der gewählten Website-
+    Rolle zugeordnet ist (`Roles.FindTabletRoleForWebsiteKey`) - sonst
+    schlägt der Befehl fehl (nur in der Server-Konsole sichtbar, siehe
+    Fehlerausgabe von `server/sv_website_bridge.lua`).
 
 **Einrichtung**:
 
-1. `sql/upgrade_v11.sql` importieren (ergänzt `st_employees.discord_id` und
-   `st_roles.website_role_key`) - bei einer Neuinstallation ist das bereits
-   in `sql/install.sql` enthalten.
+1. `sql/upgrade_v11.sql` und `sql/upgrade_v12.sql` importieren (ergänzt
+   `st_employees.discord_id`, `st_roles.website_role_key` sowie den Wert
+   `'website'` für `st_orders.source`) - bei einer Neuinstallation ist das
+   bereits in `sql/install.sql` enthalten.
 2. Auf der Website die Umgebungsvariable `TABLET_API_KEY` auf einen langen
    Zufallsstring setzen.
 3. In `config.lua` den `Config.Website`-Block ausfüllen:
@@ -612,5 +631,10 @@ FiveM-Server - der Spielserver muss dafür keinen eingehenden Port öffnen:
 (das Tablet führt dafür keine Historie, nur den aktuellen Tag); der grobe,
 6-stufige Auftragsstatus der Website ist eine vereinfachte Abbildung des
 10-stufigen Tablet-Status; Live-Karte/Position wird bewusst nicht
-übertragen. Ein Website-Ausfall blockiert niemals das Tablet - fehlgeschlagene
-Requests werden nur geloggt.
+übertragen. Ein komplett **neues** Fahrzeug von der Website aus im Spiel
+erscheinen zu lassen ist bewusst nicht umgesetzt (kein echtes FiveM-Spawn-
+Modell von der Website aus wählbar) - nur Statusänderungen an bereits
+existierenden, Tablet-verknüpften Fahrzeugen laufen in beide Richtungen.
+Ein Website-Ausfall blockiert niemals das Tablet - fehlgeschlagene
+Requests werden nur geloggt (inkl. der eigentlichen Fehlermeldung der
+Website, nicht nur des HTTP-Status).

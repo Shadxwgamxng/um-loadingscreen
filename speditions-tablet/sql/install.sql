@@ -148,7 +148,7 @@ CREATE TABLE IF NOT EXISTS `st_orders` (
     `driver_id` INT UNSIGNED NULL,
     `vehicle_id` INT UNSIGNED NULL,
     `dispatcher_id` INT UNSIGNED NULL,
-    `source` ENUM('auto','disponent') NOT NULL DEFAULT 'auto',
+    `source` ENUM('auto','disponent','website') NOT NULL DEFAULT 'auto',
     `requires_permission` VARCHAR(50) NULL,
     `cargo_amount` INT UNSIGNED NULL,
     `cargo_unit` VARCHAR(30) NULL,

@@ -107,6 +107,37 @@ function Vehicles.Update(src, vehicleId, data)
     return { ok = true }
 end
 
+--- System-Variante von Vehicles.Update für den Website-Sync (kein Spieler-
+--- `src`, keine Berechtigungsprüfung - wird ausschließlich aus einem bereits
+--- API-Key-geprüften Website-Befehl heraus aufgerufen, siehe
+--- server/sv_website_bridge.lua). Die Website kennt nur das Kennzeichen
+--- (gemeinsamer Schlüssel zwischen Tablet und Website), keine interne
+--- Fahrzeug-ID, und nur ihre eigenen zwei groben Werkstatt-Zustände
+--- (Einsatzbereit/In Werkstatt) statt der fünf feingranularen Tablet-Status -
+--- die Zuordnung passiert bereits auf Website-Seite, hier kommt bereits ein
+--- gültiger Tablet-Status an.
+function Vehicles.UpdateFromWebsite(plate, status, mileage)
+    local vehicle = MySQL.single.await('SELECT * FROM st_vehicles WHERE plate = ? LIMIT 1', { plate })
+    if not vehicle then error('vehicle_not_found') end
+
+    if status ~= nil and not Utils.InTable(STATUS_VALUES, status) then error('invalid_status') end
+    status = status or vehicle.status
+    mileage = tonumber(mileage)
+    if mileage == nil then mileage = vehicle.mileage end
+
+    MySQL.update.await('UPDATE st_vehicles SET status = ?, mileage = ? WHERE id = ?', { status, mileage, vehicle.id })
+
+    if status ~= vehicle.status then
+        logVehicleEvent(vehicle.id, 'status_change', ('Status von der Website aus geändert: %s -> %s'):format(vehicle.status, status))
+    end
+
+    Logs.Write(nil, 'vehicle_update_website', ('Fahrzeug %s (%s) wurde von der Website aus bearbeitet.'):format(vehicle.name, plate))
+    RPC.PushToPermission('dispatch', 'fleet:changed', {})
+    if WebsiteBridge then WebsiteBridge.PushVehicleUpdate(vehicle.id) end
+
+    return { ok = true }
+end
+
 --- Löscht ein Fahrzeug. mode = 'archive' (Standard, sicher) oder 'hard'.
 --- Hard-Delete wird serverseitig verweigert, wenn das Fahrzeug bereits in
 --- Aufträgen referenziert wird, um die Fahrzeughistorie nicht zu zerstören.

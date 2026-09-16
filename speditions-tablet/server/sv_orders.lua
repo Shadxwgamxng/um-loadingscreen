@@ -565,6 +565,44 @@ function Orders.CancelFromWebsite(orderId)
     return { ok = true }
 end
 
+--- Legt einen von der Website aus erstellten Auftrag im offenen Pool an -
+--- landet genauso wie ein automatisch generierter Auftrag dort, ein
+--- Disponent im Spiel muss ihn noch einem Fahrer/Fahrzeug zuweisen (siehe
+--- Plan-Entscheidung: Website-Aufträge sollen NICHT direkt disponiert
+--- ankommen). Start-/Zielort müssen exakt einem Namen aus Config.Locations
+--- entsprechen, weil daraus Distanz/Wegpunkt/Bodenmarker berechnet werden -
+--- die Website bekommt die gültigen Namen über das 'locations.sync'-Event
+--- (WebsiteBridge.PushLocations) und bietet sie dort als Auswahl an.
+function Orders.CreateFromWebsite(cargo, startLocationName, endLocationName, cargoAmount, cargoUnit)
+    if not cargo or cargo == '' then error('missing_cargo') end
+    local from = Utils.GetLocationByName(startLocationName)
+    if not from then error('unknown_start_location') end
+    local to = Utils.GetLocationByName(endLocationName)
+    if not to then error('unknown_end_location') end
+    if from.name == to.name then error('start_end_identical') end
+
+    local distanceKm = Utils.Round2(locationDistanceKm(from, to))
+    local value = Utils.Round2(distanceKm * (Config.OrderValuePerKm.min + math.random() * (Config.OrderValuePerKm.max - Config.OrderValuePerKm.min)))
+    local requiresPermission = Utils.InTable(Config.HazardousCargo, cargo) and 'gefahrgut' or nil
+
+    local unitCfg = Config.CargoUnits[cargo]
+    cargoAmount = tonumber(cargoAmount) or (unitCfg and math.random(unitCfg.min, unitCfg.max)) or nil
+    cargoUnit = cargoUnit or (unitCfg and unitCfg.unit) or nil
+
+    local orderId = MySQL.insert.await(
+        [[INSERT INTO st_orders (cargo, start_location, end_location, distance_km, value, status, source, requires_permission, cargo_amount, cargo_unit)
+          VALUES (?, ?, ?, ?, ?, 'offen', 'website', ?, ?, ?)]],
+        { cargo, from.name, to.name, distanceKm, value, requiresPermission, cargoAmount, cargoUnit }
+    )
+    insertOrderHistory(orderId, 'offen', nil, 'Von der Website aus angelegt.')
+
+    Logs.Write(nil, 'order_created_website', ('Auftrag #%s wurde von der Website aus angelegt (%s: %s -> %s).'):format(orderId, cargo, from.name, to.name))
+    RPC.PushToPermission('dispatch', 'orders:newOpenOrder', { orderId = orderId })
+    if WebsiteBridge then WebsiteBridge.PushOrderUpdate(orderId) end
+
+    return orderId
+end
+
 local CANCELLABLE_STATUSES = { 'angenommen', 'anfahrt', 'beladen', 'entladen' }
 
 --- Ein Fahrer möchte seinen aktuellen Auftrag abbrechen. Ist gerade ein

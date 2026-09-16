@@ -51,6 +51,47 @@ function Employees.Hire(src, data)
     return { employeeId = employeeId }
 end
 
+--- System-Variante von Employees.Hire für den Website-Sync (kein Spieler-
+--- `src`, keine Berechtigungsprüfung - wird ausschließlich aus einem
+--- bereits API-Key-geprüften Website-Befehl heraus aufgerufen, siehe
+--- server/sv_website_bridge.lua). Die Website kennt nur ihre eigenen 9
+--- festen Rollen, keine frei benannten Tablet-Rollen - deshalb wird über
+--- Roles.FindTabletRoleForWebsiteKey die passende Tablet-Rolle gesucht;
+--- ist die Zuordnung nicht eindeutig (keine oder mehrere Tablet-Rollen mit
+--- dieser Website-Rolle), schlägt das Anlegen fehl, bis die
+--- Geschäftsführung im Rollen-Editor für genau eine Tablet-Rolle diese
+--- Website-Rolle einträgt.
+function Employees.HireFromWebsite(username, password, name, websiteRoleKey, discordId)
+    username = Utils.SanitizeString(username, 50)
+    password = Utils.SanitizeString(password, 100)
+    name = Utils.SanitizeString(name, 100)
+    discordId = Utils.SanitizeString(discordId, 32)
+
+    if not username or not password or not name then error('missing_fields') end
+
+    local roleKey, matchCount = Roles.FindTabletRoleForWebsiteKey(websiteRoleKey)
+    if matchCount == 0 then error('no_tablet_role_mapped_to_website_role') end
+    if matchCount > 1 then error('ambiguous_tablet_role_mapping') end
+
+    local existing = MySQL.single.await('SELECT id FROM st_employees WHERE username = ? LIMIT 1', { username })
+    if existing then error('employee_already_exists') end
+
+    local employeeId = MySQL.insert.await(
+        'INSERT INTO st_employees (username, name, role, status, discord_id) VALUES (?, ?, ?, ?, ?)',
+        { username, name, roleKey, 'aktiv', discordId }
+    )
+    Employees.SetPassword(employeeId, password)
+
+    if Roles.HasPermission(roleKey, 'driver_actions') then
+        Drivers.EnsureDriverRecord(employeeId)
+    end
+
+    Logs.Write(nil, 'employee_hired_website', ('Mitarbeiter %s ("%s") wurde von der Website aus als "%s" eingestellt.'):format(name, username, roleKey))
+    if WebsiteBridge then WebsiteBridge.PushEmployeeUpdate(employeeId) end
+
+    return { employeeId = employeeId }
+end
+
 --- Setzt das Passwort eines Mitarbeiters zurück (Geschäftsführung).
 function Employees.ResetPassword(src, employeeId, newPassword)
     local emp = Employees.RequirePermission(src, 'employees_manage')

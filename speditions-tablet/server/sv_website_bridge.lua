@@ -133,6 +133,27 @@ function WebsiteBridge.PushVehicleUpdate(vehicleId)
     })
 end
 
+--- Meldet die gültigen Standortnamen (Config.Locations) an die Website -
+--- Grundlage für die Auswahl bei "Neuer Auftrag" auf der Website (siehe
+--- Orders.CreateFromWebsite: Start-/Zielort müssen exakt einem dieser Namen
+--- entsprechen, weil daraus Distanz/Wegpunkt/Bodenmarker berechnet werden).
+--- Statisch (Config.Locations ändert sich nicht zur Laufzeit) - wird daher
+--- nur einmal beim Ressourcenstart gepusht, kein periodischer Thread nötig.
+function WebsiteBridge.PushLocations()
+    local locations = {}
+    for _, loc in ipairs(Config.Locations) do
+        locations[#locations + 1] = { name = loc.name, sourceCargo = loc.sourceCargo, destCargo = loc.destCargo }
+    end
+    WebsiteBridge.PushEvent('locations.sync', { locations = locations, cargoTypes = Config.CargoTypes })
+end
+
+CreateThread(function()
+    -- Kurze Verzögerung, damit ein etwaiger Server-Neustart erst durchläuft
+    -- (Konfiguration/DB-Verbindung stehen dann sicher bereit).
+    Wait(5000)
+    WebsiteBridge.PushLocations()
+end)
+
 -- =========================================================
 -- Periodische Lenkzeiten-Meldung
 -- =========================================================
@@ -177,9 +198,38 @@ local function handleCancelOrder(data)
     return Orders.CancelFromWebsite(orderId)
 end
 
+--- `create_order`: Disponent hat auf der Website einen neuen (Kunden-/
+--- internen) Auftrag angelegt - landet im offenen Tablet-Auftragspool,
+--- muss im Spiel noch disponiert werden (siehe Orders.CreateFromWebsite).
+local function handleCreateOrder(data)
+    local cargo = data.cargo
+    if type(cargo) ~= 'string' or cargo == '' then error('invalid_command_payload') end
+    return Orders.CreateFromWebsite(cargo, data.startLocation, data.endLocation, data.cargoAmount, data.cargoUnit)
+end
+
+--- `update_vehicle`: Disponent hat auf der Website Status/Kilometerstand
+--- eines bereits bekannten Fahrzeugs geändert (Kennzeichen als
+--- gemeinsamer Schlüssel, siehe Vehicles.UpdateFromWebsite).
+local function handleUpdateVehicle(data)
+    if type(data.plate) ~= 'string' or data.plate == '' then error('invalid_command_payload') end
+    return Vehicles.UpdateFromWebsite(data.plate, data.status, data.mileage)
+end
+
+--- `create_employee`: Geschäftsführung hat auf der Website ein neues
+--- Mitarbeiterkonto angelegt (inkl. eines dort abgefragten Passworts fürs
+--- Tablet-Login, siehe Employees.HireFromWebsite).
+local function handleCreateEmployee(data)
+    if type(data.username) ~= 'string' or data.username == '' then error('invalid_command_payload') end
+    if type(data.password) ~= 'string' or data.password == '' then error('invalid_command_payload') end
+    return Employees.HireFromWebsite(data.username, data.password, data.name, data.websiteRoleKey, data.discordId)
+end
+
 local commandHandlers = {
     assign_order = handleAssignOrder,
     cancel_order = handleCancelOrder,
+    create_order = handleCreateOrder,
+    update_vehicle = handleUpdateVehicle,
+    create_employee = handleCreateEmployee,
 }
 
 local function ackCommand(commandId, ok, errMsg)
