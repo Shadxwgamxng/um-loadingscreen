@@ -243,6 +243,61 @@ function Drivers.SetPermission(src, driverId, permKey, granted)
     return { ok = true }
 end
 
+--- System-Variante ohne src/Berechtigungsprüfung: gewährt einem frisch
+--- angelegten Fahrer-Datensatz direkt beim Einstellen die im
+--- "Mitarbeiter einstellen"-Formular ausgewählten Führerscheinklassen
+--- (Employees.Hire/HireFromWebsite), statt sie erst nachträglich über die
+--- Fahrerakte einzeln vergeben zu müssen. Ungültige Schlüssel werden
+--- stillschweigend ignoriert statt einen Fehler zu werfen - das Anlegen des
+--- Mitarbeiters selbst soll dadurch nie fehlschlagen.
+function Drivers.GrantPermissionsRaw(driverId, permKeys)
+    if type(permKeys) ~= 'table' then return end
+    local valid = {}
+    for _, perm in ipairs(Config.DriverPermissions) do valid[perm.key] = true end
+    for _, key in ipairs(permKeys) do
+        if valid[key] then
+            MySQL.insert.await(
+                'INSERT INTO st_driver_permissions (driver_id, permission_key) VALUES (?, ?) ON DUPLICATE KEY UPDATE granted_at = granted_at',
+                { driverId, key }
+            )
+        end
+    end
+end
+
+--- System-Variante für den Website-Sync (kein src - wird ausschließlich aus
+--- einem bereits API-Key-geprüften Website-Befehl heraus aufgerufen, siehe
+--- server/sv_website_bridge.lua): gleicht die Führerscheinklassen eines
+--- Fahrers VOLLSTÄNDIG mit der von der Website übergebenen Liste ab (setzt
+--- alle enthaltenen, entfernt alle fehlenden) - anders als
+--- Drivers.SetPermission (einzelne An-/Abwahl) bildet das den kompletten
+--- Checkbox-Zustand des Website-Formulars in einem Rutsch ab.
+function Drivers.SetPermissionsFromWebsite(employeeId, permKeys)
+    local driver = Drivers.GetByEmployeeId(employeeId)
+    if not driver then error('driver_not_found') end
+    if type(permKeys) ~= 'table' then permKeys = {} end
+
+    local valid = {}
+    for _, perm in ipairs(Config.DriverPermissions) do valid[perm.key] = true end
+    local wanted = {}
+    for _, key in ipairs(permKeys) do
+        if valid[key] then wanted[key] = true end
+    end
+
+    for key in pairs(valid) do
+        if wanted[key] then
+            MySQL.insert.await(
+                'INSERT INTO st_driver_permissions (driver_id, permission_key) VALUES (?, ?) ON DUPLICATE KEY UPDATE granted_at = granted_at',
+                { driver.id, key }
+            )
+        else
+            MySQL.update.await('DELETE FROM st_driver_permissions WHERE driver_id = ? AND permission_key = ?', { driver.id, key })
+        end
+    end
+
+    Logs.Write(nil, 'driver_permission_website', ('Führerscheinklassen von Fahrer #%s wurden von der Website aus aktualisiert.'):format(driver.id))
+    return { ok = true }
+end
+
 --- Fahrerübersicht für den Disponenten (und die Geschäftsführung): wer ist
 --- eingeloggt, welchen Status hat er, welches Fahrzeug fährt er gerade.
 function Drivers.ListForDispatch()
@@ -293,7 +348,7 @@ end)
 RPC.Register('driver:vehicle', function(src)
     local emp = Employees.RequirePermission(src, 'driver_actions')
     local driver = Drivers.EnsureDriverRecord(emp.id)
-    return { vehicle = Drivers.GetVehicle(driver.id) }
+    return { vehicle = Drivers.GetVehicle(driver.id), onShift = Utils.ToBool(driver.on_shift) }
 end)
 
 RPC.Register('dispatch:drivers', function(src)

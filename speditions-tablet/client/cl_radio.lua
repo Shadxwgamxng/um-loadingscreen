@@ -26,10 +26,29 @@ local function pmaVoiceReady()
     return GetResourceState('pma-voice') == 'started'
 end
 
+-- Verhindert, dass die Warnung unten bei jeder Kanal-/Lautstärkeänderung
+-- erneut auftaucht, solange der Funk eingeschaltet bleibt - nur einmal pro
+-- "Einschalten"-Versuch (siehe RegisterNUICallback('radioPower', ...) unten,
+-- das setzt die Markierung beim Ausschalten wieder zurück).
+local warnedPmaVoiceMissing = false
+
 --- Überträgt den aktuellen Zustand an pma-voice. Wird bei jeder Änderung
 --- (an/aus, Kanal, Lautstärke, Stumm) neu aufgerufen.
 local function applyVoiceState()
-    if not pmaVoiceReady() then return end
+    if not pmaVoiceReady() then
+        -- Vorher ein kompletter, unsichtbarer No-Op - das CB-Funk-Bedienfeld
+        -- wirkte dann "kaputt" ohne jede Erklärung. pma-voice läuft
+        -- höchstwahrscheinlich gar nicht/wurde umbenannt/aktualisiert (siehe
+        -- README) - das lässt sich von hier aus nicht beheben, aber
+        -- wenigstens sichtbar machen statt stillschweigend nichts zu tun.
+        if radioOn and not warnedPmaVoiceMissing then
+            warnedPmaVoiceMissing = true
+            print(('^1[speditions-tablet]^7 CB-Funk: Ressource "pma-voice" ist nicht gestartet (GetResourceState = "%s") - keine Audioverbindung moeglich. Pruefe server.cfg (ensure pma-voice, Startreihenfolge) bzw. ob pma-voice unter einem anderen Namen laeuft.'):format(GetResourceState('pma-voice')))
+            TriggerEvent('speditions-tablet:client:notify', 'CB-Funk: pma-voice nicht gefunden/gestartet - keine Audioverbindung.', 'warning')
+        end
+        return
+    end
+    warnedPmaVoiceMissing = false
 
     if radioOn then
         exports['pma-voice']:setRadioChannel(channel)
@@ -86,6 +105,7 @@ end
 RegisterNUICallback('radioPower', function(data, cb)
     radioOn = data.on and true or false
     if not radioOn then
+        warnedPmaVoiceMissing = false
         talkers = {}
         sendTalkersUpdate()
         if interacting then

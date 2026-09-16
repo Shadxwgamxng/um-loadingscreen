@@ -42,7 +42,8 @@ function Employees.Hire(src, data)
     Employees.SetPassword(employeeId, password)
 
     if Roles.HasPermission(role, 'driver_actions') then
-        Drivers.EnsureDriverRecord(employeeId)
+        local driver = Drivers.EnsureDriverRecord(employeeId)
+        Drivers.GrantPermissionsRaw(driver.id, data.driverPermissions)
     end
 
     Logs.Write(emp.id, 'employee_hired', ('%s hat %s ("%s") als "%s" eingestellt.'):format(emp.name, name, username, role))
@@ -61,7 +62,7 @@ end
 --- dieser Website-Rolle), schlägt das Anlegen fehl, bis die
 --- Geschäftsführung im Rollen-Editor für genau eine Tablet-Rolle diese
 --- Website-Rolle einträgt.
-function Employees.HireFromWebsite(username, password, name, websiteRoleKey, discordId)
+function Employees.HireFromWebsite(username, password, name, websiteRoleKey, discordId, driverPermissions)
     username = Utils.SanitizeString(username, 50)
     password = Utils.SanitizeString(password, 100)
     name = Utils.SanitizeString(name, 100)
@@ -83,7 +84,8 @@ function Employees.HireFromWebsite(username, password, name, websiteRoleKey, dis
     Employees.SetPassword(employeeId, password)
 
     if Roles.HasPermission(roleKey, 'driver_actions') then
-        Drivers.EnsureDriverRecord(employeeId)
+        local driver = Drivers.EnsureDriverRecord(employeeId)
+        Drivers.GrantPermissionsRaw(driver.id, driverPermissions)
     end
 
     Logs.Write(nil, 'employee_hired_website', ('Mitarbeiter %s ("%s") wurde von der Website aus als "%s" eingestellt.'):format(name, username, roleKey))

@@ -17,11 +17,12 @@ verwaltet.
 1. Ressource nach `resources/[speditions]/speditions-tablet` kopieren.
 2. `sql/install.sql` in die Datenbank importieren (bei einer bereits
    bestehenden Installation stattdessen der Reihe nach `sql/upgrade_v2.sql`
-   bis `sql/upgrade_v11.sql` ausführen, um Lenk-/Ruhezeiten, Gefahrgut,
+   bis `sql/upgrade_v13.sql` ausführen, um Lenk-/Ruhezeiten, Gefahrgut,
    Ein-/Auszahlungen, Gehälter/Stempeluhr, den Lieferschein, die
    Fahrerkarten-Pflicht, die Abbruch-Anfragen, das Tablet-eigene Login
-   (Name + Passwort), die frei anlegbaren Rollen und den optionalen
-   Website-Sync (siehe unten) nachzurüsten).
+   (Name + Passwort), die frei anlegbaren Rollen, den optionalen
+   Website-Sync (siehe unten) sowie Orte und Anhänger (siehe unten)
+   nachzurüsten).
    **`sql/upgrade_v7.sql` löscht dabei alle bestehenden Aufträge** - siehe
    Kommentar am Anfang der Datei für den Grund. **Ab sofort werden Aufträge
    ohnehin bei JEDEM Ressourcenstart automatisch geleert** (siehe unten).
@@ -30,15 +31,19 @@ verwaltet.
    "Mitarbeiter anmelden" unten. `sql/upgrade_v10.sql` legt die drei
    mitgelieferten Basisrollen beim nächsten Ressourcenstart automatisch mit
    ihren bisherigen Berechtigungen an - am Verhalten bestehender
-   Installationen ändert sich dadurch zunächst nichts.
+   Installationen ändert sich dadurch zunächst nichts. `sql/upgrade_v13.sql`
+   legt nur die neuen Tabellen/Spalten an - die mitgelieferten Standardorte
+   (`Config.SeedLocations`) werden beim nächsten Ressourcenstart automatisch
+   eingetragen, siehe Abschnitt "Orte" unten.
 3. In `server.cfg`:
    ```
    ensure oxmysql
    ensure speditions-tablet
    ```
-4. `config.lua` anpassen (siehe unten) - insbesondere `Config.CompanyName`
-   und `Config.Locations` (an die tatsächlichen Firmenstandorte deines
-   Servers anpassen).
+4. `config.lua` anpassen (siehe unten) - insbesondere `Config.CompanyName`.
+   Standorte werden nicht mehr in `config.lua` gepflegt, sondern im Tablet
+   selbst über den Reiter "Orte" (siehe unten) - `Config.SeedLocations`
+   dient nur der Erstbefüllung.
 5. Server starten.
 
 ## Mitarbeiter anmelden (Tablet-eigenes Login)
@@ -61,8 +66,13 @@ nach der ersten Anmeldung über den Konto-Chip ändern!**
 **Weitere Mitarbeiter einstellen** - über das Tablet: Geschäftsführung →
 Tab **Mitarbeiter** → "+ Mitarbeiter einstellen" (Anzeigename, Login-Name
 und Passwort werden dabei direkt vergeben, die Zielperson muss dafür
-nicht online sein). Ein Passwort vergessen? Geschäftsführung kann es über
-den Button "Passwort zurücksetzen" in derselben Übersicht neu setzen.
+nicht online sein). Im selben Formular lassen sich direkt die
+**Führerscheinklassen** (`Config.DriverPermissions`) ankreuzen - unabhängig
+von der gewählten Rolle, harmlos falls diese Rolle gar keine Fahrerakte
+anlegt. Nachträglich änderbar bleiben sie wie bisher über die Fahrerakte
+(Tab Mitarbeiter → Akte öffnen). Ein Passwort vergessen? Geschäftsführung
+kann es über den Button "Passwort zurücksetzen" in derselben Übersicht neu
+setzen.
 
 **Alternative über die Server-Konsole** (auch nutzbar mit der
 Ace-Permission `speditions.admin`, Zielperson muss NICHT online sein):
@@ -111,6 +121,18 @@ Framework nicht gefunden wird) werden nur die Events
 `speditions-tablet:server:cashPayout` / `-cashDeposit` gefeuert, die du in
 deinem eigenen Wirtschaftsskript abfangen kannst - `server/sv_bridge.lua`.
 
+**Fehlerdiagnose "Gehalt/Auszahlung kommt nicht an":** `server/sv_bridge.lua`
+prüft bei `Config.MoneyBridge = 'qbcore'`/`'esx'` jetzt explizit, ob das
+Framework-Objekt bzw. der Spieler-Objekt gefunden wird, und fängt Fehler aus
+`AddMoney`/`addMoney` ab - der genaue Grund landet als deutliche `^1`-Zeile
+in der Server-Konsole (z.B. "qb-core wurde nicht gefunden - läuft die
+Ressource ... auf diesem Server?"). Die Buchung selbst (Guthaben abziehen,
+als bezahlt markieren) läuft weiterhin unabhängig davon durch - schlägt die
+Bargeldübergabe fehl, erscheint im Tablet jetzt ein deutlicher Fehler-Toast
+statt eines leicht übersehbaren Info-Hinweises. Prüfe bei Problemen: läuft
+`qb-core` (oder ein Fork wie `qbx_core`) tatsächlich unter genau diesem
+Ressourcennamen, und ist der Mitarbeiter beim Auszahlen online/eingeloggt?
+
 ### Fahrzeugstand vor der Abmeldung
 
 Hat ein Fahrer beim Abmelden (Button oben im Tablet) ein Fahrzeug
@@ -145,6 +167,15 @@ anderes Skript könnte dieselbe Taste bereits belegt haben. Ist das Tablet
 ohnehin offen, ist das Funkgerät automatisch mitbedienbar. Sprechen
 (Push-to-Talk) läuft über pma-voice's eigene Standard-Taste, sobald ein
 Kanal eingestellt ist - dafür baut dieses Skript nichts Eigenes.
+
+**Fehlerdiagnose "CB-Funk geht nicht/kein Ton":** Ist `pma-voice` nicht
+gestartet (falscher Ressourcenname, Absturz, o.ä.), meldet `client/cl_radio.lua`
+das jetzt einmalig deutlich statt komplett stillzuschweigen: eine `^1`-Zeile
+in der Client-Konsole (F8) mit dem tatsächlichen `GetResourceState('pma-voice')`-Wert,
+zusätzlich ein In-Game-Warnhinweis beim Einschalten des Funkgeräts. Das
+behebt nicht die eigentliche Ursache (meist läuft `pma-voice` gar nicht oder
+unter anderem Namen) - prüfe in dem Fall `ensure pma-voice` in `server.cfg`
+und ob die Ressource beim Start tatsächlich fehlerfrei durchläuft.
 
 **Sounds:** `html/sounds/ptt.m4a` beim Beginn/Ende des eigenen Sprechens
 (pma-voice-Event `radioActive`), `channel_switch.m4a` beim Kanalwechsel,
@@ -211,7 +242,8 @@ serverseitig durchgesetzt in `server/sv_roles.lua`):
 | `driver_actions` | Fahrerfunktionen (Aufträge fahren, Fahrerkarte, eigene Statistik, Nachrichten empfangen) |
 | `dispatch` | Disposition (Fahrerübersicht, Auftragspool disponieren, Fahrer kontaktieren, Umsatzübersicht) |
 | `live_map_view` | Live-Karte einsehen (Fahrerpositionen, Aufträge, gesetzte Navi-Routen) |
-| `fleet_manage` | Fuhrparkverwaltung (Fahrzeuge anlegen/bearbeiten/löschen/zuweisen) |
+| `fleet_manage` | Fuhrparkverwaltung (Fahrzeuge anlegen/bearbeiten/löschen/zuweisen) UND Anhängerverwaltung (Reiter "Anhänger": anlegen/bearbeiten/löschen/an-/umkuppeln) |
+| `locations_manage` | Orte verwalten (Reiter "Orte": Be-/Entladepunkte anlegen/bearbeiten/löschen) |
 | `employees_manage` | Mitarbeiterverwaltung (einstellen, Rolle/Status ändern, Passwörter zurücksetzen, Fahrerakten) |
 | `roles_manage` | Rollen & Berechtigungen verwalten |
 | `finance_view` | Finanzen einsehen (Umsatz, Transaktionen, Aus-/Einzahlungshistorie) |
@@ -286,22 +318,63 @@ Framework-Anbindung in diesem Standalone-Setup).
   Fahrer eine native In-Game-Benachrichtigung (funktioniert auch bei
   geschlossenem Tablet); der Disponent kann Fahrer zusätzlich aktiv über den
   Button **"Lenkzeit erinnern"** in der Fahrerübersicht erinnern.
+  **Zwei Voraussetzungen, ohne die sich die Lenkzeit NICHT ändert:** (1) die
+  Fahrerkarte muss im Reiter "Fahrerkarte" eingesteckt sein (`on_shift` in
+  `st_drivers`) - nur das Sitzen im richtigen Fahrzeug reicht seit diesem
+  Update nicht mehr aus; (2) dem Fahrer muss über den Fuhrpark ein Fahrzeug
+  zugewiesen sein. Fehlt (2) bei eingesteckter Karte, erscheint jetzt ein
+  In-Game-Warnhinweis ("Dir ist noch kein Fahrzeug zugewiesen ..."), statt
+  dass die Zähler kommentarlos bei 0 bleiben (`client/cl_hours.lua`).
 - **Automatische Wegpunkte**: Beim Annehmen eines Auftrags wird automatisch
   ein GPS-Wegpunkt zum Beladepunkt gesetzt, beim Losfahren (Statuswechsel auf
-  "Unterwegs") automatisch einer zum Zielort. Die Koordinaten kommen aus
-  `Config.Locations` - passe sie unbedingt an die tatsächlichen Lade-/
-  Entladepunkte deines Servers an.
+  "Unterwegs") automatisch einer zum Zielort. Die Koordinaten kommen aus den
+  im Tablet gepflegten Orten (siehe "Orte" unten).
 
-### Echte Standorte, Be-/Entladen per Bodenmarker, Lieferschein
+### Orte (Reiter "Orte")
 
-`Config.Locations` ist eine Liste von 32 Koordinaten (30 reale
-Firmenadressen des Servers plus 2 erfundene Möbel-Abholstandorte) statt der
-früheren abstrakten Städte-Strecken.
-Jeder Standort trägt Frachtarten-Tags (`sourceCargo` = hier abholbare Fracht,
-`destCargo` = hier anlieferbare Fracht); die automatische Auftragsgenerierung
-wählt nur Frachtarten, für die es mindestens einen passenden Start- **und**
+Standorte liegen nicht mehr fest in `config.lua`, sondern in der Datenbank
+(`st_locations`) und werden von der Geschäftsführung (Berechtigung
+`locations_manage`) direkt im Tablet über den Reiter **"Orte"** gepflegt:
+anlegen, bearbeiten, löschen. Beim Anlegen/Bearbeiten füllt der Button
+**"Aktuelle Position übernehmen"** die Koordinaten- und Blickrichtungsfelder
+automatisch mit der aktuellen Spielerposition (serverseitig ermittelt, kein
+Hinlaufen zu exakten Zahlen nötig).
+
+`Config.SeedLocations` in `config.lua` enthält die mitgelieferten 59
+Standardstandorte (echte Firmenadressen des Servers) und dient **nur** der
+einmaligen Erstbefüllung beim allerersten Ressourcenstart - danach ist
+ausschließlich die Datenbank die Quelle der Wahrheit; Änderungen an
+`Config.SeedLocations` nach der Erstbefüllung haben keine Wirkung mehr,
+Orte müssen dann über den Reiter "Orte" gepflegt werden.
+
+Jeder Ort trägt Frachtarten-Tags (Quelle = hier abholbare Fracht, Ziel = hier
+anlieferbare Fracht); die automatische Auftragsgenerierung wählt nur
+Frachtarten, für die es mindestens einen passenden Start- **und**
 Zielstandort gibt, und berechnet Distanz/Wert aus der echten
-Luftlinienentfernung der Koordinaten.
+Luftlinienentfernung der Koordinaten. Wird ein Ort gelöscht, der noch als
+Start-/Zielpunkt eines offenen Auftrags referenziert ist, bleibt der Auftrag
+bestehen - nur Wegpunkt/Bodenmarker lassen sich für ihn dann nicht mehr
+auflösen (kein Fehler, der Auftrag lässt sich weiterhin normal abschließen).
+
+### Anhänger (Reiter "Anhänger")
+
+Fünf Anhängertypen (`Config.TrailerTypes`): Curtainsider, Curtainsider mit
+Gefahrgutzulassung, Kipper, Kühlanhänger, Tankanhänger. Im Reiter
+**"Anhänger"** (Berechtigung `fleet_manage`, wie der Fuhrpark) legt die
+Geschäftsführung Anhänger an und kuppelt sie über "Ankuppeln"/"Umkuppeln" an
+ein Fahrzeug - ein Anhänger kann nur an einem Fahrzeug gleichzeitig hängen,
+das Ankuppeln an ein neues Fahrzeug kuppelt automatisch vom vorherigen ab.
+Die Fuhrpark-Tabelle zeigt in der Spalte "Anhänger" den aktuell angekuppelten
+Anhänger pro LKW.
+
+Jede Frachtart verlangt anhand von `Config.CargoTrailerType` einen
+bestimmten Anhängertyp (Gefahrgut → Curtainsider mit Gefahrgutzulassung,
+Lebensmittel/Kühlware → Kühlanhänger, Schüttgut wie Baustoffe/Schrott →
+Kipper, Flüssigfracht wie Öl/Kraftstoff → Tankanhänger, alles andere →
+normaler Curtainsider). Disponieren/Selbstzuweisen/Neuzuweisen wird
+**serverseitig verweigert**, wenn am zugewiesenen Fahrzeug kein Anhänger vom
+geforderten Typ hängt (`vehicle_missing_trailer`) - exakt wie die
+bestehende Gefahrgut-Berechtigungsprüfung bei Fahrern.
 
 - **Bodenmarker statt NPC**: An einem Standort, der gerade zu einem aktiven
   Auftrag gehört (Beladepunkt eines "in Anfahrt"-Auftrags, oder Zielort
@@ -346,24 +419,15 @@ Luftlinienentfernung der Koordinaten.
   unabhängig vom automatischen Intervall - gesteuert über
   `Config.AllowManualOrderGeneration` (Standard `true`; für den Live-Betrieb
   auf `false` stellen, dann verschwindet der Button).
-- **Wichtig nach diesem Update**: Aufträge, die VOR der Umstellung auf
-  `Config.Locations` (echte Standorte) erzeugt wurden, referenzieren
-  Standortnamen, die es im neuen System nicht mehr gibt - an ihrem Abhol-/
-  Zielort erscheint dann kein Marker und die Taste E funktioniert dort nicht.
-  `sql/upgrade_v7.sql` löscht deshalb alle bestehenden Aufträge; danach
-  erzeugt entweder der automatische Timer (`Config.OrderGeneration`) oder
-  der neue "Auftrag generieren"-Testbutton (s.o.) ausschließlich Aufträge
-  mit den neuen, echten Standorten.
 - **Bekannte Einschränkungen**: Die Zeit- und Nähe-Prüfung für das Be-/
   Entladen läuft ausschließlich clientseitig (kein serverseitiger Schutz vor
   Manipulation der lokalen Wartezeit) - für ein PvE-Logistikfeature wie
-  dieses als ausreichend eingeschätzt, bei Bedarf aber erweiterbar. Für die
-  Frachtart `Elektronik` ist unter den 32 vorgegebenen Standorten keine
-  Quelle (`sourceCargo`) hinterlegt - sie wird aktuell also nie für
-  automatisch generierte Aufträge ausgewählt, bis du in `Config.Locations`
-  einen Standort mit `sourceCargo = {'Elektronik'}` ergänzt. (`Möbel` hat
-  inzwischen zwei erfundene Abholstandorte: "Möbeltischlerei Hirschweiler"
-  und "Zentrallager Box 5 (Möbel)".)
+  dieses als ausreichend eingeschätzt, bei Bedarf aber erweiterbar. Für jede
+  der 14 Frachtarten aus `Config.CargoTypes` ist unter den mitgelieferten 59
+  Standardstandorten mindestens eine Quelle **und** ein Ziel hinterlegt -
+  löschst du im Reiter "Orte" den einzigen Quell- oder Zielort einer
+  Frachtart, wird diese Frachtart bis zum Anlegen eines Ersatzorts nicht
+  mehr für automatisch generierte Aufträge ausgewählt.
 - **Gefahrgut-Zugriffsbeschränkung**: Frachtarten in `Config.HazardousCargo`
   erzeugen Aufträge mit `requires_permission = 'gefahrgut'`. Das Disponieren
   und Neuzuweisen an Fahrer ohne die Fahrerberechtigung "Gefahrgut" wird
@@ -420,7 +484,7 @@ Positionsraster (Polling alle 5 Sekunden, `dispatch:liveMap` in
 - **Wichtige Einschränkung**: Es handelt sich bewusst um ein **schematisches
   Positionsraster, kein echtes Kartenbild** - die Ressource bringt keine
   GTA-V-Kartengrafik mit (Lizenz-/Copyright-Gründe). Fahrer UND
-  Firmenstandorte (`Config.Locations`, als graue Orientierungspunkte) werden
+  Firmenstandorte (aus dem Reiter "Orte", als graue Orientierungspunkte) werden
   auf denselben ungefähren Weltkoordinaten-Bereich der GTA-V-Karte
   (`MAP_BOUNDS` in `html/js/app.js`) abgebildet, sodass die relative Lage
   zueinander stimmt - für ein echtes Kartenbild müsste `drawLiveMap()` in
@@ -437,10 +501,12 @@ st_employees            Mitarbeiterstammdaten (Login-Name, Passwort-Hash/Salt, R
 st_drivers              Fahrer-Zusatzdaten (Status, Notizen, Fahrzeugzuweisung, Fahrerkarte eingesteckt/seit)
 st_driver_permissions   Führerscheinklassen / Sonderberechtigungen
 st_driver_statistics    Aggregierte Fahrerstatistik (aus st_orders berechnet)
+st_locations            Be-/Entladepunkte (Reiter "Orte"), Erstbefüllung aus Config.SeedLocations
 st_vehicles             Fuhrpark
 st_vehicle_assignments  Historie der Fahrzeug-Fahrer-Zuweisungen
 st_vehicle_history      Fahrzeugereignisse (erstellt, Wartung, Status, Aufträge)
-st_orders               Aufträge inkl. Fahrer-/Fahrzeugzuordnung, Menge/Einheit (Lieferschein)
+st_trailers             Anhänger (Reiter "Anhänger"), inkl. Ankupplung an st_vehicles
+st_orders               Aufträge inkl. Fahrer-/Fahrzeugzuordnung, geforderter Anhängertyp, Menge/Einheit (Lieferschein)
 st_order_stops          Zwischenstopps (optional/erweiterbar)
 st_order_history        Audit-Trail je Auftragsstatus
 st_order_cancel_requests Abbruch-Anfragen von Fahrern (offen/genehmigt/abgelehnt)
@@ -476,13 +542,17 @@ Tablet erkannt ist.
 Alle Stellschrauben befinden sich in `config.lua`:
 
 - `Config.CompanyName` - Firmenname auf Sperrbildschirm, Topbar und Fahrerkarte
-- `Config.Locations` - Liste der echten Firmenstandorte (Koordinaten,
-  Frachtarten-Tags `sourceCargo`/`destCargo`) für Auftragsgenerierung,
+- `Config.SeedLocations` - Liste der echten Firmenstandorte (Koordinaten,
+  Frachtarten-Tags `sourceCargo`/`destCargo`) für die **einmalige
+  Erstbefüllung** von `st_locations`; danach ausschließlich über den Reiter
+  "Orte" pflegbar (siehe oben). Genutzt für Auftragsgenerierung,
   Bodenmarker, Be-/Entladen und Wegpunkte; `Config.OrderValuePerKm`,
   `Config.LoadUnloadSeconds`, `Config.LocationMarkerRadius`,
   `Config.LocationInteractRadius` - Wertspanne pro km sowie Timing/Radien
   für den Be-/Entladevorgang; `Config.CargoUnits` - Mengeneinheit je
   Frachtart für den Lieferschein
+- `Config.TrailerTypes` - Katalog der fünf Anhängertypen (Reiter "Anhänger");
+  `Config.CargoTrailerType` - welche Frachtart welchen Anhängertyp verlangt
 - `Config.OrderGeneration` - Intervall und maximale Poolgröße
 - `Config.AllowManualOrderGeneration` - blendet den "Auftrag generieren"-Testbutton für Fahrer ein (Standard `true`, für Live-Betrieb auf `false` stellen)
 - `Config.OrderCancelPenalty` - Vertragsstrafe (Standard 500$), wenn ein Fahrer einen Auftrag ohne Disponenten-Freigabe selbst abbricht
@@ -525,15 +595,22 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `server/sv_tracking.lua` - Live-Karte: liest serverseitig per
   `GetEntityCoords` die Position jedes angemeldeten Fahrers, verknüpft sie
   mit dessen laufendem Auftrag/Wegpunkt für den Reiter "Live-Karte".
+- `server/sv_locations.lua` - Orte (Reiter "Orte"): CRUD auf `st_locations`,
+  Erstbefüllung aus `Config.SeedLocations`, "Aktuelle Position übernehmen"
+  (ermittelt serverseitig per `GetEntityCoords`/`GetEntityHeading`),
+  `locations:changed`-Broadcast an alle angemeldeten Mitarbeiter.
 - `server/sv_finance.lua` - Transaktions-Ledger, Guthaben, Ein-/Auszahlungen.
 - `server/sv_radio.lua` - CB-Funk ein-/ausschalten, Anrufe (privater pma-voice-Call-Kanal).
 - `server/sv_payroll.lua` - Stundenlöhne, Stempeluhr, Gehaltsauszahlung.
 - `server/sv_vehicles.lua` - Fuhrparkverwaltung.
+- `server/sv_trailers.lua` - Anhängerverwaltung (Reiter "Anhänger"): CRUD auf
+  `st_trailers`, An-/Umkuppeln an Fahrzeuge.
 - `server/sv_drivers.lua` - Fahrerkarte, Fahrerakte, Statistik, Fahrerkarte einstecken/abziehen (Schicht).
 - `server/sv_hours.lua` - Lenk-/Ruhezeiten-Tracking, Warnungen, Erinnerungen.
 - `server/sv_orders.lua` - Auftragsgenerierung & -lebenszyklus
   (disponiert → angenommen → anfahrt → beladen → entladen → abgeschlossen),
-  Gefahrgut-Prüfung, Auto-Wegpunkte, Standort-/Frachtart-Zuordnung + GPS-Koordinaten für Lieferschein,
+  Gefahrgut-Prüfung, Anhängertyp-Prüfung (`vehicle_missing_trailer`),
+  Auto-Wegpunkte, Standort-/Frachtart-Zuordnung + GPS-Koordinaten für Lieferschein,
   Abbruch-Anfragen mit Disponenten-Genehmigung/Vertragsstrafe, Auftrags-Reset bei Ressourcenstart.
 - `server/sv_employees.lua` - Mitarbeiterverwaltung (Einstellen, Rolle/Status
   ändern, beliebige im Tablet angelegte Rollen zuweisbar).
@@ -545,8 +622,8 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `client/cl_hours.lua` - Erkennt per Kennzeichen-Abgleich, ob der Fahrer
   gerade sein zugewiesenes Firmenfahrzeug fährt, und meldet Fahrzeit an den Server.
 - `client/cl_radio.lua` - CB-Funk, bindet an pma-voice an (Kanal/Lautstärke/Stumm, Anzeige "wer spricht").
-- `client/cl_orders.lua` - Bodenmarker an relevanten Standorten aus
-  `Config.Locations` (kein NPC), Be-/Entladen per Taste E mit Fortschrittsbalken.
+- `client/cl_orders.lua` - Bodenmarker an relevanten Standorten aus dem
+  Reiter "Orte" (kein NPC), Be-/Entladen per Taste E mit Fortschrittsbalken.
 - `html/` - NUI-Frontend (Sperrbildschirm, berechtigungsbasierte Reiter -
   `NAV_ITEMS`/`buildSidebar` in `js/app.js` -, Rollenverwaltung, Live-Karte
   per `<canvas>`). Der Client führt dabei keine Geschäftslogik aus - jede
@@ -575,9 +652,10 @@ FiveM-Server - der Spielserver muss dafür keinen eingehenden Port öffnen:
   disponiert/angenommen/abgeschlossen/**neu angelegt**, Fahrzeug
   angelegt/geändert, Mitarbeiter eingestellt/Rolle geändert, periodische
   Lenkzeiten-Meldung) schickt `server/sv_website_bridge.lua` sofort einen
-  Webhook an `.../api/tablet/webhook`. Einmalig beim Ressourcenstart wird
+  Webhook an `.../api/tablet/webhook`. Einmalig beim Ressourcenstart UND bei
+  jeder Änderung im Reiter "Orte" (angelegt/bearbeitet/gelöscht) wird
   zusätzlich `locations.sync` gepusht - meldet die gültigen Standortnamen/
-  Frachtarten (`Config.Locations`/`Config.CargoTypes`), Grundlage für die
+  Frachtarten (`Locations.List()`/`Config.CargoTypes`), Grundlage für die
   Standort-Auswahl beim Anlegen neuer Aufträge auf der Website.
 - **Pull** (Website → Tablet): alle `Config.Website.pollIntervalMs` fragt
   das Tablet `.../api/tablet/commands` ab und führt dort hinterlegte
@@ -588,8 +666,8 @@ FiveM-Server - der Spielserver muss dafür keinen eingehenden Port öffnen:
   - `create_order` - ein auf der Website neu angelegter Auftrag landet im
     offenen Tablet-Auftragspool (`Orders.CreateFromWebsite`), genau wie ein
     automatisch generierter - ein Disponent im Spiel muss ihn noch
-    disponieren. Start-/Zielort müssen exakt einem `Config.Locations`-Namen
-    entsprechen (siehe `locations.sync` oben).
+    disponieren. Start-/Zielort müssen exakt einem im Reiter "Orte"
+    hinterlegten Namen entsprechen (siehe `locations.sync` oben).
   - `update_vehicle` - Statusänderung an einem von der Website aus
     bearbeiteten, bereits Tablet-verknüpften Fahrzeug
     (`Vehicles.UpdateFromWebsite`, Kennzeichen als gemeinsamer Schlüssel).
@@ -598,7 +676,12 @@ FiveM-Server - der Spielserver muss dafür keinen eingehenden Port öffnen:
     im Rollen-Editor **genau eine** Tablet-Rolle der gewählten Website-
     Rolle zugeordnet ist (`Roles.FindTabletRoleForWebsiteKey`) - sonst
     schlägt der Befehl fehl (nur in der Server-Konsole sichtbar, siehe
-    Fehlerausgabe von `server/sv_website_bridge.lua`).
+    Fehlerausgabe von `server/sv_website_bridge.lua`). Optional können dabei
+    auch Führerscheinklassen mitgegeben werden.
+  - `update_driver_permissions` - ersetzt die Führerscheinklassen eines
+    bereits Tablet-verknüpften Mitarbeiters vollständig durch die von der
+    Website übergebene Auswahl (`Drivers.SetPermissionsFromWebsite`,
+    Payload `{tabletEmployeeId, permissions}`).
 
 **Einrichtung**:
 

@@ -94,7 +94,7 @@ RPC.Register('dispatch:liveMap', function(src)
     end
 
     local locations = {}
-    for _, loc in ipairs(Config.Locations) do
+    for _, loc in ipairs(Locations.List()) do
         locations[#locations + 1] = { name = loc.name, x = Utils.Round2(loc.coords.x), y = Utils.Round2(loc.coords.y) }
     end
 

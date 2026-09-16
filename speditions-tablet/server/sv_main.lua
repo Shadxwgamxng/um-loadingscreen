@@ -34,6 +34,7 @@ local function sessionPayload(emp)
         driverPermissions = Config.DriverPermissions,
         vehicleClasses = Config.VehicleClasses,
         vehicleStatuses = Config.VehicleStatus,
+        cargoTypes = Config.CargoTypes,
     }
 end
 

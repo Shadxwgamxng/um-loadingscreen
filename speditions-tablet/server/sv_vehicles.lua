@@ -18,10 +18,12 @@ end
 function Vehicles.List(includeArchived)
     local where = includeArchived and '' or 'WHERE v.archived = 0'
     return MySQL.query.await(([[
-        SELECT v.*, d.id AS driver_id, e.name AS driver_name
+        SELECT v.*, d.id AS driver_id, e.name AS driver_name,
+            t.id AS trailer_id, t.name AS trailer_name, t.type AS trailer_type
         FROM st_vehicles v
         LEFT JOIN st_drivers d ON d.assigned_vehicle_id = v.id
         LEFT JOIN st_employees e ON e.id = d.employee_id
+        LEFT JOIN st_trailers t ON t.assigned_vehicle_id = v.id
         %s
         ORDER BY v.archived ASC, v.name ASC
     ]]):format(where))

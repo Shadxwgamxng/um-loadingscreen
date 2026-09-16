@@ -51,6 +51,15 @@ local function driverHasPermission(driverId, permissionKey)
     return row ~= nil
 end
 
+--- Prüft, ob am übergebenen Fahrzeug ein Anhänger vom geforderten Typ
+--- angekuppelt ist (siehe Config.CargoTrailerType, server/sv_trailers.lua).
+--- requiredType = nil bedeutet "kein bestimmter Anhänger nötig".
+local function vehicleHasTrailer(vehicleId, requiredType)
+    if not requiredType then return true end
+    local trailer = Trailers.GetByVehicleId(vehicleId)
+    return trailer ~= nil and trailer.type == requiredType
+end
+
 --- Prüft, ob gerade ein Disponent ODER die Geschäftsführung online UND am
 --- Tablet erkannt ist (d.h. das Tablet in dieser Verbindung schon einmal
 --- geöffnet hat). Nur wenn das NICHT der Fall ist, dürfen Fahrer sich
@@ -76,21 +85,25 @@ function Orders.CountOpen()
 end
 
 -- ---------------------------------------------------------
--- Frachtart -> mögliche Abhol-/Zielstandorte (aus Config.Locations
--- aufgebaut, siehe dort für die Erklärung von sourceCargo/destCargo).
+-- Frachtart -> mögliche Abhol-/Zielstandorte (aus Locations.List() gebaut,
+-- die Datenbank ist jetzt die Quelle der Wahrheit für Orte, siehe
+-- server/sv_locations.lua - bei ~60 Orten günstig genug, das bei jedem
+-- Aufruf frisch aufzubauen statt einen eigenen Cache zu pflegen).
 -- ---------------------------------------------------------
 
-local sourcesByCargo = {}
-local destsByCargo = {}
-for _, loc in ipairs(Config.Locations) do
-    for _, cargo in ipairs(loc.sourceCargo or {}) do
-        sourcesByCargo[cargo] = sourcesByCargo[cargo] or {}
-        table.insert(sourcesByCargo[cargo], loc)
+local function buildCargoLocationIndex()
+    local sourcesByCargo, destsByCargo = {}, {}
+    for _, loc in ipairs(Locations.List()) do
+        for _, cargo in ipairs(loc.sourceCargo or {}) do
+            sourcesByCargo[cargo] = sourcesByCargo[cargo] or {}
+            table.insert(sourcesByCargo[cargo], loc)
+        end
+        for _, cargo in ipairs(loc.destCargo or {}) do
+            destsByCargo[cargo] = destsByCargo[cargo] or {}
+            table.insert(destsByCargo[cargo], loc)
+        end
     end
-    for _, cargo in ipairs(loc.destCargo or {}) do
-        destsByCargo[cargo] = destsByCargo[cargo] or {}
-        table.insert(destsByCargo[cargo], loc)
-    end
+    return sourcesByCargo, destsByCargo
 end
 
 --- Distanz zwischen zwei Standorten in km (echte Luftlinie aus den
@@ -104,6 +117,7 @@ end
 --- für die es mindestens einen Abhol- UND einen (anderen) Zielstandort
 --- gibt, und berechnet Distanz/Wert/Menge daraus.
 function Orders.GenerateOne()
+    local sourcesByCargo, destsByCargo = buildCargoLocationIndex()
     local possibleCargoTypes = {}
     for cargo in pairs(sourcesByCargo) do
         if destsByCargo[cargo] then
@@ -130,15 +144,16 @@ function Orders.GenerateOne()
     local distanceKm = Utils.Round2(locationDistanceKm(from, to))
     local value = Utils.Round2(distanceKm * (Config.OrderValuePerKm.min + math.random() * (Config.OrderValuePerKm.max - Config.OrderValuePerKm.min)))
     local requiresPermission = Utils.InTable(Config.HazardousCargo, cargo) and 'gefahrgut' or nil
+    local requiresTrailerType = Config.CargoTrailerType[cargo] or 'curtainsider'
 
     local unitCfg = Config.CargoUnits[cargo]
     local cargoAmount = unitCfg and math.random(unitCfg.min, unitCfg.max) or nil
     local cargoUnit = unitCfg and unitCfg.unit or nil
 
     local orderId = MySQL.insert.await(
-        [[INSERT INTO st_orders (cargo, start_location, end_location, distance_km, value, status, source, requires_permission, cargo_amount, cargo_unit)
-          VALUES (?, ?, ?, ?, ?, 'offen', 'auto', ?, ?, ?)]],
-        { cargo, from.name, to.name, distanceKm, value, requiresPermission, cargoAmount, cargoUnit }
+        [[INSERT INTO st_orders (cargo, start_location, end_location, distance_km, value, status, source, requires_permission, requires_trailer_type, cargo_amount, cargo_unit)
+          VALUES (?, ?, ?, ?, ?, 'offen', 'auto', ?, ?, ?, ?)]],
+        { cargo, from.name, to.name, distanceKm, value, requiresPermission, requiresTrailerType, cargoAmount, cargoUnit }
     )
 
     insertOrderHistory(orderId, 'offen', nil, 'Automatisch generiert.')
@@ -252,6 +267,7 @@ function Orders.Dispatch(src, orderId, driverId, vehicleId)
         if not vehicle then error('vehicle_not_found') end
         if Utils.ToBool(vehicle.archived) then error('vehicle_archived') end
         if Config.VehicleBlockedForDispatch[vehicle.status] then error('vehicle_unavailable') end
+        if not vehicleHasTrailer(finalVehicleId, order.requires_trailer_type) then error('vehicle_missing_trailer') end
     end
 
     MySQL.update.await(
@@ -286,6 +302,7 @@ function Orders.DispatchFromWebsite(orderId, vehiclePlate)
     if not vehicle then error('vehicle_not_found') end
     if Utils.ToBool(vehicle.archived) then error('vehicle_archived') end
     if Config.VehicleBlockedForDispatch[vehicle.status] then error('vehicle_unavailable') end
+    if not vehicleHasTrailer(vehicle.id, order.requires_trailer_type) then error('vehicle_missing_trailer') end
 
     local driver = MySQL.single.await(
         'SELECT d.*, e.name, e.status AS emp_status FROM st_drivers d JOIN st_employees e ON e.id = d.employee_id WHERE d.assigned_vehicle_id = ?',
@@ -340,6 +357,7 @@ function Orders.SelfAssign(src, orderId)
         if not vehicle then error('vehicle_not_found') end
         if Utils.ToBool(vehicle.archived) then error('vehicle_archived') end
         if Config.VehicleBlockedForDispatch[vehicle.status] then error('vehicle_unavailable') end
+        if not vehicleHasTrailer(vehicleId, order.requires_trailer_type) then error('vehicle_missing_trailer') end
     end
 
     MySQL.update.await(
@@ -367,6 +385,9 @@ function Orders.Reassign(src, orderId, newDriverId)
 
     if not driverHasPermission(newDriverId, order.requires_permission) then
         error('driver_missing_permission')
+    end
+    if driver.assigned_vehicle_id and not vehicleHasTrailer(driver.assigned_vehicle_id, order.requires_trailer_type) then
+        error('vehicle_missing_trailer')
     end
 
     MySQL.update.await(
@@ -569,8 +590,8 @@ end
 --- landet genauso wie ein automatisch generierter Auftrag dort, ein
 --- Disponent im Spiel muss ihn noch einem Fahrer/Fahrzeug zuweisen (siehe
 --- Plan-Entscheidung: Website-Aufträge sollen NICHT direkt disponiert
---- ankommen). Start-/Zielort müssen exakt einem Namen aus Config.Locations
---- entsprechen, weil daraus Distanz/Wegpunkt/Bodenmarker berechnet werden -
+--- ankommen). Start-/Zielort müssen exakt einem im Reiter "Orte" hinterlegten
+--- Namen entsprechen, weil daraus Distanz/Wegpunkt/Bodenmarker berechnet werden -
 --- die Website bekommt die gültigen Namen über das 'locations.sync'-Event
 --- (WebsiteBridge.PushLocations) und bietet sie dort als Auswahl an.
 function Orders.CreateFromWebsite(cargo, startLocationName, endLocationName, cargoAmount, cargoUnit)
@@ -584,15 +605,16 @@ function Orders.CreateFromWebsite(cargo, startLocationName, endLocationName, car
     local distanceKm = Utils.Round2(locationDistanceKm(from, to))
     local value = Utils.Round2(distanceKm * (Config.OrderValuePerKm.min + math.random() * (Config.OrderValuePerKm.max - Config.OrderValuePerKm.min)))
     local requiresPermission = Utils.InTable(Config.HazardousCargo, cargo) and 'gefahrgut' or nil
+    local requiresTrailerType = Config.CargoTrailerType[cargo] or 'curtainsider'
 
     local unitCfg = Config.CargoUnits[cargo]
     cargoAmount = tonumber(cargoAmount) or (unitCfg and math.random(unitCfg.min, unitCfg.max)) or nil
     cargoUnit = cargoUnit or (unitCfg and unitCfg.unit) or nil
 
     local orderId = MySQL.insert.await(
-        [[INSERT INTO st_orders (cargo, start_location, end_location, distance_km, value, status, source, requires_permission, cargo_amount, cargo_unit)
-          VALUES (?, ?, ?, ?, ?, 'offen', 'website', ?, ?, ?)]],
-        { cargo, from.name, to.name, distanceKm, value, requiresPermission, cargoAmount, cargoUnit }
+        [[INSERT INTO st_orders (cargo, start_location, end_location, distance_km, value, status, source, requires_permission, requires_trailer_type, cargo_amount, cargo_unit)
+          VALUES (?, ?, ?, ?, ?, 'offen', 'website', ?, ?, ?, ?)]],
+        { cargo, from.name, to.name, distanceKm, value, requiresPermission, requiresTrailerType, cargoAmount, cargoUnit }
     )
     insertOrderHistory(orderId, 'offen', nil, 'Von der Website aus angelegt.')
 

@@ -133,15 +133,17 @@ function WebsiteBridge.PushVehicleUpdate(vehicleId)
     })
 end
 
---- Meldet die gültigen Standortnamen (Config.Locations) an die Website -
---- Grundlage für die Auswahl bei "Neuer Auftrag" auf der Website (siehe
---- Orders.CreateFromWebsite: Start-/Zielort müssen exakt einem dieser Namen
---- entsprechen, weil daraus Distanz/Wegpunkt/Bodenmarker berechnet werden).
---- Statisch (Config.Locations ändert sich nicht zur Laufzeit) - wird daher
---- nur einmal beim Ressourcenstart gepusht, kein periodischer Thread nötig.
+--- Meldet die gültigen Standortnamen (aus st_locations, siehe
+--- server/sv_locations.lua) an die Website - Grundlage für die Auswahl bei
+--- "Neuer Auftrag" auf der Website (siehe Orders.CreateFromWebsite:
+--- Start-/Zielort müssen exakt einem dieser Namen entsprechen, weil daraus
+--- Distanz/Wegpunkt/Bodenmarker berechnet werden). Wird beim
+--- Ressourcenstart UND jedes Mal gepusht, wenn im Reiter "Orte" ein Ort
+--- angelegt/bearbeitet/gelöscht wird (siehe Locations.Create/Update/Delete).
 function WebsiteBridge.PushLocations()
+    if not websiteConfigured() then return end
     local locations = {}
-    for _, loc in ipairs(Config.Locations) do
+    for _, loc in ipairs(Locations.List()) do
         locations[#locations + 1] = { name = loc.name, sourceCargo = loc.sourceCargo, destCargo = loc.destCargo }
     end
     WebsiteBridge.PushEvent('locations.sync', { locations = locations, cargoTypes = Config.CargoTypes })
@@ -221,7 +223,16 @@ end
 local function handleCreateEmployee(data)
     if type(data.username) ~= 'string' or data.username == '' then error('invalid_command_payload') end
     if type(data.password) ~= 'string' or data.password == '' then error('invalid_command_payload') end
-    return Employees.HireFromWebsite(data.username, data.password, data.name, data.websiteRoleKey, data.discordId)
+    return Employees.HireFromWebsite(data.username, data.password, data.name, data.websiteRoleKey, data.discordId, data.driverPermissions)
+end
+
+--- `update_driver_permissions`: Geschäftsführung hat auf der Website die
+--- Führerscheinklassen eines bereits Tablet-verknüpften Mitarbeiters
+--- geändert (voller Abgleich, siehe Drivers.SetPermissionsFromWebsite).
+local function handleUpdateDriverPermissions(data)
+    local employeeId = tonumber(data.tabletEmployeeId)
+    if not employeeId then error('invalid_command_payload') end
+    return Drivers.SetPermissionsFromWebsite(employeeId, data.permissions)
 end
 
 local commandHandlers = {
@@ -230,6 +241,7 @@ local commandHandlers = {
     create_order = handleCreateOrder,
     update_vehicle = handleUpdateVehicle,
     create_employee = handleCreateEmployee,
+    update_driver_permissions = handleUpdateDriverPermissions,
 }
 
 local function ackCommand(commandId, ok, errMsg)

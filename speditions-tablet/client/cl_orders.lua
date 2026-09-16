@@ -15,15 +15,45 @@ local INTERACT_CONTROL = 51 -- INPUT_CONTEXT ("E")
 local MARKER_TYPE = 1 -- Cylinder
 local CANCEL_GRACE_MS = 1500 -- Schonfrist, bevor die Abstandsprüfung greift (Szenario-Einstiegsanimation kann den Ped kurz verschieben)
 
-local myRole = nil
+local myHasDriverActions = false
 local myOrders = {}
 local busy = false
+local locations = {}
+
+local function inTable(list, value)
+    if type(list) ~= 'table' then return false end
+    for _, v in ipairs(list) do
+        if v == value then return true end
+    end
+    return false
+end
 
 local function refreshMyOrders()
     ServerCall('driver:myOrders', nil, function(res)
         myOrders = (res and res.ok and res.result and res.result.orders) or {}
     end)
 end
+
+--- Orte kommen seit der Umstellung auf st_locations (Reiter "Orte") nicht
+--- mehr aus der statischen Config.Locations, sondern werden einmal beim
+--- Ressourcenstart vom Server geladen und bei Änderungen (Ort angelegt/
+--- bearbeitet/gelöscht) automatisch aktualisiert (siehe
+--- 'locations:changed'-Broadcast unten).
+local function refreshLocations()
+    ServerCall('locations:list', nil, function(res)
+        locations = (res and res.ok and res.result and res.result.locations) or {}
+    end)
+end
+
+CreateThread(function()
+    refreshLocations()
+end)
+
+RegisterNetEvent('speditions-tablet:client:push', function(event, _data)
+    if event == 'locations:changed' then
+        refreshLocations()
+    end
+end)
 
 --- Liefert den relevanten Auftrag (falls vorhanden) für einen Standort: ein
 --- Auftrag "in Anfahrt", dessen Beladepunkt hier ist ("pickup"), oder ein
@@ -135,9 +165,10 @@ CreateThread(function()
     while true do
         Wait(3000)
         ServerCall('session:whoami', nil, function(res)
-            myRole = (res and res.ok and res.result and res.result.loggedIn) and res.result.employee.role or nil
+            myHasDriverActions = (res and res.ok and res.result and res.result.loggedIn)
+                and inTable(res.result.permissions, 'driver_actions') or false
         end)
-        if myRole == Config.Roles.FAHRER then
+        if myHasDriverActions then
             refreshMyOrders()
         else
             myOrders = {}
@@ -152,10 +183,10 @@ CreateThread(function()
     while true do
         local sleep = 1000
 
-        if myRole == Config.Roles.FAHRER and not busy and #myOrders > 0 then
+        if myHasDriverActions and not busy and #myOrders > 0 then
             local playerCoords = GetEntityCoords(PlayerPedId())
 
-            for _, loc in ipairs(Config.Locations) do
+            for _, loc in ipairs(locations) do
                 local order, phase = findRelevantOrder(loc.name)
                 if order then
                     local markerCoords = vector3(loc.coords.x, loc.coords.y, loc.coords.z)

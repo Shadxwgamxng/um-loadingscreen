@@ -94,6 +94,24 @@ CREATE TABLE IF NOT EXISTS `st_driver_statistics` (
     CONSTRAINT `fk_stats_driver` FOREIGN KEY (`driver_id`) REFERENCES `st_drivers` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Be-/Entladepunkte (Reiter "Orte") - ersetzt die frühere feste
+-- Config.Locations-Liste, damit die Geschäftsführung Orte im Spiel selbst
+-- pflegen kann (inkl. "Aktuelle Position übernehmen").
+CREATE TABLE IF NOT EXISTS `st_locations` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `name` VARCHAR(100) NOT NULL,
+    `pos_x` DOUBLE NOT NULL,
+    `pos_y` DOUBLE NOT NULL,
+    `pos_z` DOUBLE NOT NULL,
+    `heading` DOUBLE NOT NULL DEFAULT 0,
+    `source_cargo` TEXT NULL,
+    `dest_cargo` TEXT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_location_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS `st_vehicles` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `name` VARCHAR(100) NOT NULL,
@@ -137,6 +155,25 @@ CREATE TABLE IF NOT EXISTS `st_vehicle_history` (
     CONSTRAINT `fk_vh_vehicle` FOREIGN KEY (`vehicle_id`) REFERENCES `st_vehicles` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Anhänger (Reiter "Anhänger") - werden einem Fahrzeug zugewiesen/angekuppelt
+-- (assigned_vehicle_id) und bestimmen, welche Aufträge damit disponiert
+-- werden können (siehe Config.CargoTrailerType, st_orders.requires_trailer_type).
+CREATE TABLE IF NOT EXISTS `st_trailers` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `name` VARCHAR(100) NOT NULL,
+    `type` ENUM('curtainsider','curtainsider_gefahrgut','kipper','kuehlanhaenger','tankanhaenger') NOT NULL,
+    `plate` VARCHAR(20) NOT NULL,
+    `assigned_vehicle_id` INT UNSIGNED NULL,
+    `status` ENUM('verfuegbar','im_einsatz','wartung','defekt','ausser_betrieb') NOT NULL DEFAULT 'verfuegbar',
+    `archived` TINYINT(1) NOT NULL DEFAULT 0,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_trailer_plate` (`plate`),
+    KEY `idx_trailer_vehicle` (`assigned_vehicle_id`),
+    CONSTRAINT `fk_trailer_vehicle` FOREIGN KEY (`assigned_vehicle_id`) REFERENCES `st_vehicles` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS `st_orders` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `cargo` VARCHAR(150) NOT NULL,
@@ -150,6 +187,7 @@ CREATE TABLE IF NOT EXISTS `st_orders` (
     `dispatcher_id` INT UNSIGNED NULL,
     `source` ENUM('auto','disponent','website') NOT NULL DEFAULT 'auto',
     `requires_permission` VARCHAR(50) NULL,
+    `requires_trailer_type` ENUM('curtainsider','curtainsider_gefahrgut','kipper','kuehlanhaenger','tankanhaenger') NULL,
     `cargo_amount` INT UNSIGNED NULL,
     `cargo_unit` VARCHAR(30) NULL,
     `deadline` DATETIME NULL,

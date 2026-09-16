@@ -86,6 +86,7 @@ Config.Permissions = {
     { key = 'dispatch',          label = 'Disposition (Fahrerübersicht, Auftragspool disponieren, Fahrer kontaktieren, Live-Karte)', group = 'Disposition' },
     { key = 'live_map_view',     label = 'Live-Karte einsehen (Fahrerpositionen, Aufträge, gesetzte Navi-Routen)', group = 'Disposition' },
     { key = 'fleet_manage',      label = 'Fuhrparkverwaltung (Fahrzeuge anlegen/bearbeiten/löschen/zuweisen)', group = 'Fuhrpark' },
+    { key = 'locations_manage',  label = 'Orte verwalten (Be-/Entladepunkte anlegen/bearbeiten/löschen)', group = 'Fuhrpark' },
     { key = 'employees_manage',  label = 'Mitarbeiterverwaltung (einstellen, Rolle/Status ändern, Passwörter zurücksetzen)', group = 'Personal' },
     { key = 'roles_manage',      label = 'Rollen & Berechtigungen verwalten', group = 'Personal' },
     { key = 'finance_view',      label = 'Finanzen einsehen (Umsatz, Transaktionen, Aus-/Einzahlungshistorie)', group = 'Finanzen' },
@@ -101,7 +102,7 @@ Config.DefaultRolePermissions = {
     fahrer = { 'driver_actions' },
     disponent = { 'dispatch', 'live_map_view' },
     geschaeftsfuehrung = {
-        'dispatch', 'live_map_view', 'fleet_manage', 'employees_manage', 'roles_manage',
+        'dispatch', 'live_map_view', 'fleet_manage', 'locations_manage', 'employees_manage', 'roles_manage',
         'finance_view', 'finance_payout', 'wages_manage', 'activity_log_view', 'stats_view',
     },
 }
@@ -148,7 +149,7 @@ Config.VehicleBlockedForDispatch = {
 Config.CargoTypes = {
     'Baustoffe', 'Lebensmittel', 'Elektronik', 'Möbel',
     'Fahrzeugteile', 'Chemikalien', 'Holz', 'Maschinenteile',
-    'Farben', 'Öle',
+    'Farben', 'Öle', 'Kraftstoff', 'Schmuck', 'Kleidung', 'Schrott',
 }
 
 -- Frachtarten, die die Fahrerberechtigung "gefahrgut" voraussetzen. Ein
@@ -171,54 +172,112 @@ Config.CargoUnits = {
     ['Öle']         = { unit = 'Liter',     min = 100, max = 2000 },
     ['Möbel']       = { unit = 'Stück',     min = 1,   max = 30   },
     Elektronik      = { unit = 'Stück',     min = 1,   max = 50   },
+    Kraftstoff      = { unit = 'Liter',     min = 2000, max = 15000 },
+    Schmuck         = { unit = 'Stück',     min = 5,   max = 50   },
+    Kleidung        = { unit = 'Stück',     min = 100, max = 800  },
+    Schrott         = { unit = 'kg',        min = 500, max = 5000 },
+}
+
+-- Ordnet jeder Frachtart zu, welcher Anhängertyp für den Transport benötigt
+-- wird (siehe Reiter "Anhänger", server/sv_trailers.lua) - Frachtarten ohne
+-- Eintrag hier benötigen den Standard-Anhänger 'curtainsider'.
+Config.CargoTrailerType = {
+    Chemikalien = 'curtainsider_gefahrgut',
+    Lebensmittel = 'kuehlanhaenger',
+    ['Öle'] = 'tankanhaenger',
+    Kraftstoff = 'tankanhaenger',
+    Baustoffe = 'kipper',
+    Schrott = 'kipper',
+}
+
+-- Katalog der verfügbaren Anhängertypen (Reiter "Anhänger") - `key` steht in
+-- st_trailers.type, `label` ist die Anzeige im Tablet.
+Config.TrailerTypes = {
+    { key = 'curtainsider',          label = 'Curtainsider' },
+    { key = 'curtainsider_gefahrgut', label = 'Curtainsider (Gefahrgutzulassung)' },
+    { key = 'kipper',                label = 'Kipper' },
+    { key = 'kuehlanhaenger',        label = 'Kühlanhänger' },
+    { key = 'tankanhaenger',         label = 'Tankanhänger' },
 }
 
 -- =========================================================
--- BELADE-/ENTLADEPUNKTE
+-- BELADE-/ENTLADEPUNKTE (ORTE)
 -- =========================================================
--- Jeder Ort ist ein echter Firmenstandort in der Welt: dort markiert ein
--- Bodenkreis die Be-/Entladestelle, an der per Tasteninteraktion (E) die
--- Fracht ab-/angenommen wird (siehe client/cl_orders.lua - bewusst kein
--- NPC, um Probleme mit der Pedestrian-KI zu vermeiden). `sourceCargo` =
--- Frachtarten, die hier ABGEHOLT werden können (Auftrags-Startpunkt),
--- `destCargo` = Frachtarten, die hier ANGENOMMEN werden
--- (Auftrags-Zielpunkt). Ein Auftrag wird nur zwischen zwei
--- UNTERSCHIEDLICHEN Orten generiert, die dieselbe Frachtart als Quelle
--- bzw. Ziel führen. `coords` ist x, y, z, Blickrichtung (Heading, aktuell
--- ungenutzt ohne NPC).
-Config.Locations = {
-    { name = 'Holzhandel Hirschweiler',                coords = vector4(46.5653, 6301.5454, 31.2295, 139.2673),   sourceCargo = { 'Holz' } },
-    { name = 'Schlachterei Hirschweiler',               coords = vector4(-74.7670, 6265.5103, 31.2581, 59.6800),   sourceCargo = { 'Lebensmittel' } },
-    { name = 'Bauer Siggi Hirschweiler',                coords = vector4(417.5191, 6472.0654, 28.8115, 58.1537),  sourceCargo = { 'Lebensmittel' } },
-    { name = 'Holzverarbeitung Hirschweiler',           coords = vector4(-600.0895, 5292.8071, 70.2152, 260.2553), sourceCargo = { 'Holz' } },
-    { name = 'Farbhandel Friederichsen',                coords = vector4(1646.7103, 4837.1064, 42.0292, 95.3194), sourceCargo = { 'Farben' } },
-    { name = 'KfZ Werkstatt Meier',                     coords = vector4(1963.2445, 5177.4312, 47.9211, 290.3256), destCargo = { 'Fahrzeugteile', 'Öle' } },
-    { name = 'Gefahrenstoffzentrum Galileo Park',       coords = vector4(2902.0540, 4369.3184, 50.3478, 294.0421), sourceCargo = { 'Chemikalien' } },
-    { name = 'Garten- & Landschaftsbau Machere',        coords = vector4(2908.5291, 4466.8555, 48.1954, 153.3615), destCargo = { 'Holz', 'Farben', 'Baustoffe' } },
-    { name = 'Baumarkt Thomsen Nord',                   coords = vector4(2680.3562, 3504.5762, 53.3038, 68.0863), destCargo = { 'Baustoffe', 'Farben', 'Holz' } },
-    { name = 'Kiesgrube Nord',                          coords = vector4(2682.2056, 2796.8303, 40.4611, 6.2855),  sourceCargo = { 'Baustoffe' } },
-    { name = 'Kiesgrube Nord - Abbau',                  coords = vector4(2943.4368, 2744.2578, 43.3081, 286.8217), sourceCargo = { 'Baustoffe' } },
-    { name = 'Kohlekraftwerk',                          coords = vector4(2710.9817, 1514.1188, 24.5007, 76.9679), destCargo = { 'Maschinenteile', 'Öle' } },
-    { name = 'Zentrallager Box 9 (Holz)',                coords = vector4(1709.7573, -1503.2196, 113.9467, 70.8459), destCargo = { 'Holz' } },
-    { name = 'Zentrallager Box 2 (Sonstiges)',           coords = vector4(1727.7478, -1535.5013, 113.9467, 249.7921), destCargo = { 'Möbel', 'Elektronik' } },
-    { name = 'Zentrallager Anlieferung Schüttgut',       coords = vector4(1742.9828, -1632.9983, 112.4680, 99.0393), destCargo = { 'Baustoffe' } },
-    { name = 'Zentrallager Anlieferung Gefahrenstoffe',  coords = vector4(1490.6962, -1910.1671, 71.5243, 211.0637), destCargo = { 'Chemikalien' } },
-    { name = 'Zentrallager Anlieferung Altmetalle',      coords = vector4(1568.3628, -2165.1841, 77.5721, 84.1045), destCargo = { 'Maschinenteile' } },
-    { name = 'Zentrallager Abholung Öle',                coords = vector4(1258.2878, -1907.9558, 38.5011, 16.5664), sourceCargo = { 'Öle' } },
-    { name = 'Metallschmelze',                          coords = vector4(1098.6482, -1984.2262, 31.0147, 325.9687), sourceCargo = { 'Maschinenteile' } },
-    { name = 'Zwischenlager Baumarkt',                   coords = vector4(998.3950, -1855.2062, 31.0398, 182.0329), sourceCargo = { 'Baustoffe' } },
-    { name = 'Grosshandel Holzwaren',                    coords = vector4(500.7615, -1965.1077, 24.9851, 125.8696), sourceCargo = { 'Holz' } },
-    { name = 'Anlieferung Shopping Center',               coords = vector4(96.4740, -1808.7917, 27.0821, 229.9650), destCargo = { 'Möbel', 'Elektronik', 'Lebensmittel' } },
-    { name = 'Anlieferung KfZ Werkstatt (Stadt)',        coords = vector4(-195.5794, -1376.9260, 31.2584, 208.8103), destCargo = { 'Fahrzeugteile', 'Öle' } },
-    { name = 'Baustelle Stadt/West',                     coords = vector4(-502.1097, -941.4283, 23.9640, 152.0452), destCargo = { 'Baustoffe' } },
-    { name = 'Baustelle Stadtmitte',                     coords = vector4(-121.6090, -1056.7939, 27.2595, 293.2224), destCargo = { 'Baustoffe' } },
-    { name = 'Baustelle Stadt/Nord',                     coords = vector4(93.9297, -375.4476, 41.9395, 200.3073),  destCargo = { 'Baustoffe' } },
-    { name = 'Baustelle Stadt/ost',                      coords = vector4(1393.6664, -738.7650, 67.1901, 101.5932), destCargo = { 'Baustoffe' } },
-    { name = 'Anlieferung Einkaufszentrum Weststadt',    coords = vector4(-1543.6205, -590.0679, 34.8675, 354.0047), destCargo = { 'Möbel', 'Elektronik', 'Lebensmittel' } },
-    { name = 'Anlieferung 24/7 Supermarkt',               coords = vector4(-2955.2710, 396.4877, 15.0217, 61.8753), destCargo = { 'Lebensmittel' } },
-    { name = 'Abholung KfZ-Teilehandel',                  coords = vector4(963.3997, -1017.6773, 40.8475, 265.3992), sourceCargo = { 'Fahrzeugteile' } },
-    { name = 'Möbeltischlerei Hirschweiler',              coords = vector4(179.6482, 6162.3105, 31.6971, 320.5), sourceCargo = { 'Möbel' } },
-    { name = 'Zentrallager Box 5 (Möbel)',                coords = vector4(1718.9204, -1519.7361, 113.9467, 159.8), sourceCargo = { 'Möbel' } },
+-- Orte werden NICHT mehr live aus der Config gelesen, sondern in der
+-- Datenbank (st_locations) gepflegt - die Geschäftsführung kann sie im
+-- Tablet-Reiter "Orte" selbst anlegen/bearbeiten/löschen (inkl. "Aktuelle
+-- Position übernehmen"), siehe server/sv_locations.lua. `Config.SeedLocations`
+-- wirkt genau wie `Config.DefaultRolePermissions`/`Config.DefaultHourlyWage`
+-- nur EINMALIG als Erstbefüllung beim allerersten Ressourcenstart (per
+-- Namen, `ON DUPLICATE KEY` - bereits vorhandene Orte werden nicht
+-- überschrieben) - danach ist ausschließlich die Datenbank die Quelle der
+-- Wahrheit, Änderungen hier haben dann keine Wirkung mehr. `sourceCargo` =
+-- Frachtarten, die an einem Ort ABGEHOLT werden können (Auftrags-
+-- Startpunkt), `destCargo` = Frachtarten, die dort ANGENOMMEN werden
+-- (Auftrags-Zielpunkt) - ein Auftrag wird nur zwischen zwei
+-- UNTERSCHIEDLICHEN Orten generiert, die dieselbe Frachtart als Quelle bzw.
+-- Ziel führen (siehe server/sv_orders.lua, Orders.GenerateOne). `coords` ist
+-- x, y, z, Blickrichtung (Heading).
+Config.SeedLocations = {
+    { name = 'Tankstelle Südstadt',                   coords = vector4(-1413.0906, -276.3613, 46.3573, 122.9841),  destCargo = { 'Kraftstoff' } },
+    { name = 'Einkaufsstraße Südstadt',                coords = vector4(-1322.3031, -756.9341, 20.3754, 132.1405),  destCargo = { 'Elektronik', 'Möbel' } },
+    { name = 'Vangelico Juwelier',                     coords = vector4(-632.0485, -239.9601, 38.1142, 113.6025),   sourceCargo = { 'Schmuck' } },
+    { name = 'Lichtkick Filmtheater',                  coords = vector4(-486.6024, -447.9075, 34.2013, 165.1228),   destCargo = { 'Elektronik' } },
+    { name = 'Klamottenladen Nordstadt',               coords = vector4(-58.4882, -176.9483, 54.2738, 159.8721),    destCargo = { 'Kleidung' } },
+    { name = 'Tattoozentrum Nordstadt',                coords = vector4(-52.4797, -179.4368, 54.2742, 147.3091),    destCargo = { 'Farben' } },
+    { name = 'Apotheke Nordstadt',                     coords = vector4(-45.8573, -182.2130, 54.2699, 156.1175),    destCargo = { 'Chemikalien' } },
+    { name = 'Euroshop Nordstadt',                     coords = vector4(45.4441, -106.2116, 56.0044, 337.8018),     destCargo = { 'Elektronik' } },
+    { name = 'Paketzentrum Nordstadt',                 coords = vector4(65.1030, 129.8393, 80.5308, 162.2396),      destCargo = { 'Elektronik', 'Möbel' } },
+    { name = 'Fast-Food Laden Nordstadt',              coords = vector4(90.7449, 298.1360, 110.2102, 338.5446),     destCargo = { 'Lebensmittel' } },
+    { name = 'Juwelier Nordstadt',                     coords = vector4(236.8944, 380.8580, 106.1918, 341.7407),    destCargo = { 'Schmuck' } },
+    { name = 'Second Hand Klamottenladen Nordstadt',   coords = vector4(331.1173, 362.7849, 106.6535, 355.3933),    sourceCargo = { 'Kleidung' } },
+    { name = '24/7 Supermarkt Nordstadt',              coords = vector4(382.3276, 356.3886, 102.5808, 350.3206),    destCargo = { 'Lebensmittel' } },
+    { name = 'Casino',                                 coords = vector4(971.8890, 7.4844, 81.0410, 224.8293),       destCargo = { 'Möbel' } },
+    { name = 'Friseursalon Nordstadt',                 coords = vector4(1224.7721, -481.9726, 66.4220, 254.5712),   destCargo = { 'Farben' } },
+    { name = 'KFZ Werkstatt Rudi',                     coords = vector4(1064.5686, -784.7833, 58.2627, 352.5960),   destCargo = { 'Fahrzeugteile', 'Öle' } },
+    { name = 'Solarzentrum',                           coords = vector4(750.6551, 1301.9348, 360.2965, 131.8380),   sourceCargo = { 'Elektronik', 'Maschinenteile' } },
+    { name = 'Movie Park',                             coords = vector4(188.0015, 1243.4708, 225.5953, 275.1788),   destCargo = { 'Elektronik' } },
+    { name = 'Bauernhof Meier',                        coords = vector4(-87.4153, 1877.5320, 197.3252, 270.5265),   sourceCargo = { 'Lebensmittel' } },
+    { name = 'KFZ Werkstatt Ranjid',                   coords = vector4(262.1628, 2582.1777, 44.9263, 124.4768),    destCargo = { 'Fahrzeugteile', 'Öle' } },
+    { name = 'Kieswerk Falkenwalde',                   coords = vector4(283.9247, 2847.5205, 43.6424, 111.1951),    sourceCargo = { 'Baustoffe' } },
+    { name = 'Kieswerk Hügeldorf',                     coords = vector4(2677.0366, 2791.0420, 40.5186, 12.6945),    sourceCargo = { 'Baustoffe' } },
+    { name = 'Baumarkt Hügeldorf Autobahn',             coords = vector4(2681.4785, 3508.3516, 53.3037, 65.9424),    destCargo = { 'Baustoffe', 'Holz', 'Farben' } },
+    { name = 'Tankstelle Hügeldorf Landstraße',         coords = vector4(1359.5720, 3615.3787, 34.8913, 293.8185),   destCargo = { 'Kraftstoff' } },
+    { name = 'Holzverarbeitung Hirschweiler',           coords = vector4(-574.4285, 5270.5923, 70.2689, 67.8386),    sourceCargo = { 'Holz' } },
+    { name = 'Fahrradvermietung Hirschweiler',          coords = vector4(-769.1369, 5596.4321, 33.6058, 185.0724),   destCargo = { 'Fahrzeugteile' } },
+    { name = 'Metzgerei Hirschweiler',                  coords = vector4(-69.7692, 6269.4512, 31.2621, 35.2860),     destCargo = { 'Lebensmittel' } },
+    { name = 'Zentrallager Hirschweiler (Tor 1)',       coords = vector4(42.1257, 6299.3848, 31.2294, 189.4753),     sourceCargo = { 'Möbel', 'Elektronik' } },
+    { name = 'Tiernahrungszentrum Hirschweiler',        coords = vector4(-55.6003, 6394.8511, 31.4904, 40.4435),     destCargo = { 'Lebensmittel' } },
+    { name = 'Zentrallager Hirschweiler (Tor 2)',       coords = vector4(58.0157, 6471.7808, 31.4253, 219.9842),     sourceCargo = { 'Möbel', 'Elektronik', 'Farben' } },
+    { name = 'Bauer Manfred Hirschweiler',              coords = vector4(421.6891, 6477.3452, 28.8147, 24.6141),     sourceCargo = { 'Lebensmittel' } },
+    { name = 'Bauer Günni Hirschweiler Autobahn',       coords = vector4(2200.6777, 5613.5015, 53.6332, 191.3689),   sourceCargo = { 'Lebensmittel' } },
+    { name = 'Bootsanleger Land',                       coords = vector4(3802.1641, 4475.4995, 5.9927, 170.4438),    destCargo = { 'Maschinenteile' } },
+    { name = 'Humane Labs Forschungslabor',             coords = vector4(3609.2017, 3731.3088, 29.6894, 326.4201),   destCargo = { 'Chemikalien' } },
+    { name = 'Schrottplatz Hügeldorf',                  coords = vector4(2364.2654, 3129.1616, 48.2104, 265.5793),   sourceCargo = { 'Schrott', 'Maschinenteile', 'Fahrzeugteile' } },
+    { name = 'Strandpromenade Café',                    coords = vector4(-1793.5090, -1198.1898, 13.0174, 329.9821), destCargo = { 'Lebensmittel' } },
+    { name = 'Anlieferung Hafen Walker',                 coords = vector4(-52.2539, -2653.1208, 6.0007, 162.0387),    destCargo = { 'Maschinenteile' } },
+    { name = 'Anlieferung Hafen Schiff',                 coords = vector4(-143.1830, -2388.8242, 6.0000, 71.0642),    sourceCargo = { 'Maschinenteile' } },
+    { name = 'Anlieferung Hafen Bugstars',               coords = vector4(129.3919, -3084.8677, 5.9009, 76.0289),     destCargo = { 'Elektronik' } },
+    { name = 'Anlieferung Hafen U-Boot Halle',           coords = vector4(494.6169, -3167.8530, 6.0696, 194.4470),    destCargo = { 'Maschinenteile' } },
+    { name = 'Anlieferung Hafen Containerlager',         coords = vector4(1133.5258, -3069.2036, 5.9010, 167.8817),   destCargo = { 'Möbel' } },
+    { name = 'Industriegebäude',                        coords = vector4(820.1056, -2364.1206, 30.2318, 138.0473),   destCargo = { 'Maschinenteile' } },
+    { name = 'Schmelze',                                coords = vector4(1084.2832, -1973.7777, 31.0146, 144.1909),  sourceCargo = { 'Maschinenteile' }, destCargo = { 'Schrott' } },
+    { name = 'Schlachthof',                             coords = vector4(961.1883, -2106.4451, 31.8275, 254.5108),   sourceCargo = { 'Lebensmittel' } },
+    { name = 'Öl Lager',                                coords = vector4(699.9645, -2312.4636, 26.6375, 143.2132),   sourceCargo = { 'Öle' } },
+    { name = 'Kraftstofflager',                         coords = vector4(557.3855, -2328.2297, 5.8236, 88.7202),     sourceCargo = { 'Kraftstoff' } },
+    { name = 'Gas Lager',                               coords = vector4(-224.5158, -2251.1614, 7.8117, 63.8850),    sourceCargo = { 'Kraftstoff', 'Chemikalien' } },
+    { name = 'Flughafen',                               coords = vector4(-946.4362, -2826.4675, 13.9672, 250.9027),  destCargo = { 'Elektronik', 'Maschinenteile' } },
+    { name = 'Logistikhandel Platz 12',                 coords = vector4(-1124.8440, -2221.0049, 13.1958, 326.1807), destCargo = { 'Möbel' } },
+    { name = 'Logistikhandel Platz 25',                 coords = vector4(-1183.0769, -2147.0903, 13.2526, 320.6503), destCargo = { 'Elektronik' } },
+    { name = 'Industriebetrieb',                        coords = vector4(-580.4362, -1589.4342, 26.7511, 254.5801),  destCargo = { 'Maschinenteile' } },
+    { name = 'Schrotthof',                              coords = vector4(-498.9285, -1713.7181, 19.8991, 346.7195),  sourceCargo = { 'Schrott' } },
+    { name = 'Güterbahnhof',                            coords = vector4(503.7385, -629.3307, 24.7511, 43.7673),     destCargo = { 'Baustoffe', 'Möbel' } },
+    { name = 'Umspannwerk',                             coords = vector4(735.7593, 131.9819, 80.7205, 72.7470),      destCargo = { 'Maschinenteile' } },
+    { name = 'Tankstelle Neumann',                      coords = vector4(642.4342, 260.3834, 103.2956, 260.9001),    destCargo = { 'Kraftstoff' } },
+    { name = 'Tankstelle Klausen',                      coords = vector4(-2059.8032, -304.9529, 13.1621, 282.9346),  destCargo = { 'Kraftstoff' } },
+    { name = 'Tankstelle Meier',                        coords = vector4(-341.0958, -1475.3755, 30.7519, 60.6348),   destCargo = { 'Kraftstoff' } },
+    { name = 'Tankstelle Schneider',                    coords = vector4(293.8644, -1251.6951, 29.4058, 203.0127),   destCargo = { 'Kraftstoff' } },
+    { name = 'Tankstelle Müller',                       coords = vector4(-79.4204, -1756.5078, 29.6349, 236.3690),   destCargo = { 'Kraftstoff' } },
 }
 
 -- Wertspanne ($ pro km), aus der zufällig der Auftragswert berechnet wird

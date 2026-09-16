@@ -302,6 +302,8 @@ const NAV_ITEMS = [
     { id: 'gf-roles', label: 'Rollen', icon: '🛡️', perm: 'roles_manage' },
     { id: 'gf-drivers', label: 'Fahrerakten', icon: '🪪', perm: 'employees_manage' },
     { id: 'gf-fleet', label: 'Fuhrpark', icon: '🚛', perm: 'fleet_manage' },
+    { id: 'gf-trailers', label: 'Anhänger', icon: '🚋', perm: 'fleet_manage' },
+    { id: 'gf-locations', label: 'Orte', icon: '📍', perm: 'locations_manage' },
     { id: 'gf-finance', label: 'Finanzen', icon: '💰', perm: 'finance_view' },
     { id: 'gf-payouts', label: 'Ein-/Auszahlungen', icon: '🏦', perm: 'finance_payout' },
     { id: 'gf-payroll', label: 'Gehälter', icon: '💵', perm: 'wages_manage' },
@@ -777,7 +779,7 @@ async function refreshAfterRolesChanged() {
 // ---------------------------------------------------------
 // Live-Karte (Disposition) - schematisches Positionsraster, KEIN echtes
 // Kartenbild (die Ressource bringt keine GTA-Kartengrafik mit) - Fahrer
-// UND Firmenstandorte (Config.Locations, als Orientierungspunkte) werden
+// UND Firmenstandorte (Reiter "Orte", als Orientierungspunkte) werden
 // auf denselben, ungefähren Weltkoordinaten-Bereich der GTA-V-Karte
 // abgebildet, damit die relative Lage zueinander stimmt.
 // ---------------------------------------------------------
@@ -1391,6 +1393,7 @@ VIEWS['gf-fleet'] = async (root) => {
         <td>${escapeHtml(v.vehicle_class)}</td>
         <td>${Number(v.mileage).toLocaleString('de-DE')} km</td>
         <td>${v.driver_name ? escapeHtml(v.driver_name) : '-'}</td>
+        <td>${v.trailer_id ? escapeHtml(v.trailer_name) : '-'}</td>
         <td class="btn-row">
             <button class="btn btn-sm" onclick="Actions.openVehicleFile(${v.id})">Akte</button>
             ${!v.archived ? `
@@ -1408,7 +1411,56 @@ VIEWS['gf-fleet'] = async (root) => {
             <button class="btn btn-primary" onclick="Actions.openVehicleCreateModal()">+ LKW hinzufügen</button>
             <button class="btn" onclick="Actions.toggleArchivedFleet()">${includeArchived ? 'Archivierte ausblenden' : 'Archivierte anzeigen'}</button>
         </div>
-        <div class="section">${table(['Status', 'Name', 'Kennzeichen', 'Klasse', 'Kilometerstand', 'Fahrer', ''], rows)}</div>`;
+        <div class="section">${table(['Status', 'Name', 'Kennzeichen', 'Klasse', 'Kilometerstand', 'Fahrer', 'Anhänger', ''], rows)}</div>`;
+};
+
+VIEWS['gf-trailers'] = async (root) => {
+    const d = await call('gf:trailers:list');
+    const typeLabel = (key) => (d.trailerTypes.find((t) => t.key === key) || {}).label || key;
+
+    const rows = d.trailers.map((t) => `<tr>
+        <td>${badge(VEHICLE_STATUS_META[t.status])}</td>
+        <td>${escapeHtml(t.name)}${t.archived ? ' <span class="pill">Archiviert</span>' : ''}</td>
+        <td>${escapeHtml(t.plate)}</td>
+        <td>${escapeHtml(typeLabel(t.type))}</td>
+        <td>${t.vehicle_plate ? `${escapeHtml(t.vehicle_name)} (${escapeHtml(t.vehicle_plate)})` : '-'}</td>
+        <td class="btn-row">
+            <button class="btn btn-sm" onclick="Actions.openTrailerEditModal(${t.id})">Bearbeiten</button>
+            <button class="btn btn-sm" onclick="Actions.openTrailerAssignModal(${t.id})">${t.vehicle_plate ? 'Umkuppeln' : 'Ankuppeln'}</button>
+            ${t.vehicle_plate ? `<button class="btn btn-sm" onclick="Actions.confirmTrailerAssign(${t.id}, null)">Abkuppeln</button>` : ''}
+            <button class="btn btn-sm btn-danger" onclick="Actions.confirmDeleteTrailer(${t.id})">Löschen</button>
+        </td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Anhänger</h1>
+        <p class="view-subtitle">${d.trailers.length} Anhänger</p>
+        <div class="btn-row" style="margin-bottom:14px;">
+            <button class="btn btn-primary" onclick="Actions.openTrailerCreateModal()">+ Anhänger hinzufügen</button>
+        </div>
+        <div class="section">${table(['Status', 'Name', 'Kennzeichen', 'Typ', 'Angekuppelt an', ''], rows)}</div>`;
+};
+
+VIEWS['gf-locations'] = async (root) => {
+    const d = await call('locations:list');
+
+    const rows = d.locations.map((l) => `<tr>
+        <td>${escapeHtml(l.name)}</td>
+        <td>${(l.sourceCargo || []).map((c) => `<span class="pill">${escapeHtml(c)}</span>`).join(' ') || '-'}</td>
+        <td>${(l.destCargo || []).map((c) => `<span class="pill">${escapeHtml(c)}</span>`).join(' ') || '-'}</td>
+        <td class="btn-row">
+            <button class="btn btn-sm" onclick="Actions.openLocationEditModal(${l.id})">Bearbeiten</button>
+            <button class="btn btn-sm btn-danger" onclick="Actions.confirmDeleteLocation(${l.id})">Löschen</button>
+        </td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Orte</h1>
+        <p class="view-subtitle">${d.locations.length} Be-/Entladepunkte</p>
+        <div class="btn-row" style="margin-bottom:14px;">
+            <button class="btn btn-primary" onclick="Actions.openLocationCreateModal()">+ Ort hinzufügen</button>
+        </div>
+        <div class="section">${table(['Name', 'Quelle (Abholung)', 'Ziel (Anlieferung)', ''], rows)}</div>`;
 };
 
 VIEWS['gf-finance'] = async (root) => {
@@ -1839,6 +1891,12 @@ Actions.openHireModal = async () => {
         <select id="hire-role">${roleOptions}</select>
         <label>Discord-ID <span style="font-weight:400;color:var(--text-2);">(optional, nur für Website-Sync)</span></label>
         <input id="hire-discord-id" type="text" autocomplete="off" placeholder="z.B. 123456789012345678" />
+        <label>Führerscheinklassen <span style="font-weight:400;color:var(--text-2);">(nur relevant, falls die Rolle Fahrerfunktionen hat)</span></label>
+        <div class="form-row" style="flex-wrap:wrap;">${(State.config.driverPermissions || []).map((p) => `
+            <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:400;">
+                <input type="checkbox" class="hire-driver-perm" value="${escapeHtml(p.key)}" style="width:auto;" />
+                ${escapeHtml(p.label)}
+            </label>`).join('')}</div>
     `, `
         <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
         <button class="btn btn-primary" onclick="Actions.confirmHire()">Einstellen</button>
@@ -1850,8 +1908,9 @@ Actions.confirmHire = async () => {
     const password = modalInputValue('hire-password');
     const role = modalInputValue('hire-role');
     const discordId = modalInputValue('hire-discord-id').trim();
+    const driverPermissions = Array.from(document.querySelectorAll('.hire-driver-perm:checked')).map((el) => el.value);
     if (!name || !username || !password) { toast('Fehler', 'Bitte Anzeigename, Login-Name und Passwort ausfüllen.', 'error'); return; }
-    await call('gf:employees:hire', { name, username, password, role, discordId });
+    await call('gf:employees:hire', { name, username, password, role, discordId, driverPermissions });
     closeModal();
     toast('Mitarbeiter eingestellt', '', 'success');
     showView('gf-employees');
@@ -2131,6 +2190,190 @@ Actions.reactivateVehicle = async (vehicleId) => {
     showView('gf-fleet');
 };
 
+// ---------------------------------------------------------
+// Anhänger
+// ---------------------------------------------------------
+
+function trailerTypeOptions(trailerTypes, selectedKey) {
+    return trailerTypes.map((t) => `<option value="${t.key}" ${t.key === selectedKey ? 'selected' : ''}>${escapeHtml(t.label)}</option>`).join('');
+}
+
+Actions.openTrailerCreateModal = async () => {
+    const d = await call('gf:trailers:list');
+    openModal('Anhänger erstellen', '', `
+        <label>Name</label><input id="tr-name" type="text" />
+        <label>Kennzeichen</label><input id="tr-plate" type="text" />
+        <label>Typ</label><select id="tr-type">${trailerTypeOptions(d.trailerTypes)}</select>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmCreateTrailer()">Anhänger erstellen</button>
+    `);
+};
+Actions.confirmCreateTrailer = async () => {
+    await call('gf:trailers:create', {
+        name: modalInputValue('tr-name'),
+        plate: modalInputValue('tr-plate'),
+        type: modalInputValue('tr-type'),
+    });
+    closeModal();
+    toast('Anhänger erstellt', '', 'success');
+    showView('gf-trailers');
+};
+
+Actions.openTrailerEditModal = async (trailerId) => {
+    const d = await call('gf:trailers:list');
+    const t = d.trailers.find((x) => x.id === trailerId);
+    if (!t) return;
+    const statusOptions = Object.keys(VEHICLE_STATUS_META).map((s) => `<option value="${s}" ${t.status === s ? 'selected' : ''}>${VEHICLE_STATUS_META[s].label}</option>`).join('');
+    openModal('Anhänger bearbeiten', `${escapeHtml(t.name)} - ${escapeHtml(t.plate)}`, `
+        <label>Name</label><input id="tr-name" type="text" value="${escapeHtml(t.name)}" />
+        <label>Kennzeichen</label><input id="tr-plate" type="text" value="${escapeHtml(t.plate)}" />
+        <label>Typ</label><select id="tr-type">${trailerTypeOptions(d.trailerTypes, t.type)}</select>
+        <label>Status</label><select id="tr-status">${statusOptions}</select>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmEditTrailer(${trailerId})">Speichern</button>
+    `);
+};
+Actions.confirmEditTrailer = async (trailerId) => {
+    await call('gf:trailers:update', {
+        trailerId,
+        name: modalInputValue('tr-name'),
+        plate: modalInputValue('tr-plate'),
+        type: modalInputValue('tr-type'),
+        status: modalInputValue('tr-status'),
+    });
+    closeModal();
+    toast('Anhänger aktualisiert', '', 'success');
+    showView('gf-trailers');
+};
+
+Actions.openTrailerAssignModal = async (trailerId) => {
+    const d = await call('gf:vehicles:list');
+    const options = d.vehicles.filter((v) => !v.archived).map((v) => `<option value="${v.id}">${escapeHtml(v.name)} (${escapeHtml(v.plate)})</option>`).join('');
+    openModal('Anhänger ankuppeln', '', `
+        <label>Fahrzeug</label>
+        <select id="tr-assign-vehicle">${options}</select>
+        <p class="card-hint">Ein bereits an dieses Fahrzeug gekuppelter Anhänger wird automatisch abgekuppelt.</p>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmTrailerAssign(${trailerId}, Number(modalInputValue('tr-assign-vehicle')))">Ankuppeln</button>
+    `);
+};
+Actions.confirmTrailerAssign = async (trailerId, vehicleId) => {
+    await call('gf:trailers:assign', { trailerId, vehicleId });
+    closeModal();
+    toast(vehicleId ? 'Anhänger angekuppelt' : 'Anhänger abgekuppelt', '', 'success');
+    showView('gf-trailers');
+};
+
+Actions.confirmDeleteTrailer = async (trailerId) => {
+    if (!confirm('Diesen Anhänger wirklich archivieren?')) return;
+    await call('gf:trailers:delete', { trailerId, mode: 'archive' });
+    toast('Anhänger archiviert', '', 'success');
+    showView('gf-trailers');
+};
+
+// ---------------------------------------------------------
+// Orte
+// ---------------------------------------------------------
+
+function cargoCheckboxes(prefix, cargoTypes, selectedList) {
+    const selected = new Set(selectedList || []);
+    return cargoTypes.map((c) => `
+        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:400;">
+            <input type="checkbox" class="${prefix}-cargo" value="${escapeHtml(c)}" style="width:auto;" ${selected.has(c) ? 'checked' : ''} />
+            ${escapeHtml(c)}
+        </label>`).join('');
+}
+
+function readCheckedCargo(prefix) {
+    return Array.from(document.querySelectorAll(`.${prefix}-cargo:checked`)).map((el) => el.value);
+}
+
+function locationFormFields(l) {
+    const cargoTypes = State.config.cargoTypes || [];
+    l = l || {};
+    return `
+        <label>Name</label><input id="loc-name" type="text" value="${escapeHtml(l.name || '')}" />
+        <div class="btn-row" style="margin:4px 0;">
+            <button type="button" class="btn btn-sm" onclick="Actions.useCurrentPositionForLocation()">📍 Aktuelle Position übernehmen</button>
+            <span id="loc-pos-hint" class="card-hint">${l.coords ? `x=${l.coords.x.toFixed(1)}, y=${l.coords.y.toFixed(1)}, z=${l.coords.z.toFixed(1)}` : 'Noch keine Position gesetzt.'}</span>
+        </div>
+        <input id="loc-x" type="hidden" value="${l.coords ? l.coords.x : ''}" />
+        <input id="loc-y" type="hidden" value="${l.coords ? l.coords.y : ''}" />
+        <input id="loc-z" type="hidden" value="${l.coords ? l.coords.z : ''}" />
+        <input id="loc-heading" type="hidden" value="${l.coords ? l.coords.w : 0}" />
+        <label>Quelle (hier abholbare Frachtarten)</label>
+        <div class="form-row" style="flex-wrap:wrap;">${cargoCheckboxes('loc-src', cargoTypes, l.sourceCargo)}</div>
+        <label>Ziel (hier anlieferbare Frachtarten)</label>
+        <div class="form-row" style="flex-wrap:wrap;">${cargoCheckboxes('loc-dst', cargoTypes, l.destCargo)}</div>
+    `;
+}
+
+Actions.useCurrentPositionForLocation = async () => {
+    const pos = await call('gf:locations:currentPosition');
+    document.getElementById('loc-x').value = pos.x;
+    document.getElementById('loc-y').value = pos.y;
+    document.getElementById('loc-z').value = pos.z;
+    document.getElementById('loc-heading').value = pos.heading;
+    document.getElementById('loc-pos-hint').textContent = `x=${pos.x.toFixed(1)}, y=${pos.y.toFixed(1)}, z=${pos.z.toFixed(1)} (übernommen)`;
+    toast('Position übernommen', '', 'success');
+};
+
+Actions.openLocationCreateModal = () => {
+    openModal('Ort erstellen', '', locationFormFields(null), `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmCreateLocation()">Ort erstellen</button>
+    `);
+};
+Actions.confirmCreateLocation = async () => {
+    await call('gf:locations:create', {
+        name: modalInputValue('loc-name'),
+        x: Number(modalInputValue('loc-x')),
+        y: Number(modalInputValue('loc-y')),
+        z: Number(modalInputValue('loc-z')),
+        heading: Number(modalInputValue('loc-heading')) || 0,
+        sourceCargo: readCheckedCargo('loc-src'),
+        destCargo: readCheckedCargo('loc-dst'),
+    });
+    closeModal();
+    toast('Ort erstellt', '', 'success');
+    showView('gf-locations');
+};
+
+Actions.openLocationEditModal = async (locationId) => {
+    const d = await call('locations:list');
+    const l = d.locations.find((x) => x.id === locationId);
+    if (!l) return;
+    openModal('Ort bearbeiten', escapeHtml(l.name), locationFormFields(l), `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmEditLocation(${locationId})">Speichern</button>
+    `);
+};
+Actions.confirmEditLocation = async (locationId) => {
+    await call('gf:locations:update', {
+        locationId,
+        name: modalInputValue('loc-name'),
+        x: Number(modalInputValue('loc-x')),
+        y: Number(modalInputValue('loc-y')),
+        z: Number(modalInputValue('loc-z')),
+        heading: Number(modalInputValue('loc-heading')) || 0,
+        sourceCargo: readCheckedCargo('loc-src'),
+        destCargo: readCheckedCargo('loc-dst'),
+    });
+    closeModal();
+    toast('Ort aktualisiert', '', 'success');
+    showView('gf-locations');
+};
+
+Actions.confirmDeleteLocation = async (locationId) => {
+    if (!confirm('Diesen Ort wirklich löschen?')) return;
+    await call('gf:locations:delete', { locationId });
+    toast('Ort gelöscht', '', 'success');
+    showView('gf-locations');
+};
+
 Actions.openVehicleFile = async (vehicleId) => {
     const f = await call('gf:vehicles:file', { vehicleId });
     const v = f.vehicle;
@@ -2156,7 +2399,7 @@ Actions.executePayout = async () => {
     if (result.cashGiven) {
         toast('Auszahlung durchgeführt', `${formatMoney(amount)} als Bargeld erhalten.`, 'success');
     } else {
-        toast('Auszahlung gebucht', `${formatMoney(amount)} - Bargeld konnte nicht übergeben werden (Wirtschafts-Anbindung nicht verfügbar).`, 'info');
+        toast('Achtung: kein Bargeld erhalten!', `${formatMoney(amount)} wurde verbucht, aber die Wirtschafts-Anbindung (Config.MoneyBridge) hat kein Bargeld übergeben - Server-Konsole prüfen.`, 'error');
     }
     showView('gf-payouts');
 };
@@ -2188,7 +2431,7 @@ Actions.payEmployee = async (employeeId, name) => {
     if (result.cashGiven) {
         toast('Gehalt ausgezahlt', `${formatMoney(result.amount)} an ${name} als Bargeld übergeben.`, 'success');
     } else {
-        toast('Gehalt gebucht', `${formatMoney(result.amount)} für ${name} - Bargeld konnte nicht übergeben werden (nicht online oder keine Wirtschafts-Anbindung).`, 'info');
+        toast('Achtung: kein Bargeld erhalten!', `${formatMoney(result.amount)} für ${name} wurde verbucht, aber NICHT als Bargeld übergeben (nicht online, oder Config.MoneyBridge funktioniert nicht - Server-Konsole prüfen).`, 'error');
     }
     showView('gf-payroll');
 };
