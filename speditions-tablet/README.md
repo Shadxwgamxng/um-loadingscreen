@@ -92,6 +92,10 @@ oder aktualisiert Passwort/Rolle, falls der Login-Name bereits existiert.
   ```lua
   exports['speditions-tablet']:OpenTablet()
   ```
+- Solange das Tablet geöffnet ist, hält der Spieler es sichtbar in der Hand
+  (`Config.TabletProp`, Standard-Modell `prop_cs_tablet`) - rein optisch,
+  ohne Bewegungseinschränkung. Modell/Position/Rotation sind über
+  `Config.TabletProp` in `config.lua` anpassbar.
 
 ### Tablet nur per Item öffnen
 
@@ -241,7 +245,6 @@ serverseitig durchgesetzt in `server/sv_roles.lua`):
 |---|---|
 | `driver_actions` | Fahrerfunktionen (Aufträge fahren, Fahrerkarte, eigene Statistik, Nachrichten empfangen) |
 | `dispatch` | Disposition (Fahrerübersicht, Auftragspool disponieren, Fahrer kontaktieren, Umsatzübersicht) |
-| `live_map_view` | Live-Karte einsehen (Fahrerpositionen, Aufträge, gesetzte Navi-Routen) |
 | `fleet_manage` | Fuhrparkverwaltung (Fahrzeuge anlegen/bearbeiten/löschen/zuweisen) UND Anhängerverwaltung (Reiter "Anhänger": anlegen/bearbeiten/löschen/an-/umkuppeln) |
 | `locations_manage` | Orte verwalten (Reiter "Orte": Be-/Entladepunkte anlegen/bearbeiten/löschen) |
 | `employees_manage` | Mitarbeiterverwaltung (einstellen, Rolle/Status ändern, Passwörter zurücksetzen, Fahrerakten) |
@@ -261,7 +264,7 @@ die Geschäftsführung kann auch ihre Berechtigungen im Tablet anpassen):
 | Basisrolle | Berechtigungen |
 |---|---|
 | LKW-Fahrer | `driver_actions` |
-| Disponent | `dispatch`, `live_map_view` |
+| Disponent | `dispatch` |
 | Geschäftsführung | alle außer `driver_actions` |
 
 Welche Reiter im Tablet sichtbar sind, richtet sich ausschließlich nach den
@@ -321,9 +324,12 @@ Framework-Anbindung in diesem Standalone-Setup).
   **Zwei Voraussetzungen, ohne die sich die Lenkzeit NICHT ändert:** (1) die
   Fahrerkarte muss im Reiter "Fahrerkarte" eingesteckt sein (`on_shift` in
   `st_drivers`) - nur das Sitzen im richtigen Fahrzeug reicht seit diesem
-  Update nicht mehr aus; (2) dem Fahrer muss über den Fuhrpark ein Fahrzeug
-  zugewiesen sein. Fehlt (2) bei eingesteckter Karte, erscheint jetzt ein
-  In-Game-Warnhinweis ("Dir ist noch kein Fahrzeug zugewiesen ..."), statt
+  Update nicht mehr aus; (2) dem Fahrer muss ein Fahrzeug zugewiesen sein -
+  das passiert seit dem Selbstauswahl-Feature (siehe unten) automatisch beim
+  Einstecken der Fahrerkarte. Fehlt (2) trotzdem (z.B. weil die
+  Geschäftsführung die Zuweisung nachträglich im Fuhrpark aufgehoben hat),
+  erscheint ein In-Game-Warnhinweis ("Dir ist noch kein Fahrzeug zugewiesen
+  ..."), statt
   dass die Zähler kommentarlos bei 0 bleiben (`client/cl_hours.lua`).
 - **Automatische Wegpunkte**: Beim Annehmen eines Auftrags wird automatisch
   ein GPS-Wegpunkt zum Beladepunkt gesetzt, beim Losfahren (Statuswechsel auf
@@ -365,7 +371,10 @@ Geschäftsführung Anhänger an und kuppelt sie über "Ankuppeln"/"Umkuppeln" an
 ein Fahrzeug - ein Anhänger kann nur an einem Fahrzeug gleichzeitig hängen,
 das Ankuppeln an ein neues Fahrzeug kuppelt automatisch vom vorherigen ab.
 Die Fuhrpark-Tabelle zeigt in der Spalte "Anhänger" den aktuell angekuppelten
-Anhänger pro LKW.
+Anhänger pro LKW. Fahrer können sich beim Fahrerkarte-Einstecken auch selbst
+einen freien Anhänger ankuppeln (siehe "Fahrerkarte einstecken vor
+Auftragsannahme" unten) - die GF-Verwaltung hier bleibt parallel als
+manuelle Vorab-/Korrekturmöglichkeit bestehen.
 
 Jede Frachtart verlangt anhand von `Config.CargoTrailerType` einen
 bestimmten Anhängertyp (Gefahrgut → Curtainsider mit Gefahrgutzulassung,
@@ -399,15 +408,30 @@ bestehende Gefahrgut-Berechtigungsprüfung bei Fahrern.
   min); der Auftragsstatus wechselt danach automatisch weiter (s.o.).
   Entfernt sich der Fahrer während des Vorgangs mehr als 5m vom Marker,
   bricht der Vorgang ab.
-- **Fahrerkarte einstecken vor Auftragsannahme**: Ein Fahrer muss im Reiter
-  "Fahrerkarte" zuerst seine Fahrt starten ("Fahrerkarte einstecken"), bevor
-  er einen Auftrag annehmen kann (`shift_not_started`, serverseitig
-  erzwungen in `Orders.AcceptByDriver`) - damit bewusst bestätigt wird, dass
-  ab jetzt seine Lenk-/Ruhezeiten laufen. "Fahrerkarte abziehen" beendet die
-  Fahrt wieder. Der Zustand wird in `st_drivers.on_shift`/`shift_started_at`
-  gespeichert und ist unabhängig vom (automatischen, kennzeichenbasierten)
-  Lenkzeit-Tracking selbst - Letzteres läuft weiterhin wie gehabt über
-  `client/cl_hours.lua`.
+- **Fahrerkarte einstecken vor Auftragsannahme, inkl. Fahrzeug-/Anhänger-
+  Selbstauswahl**: Ein Fahrer muss im Reiter "Fahrerkarte" zuerst seine Fahrt
+  starten ("Fahrerkarte einstecken"), bevor er einen Auftrag annehmen kann
+  (`shift_not_started`, serverseitig erzwungen in `Orders.AcceptByDriver`) -
+  damit bewusst bestätigt wird, dass ab jetzt seine Lenk-/Ruhezeiten laufen.
+  Dabei öffnet sich ein Formular, in dem der Fahrer sich **selbst** ein
+  freies Fahrzeug aussucht (`driver:shiftOptions`/`driver:startShift`,
+  `server/sv_drivers.lua`) - eine gesonderte Zuweisung durch die
+  Geschäftsführung im Fuhrpark ist dafür nicht mehr nötig, bleibt als
+  manuelle Vorab-Zuweisung aber weiterhin möglich. Passend dazu muss der
+  Fahrer entweder einen freien Anhänger auswählen (wird automatisch an das
+  gewählte Fahrzeug angekuppelt) oder explizit **"Werkstattfahrt"** wählen
+  (kein Anhänger) - erst dann lässt sich "Fahrerkarte einstecken" bestätigen.
+  Ohne Anhänger kann der Fahrer keine Frachtaufträge annehmen (siehe
+  Anhänger-Pflicht oben), Lenkzeit wird aber unabhängig davon erfasst, sobald
+  er im zugewiesenen Fahrzeug sitzt - eine Werkstattfahrt ist also bewusst
+  auch ohne Fracht möglich. Ein Fahrzeug/Anhänger, das sich gerade ein
+  ANDERER, bereits im Dienst befindlicher Fahrer genommen hat, taucht in der
+  Auswahl nicht auf. "Fahrerkarte abziehen" beendet die Fahrt wieder UND gibt
+  das Fahrzeug automatisch für andere Fahrer frei (der Anhänger bleibt am
+  Fahrzeug hängen). Der Schicht-Zustand wird in
+  `st_drivers.on_shift`/`shift_started_at` gespeichert und ist unabhängig
+  vom (automatischen, kennzeichenbasierten) Lenkzeit-Tracking selbst -
+  Letzteres läuft weiterhin wie gehabt über `client/cl_hours.lua`.
 - **Lieferschein im Tablet**: Solange ein Auftrag angenommen, in Anfahrt,
   beladen oder in Entladung ist, zeigt das Tablet unter "Meine Aufträge"
   einen ausführlichen Lieferschein: Ware, Menge/Einheit
@@ -457,39 +481,6 @@ Im Reiter "Aufträge" hat ein Fahrer bei jedem laufenden Auftrag
 - **Ist niemand online**: Der Auftrag wird sofort abgebrochen, und dem
   Unternehmensguthaben wird eine **Vertragsstrafe** (`Config.OrderCancelPenalty`,
   Standard 500$) als eigene Transaktion (`vertragsstrafe`) belastet.
-
-### Live-Karte (Disposition)
-
-Mit der Berechtigung `live_map_view` (Basisrollen: Disponent und
-Geschäftsführung) zeigt der Reiter **Live-Karte** ein live aktualisiertes
-Positionsraster (Polling alle 5 Sekunden, `dispatch:liveMap` in
-`server/sv_tracking.lua`) aller gerade am Tablet angemeldeten Fahrer:
-
-- **Position**: Wird rein **serverseitig** alle 5 Sekunden per
-  `GetEntityCoords` für jeden angemeldeten Mitarbeiter mit der Berechtigung
-  `driver_actions` ermittelt - dafür ist **keinerlei Mitwirkung des
-  Client-Skripts nötig** (kein eigener Heartbeat-Call, dadurch auch kein
-  Risiko von RPC-Fehler-Spam für Mitarbeiter ohne diese Berechtigung).
-  Positionen werden nicht in der Datenbank gespeichert, sondern nur
-  transient im Arbeitsspeicher gehalten und bei jedem Intervall komplett
-  neu aufgebaut - meldet sich ein Fahrer ab oder verlässt den Server,
-  verschwindet er beim nächsten Intervall automatisch von der Karte statt
-  als veraltete "Geisterposition" stehen zu bleiben.
-- **Aufträge**: Zu jedem Fahrer mit einem laufenden Auftrag
-  (`angenommen`/`anfahrt`/`beladen`/`entladen`) zeigt die Karte Frachtart
-  sowie Abhol-/Zielort.
-- **Navi-Route**: Der aktuell gesetzte GPS-Wegpunkt (derselbe, den der
-  Fahrer auch tatsächlich in GTA angezeigt bekommt, s.o.) wird als gelber
-  Punkt mit gestrichelter Linie zur aktuellen Fahrerposition eingezeichnet.
-- **Wichtige Einschränkung**: Es handelt sich bewusst um ein **schematisches
-  Positionsraster, kein echtes Kartenbild** - die Ressource bringt keine
-  GTA-V-Kartengrafik mit (Lizenz-/Copyright-Gründe). Fahrer UND
-  Firmenstandorte (aus dem Reiter "Orte", als graue Orientierungspunkte) werden
-  auf denselben ungefähren Weltkoordinaten-Bereich der GTA-V-Karte
-  (`MAP_BOUNDS` in `html/js/app.js`) abgebildet, sodass die relative Lage
-  zueinander stimmt - für ein echtes Kartenbild müsste `drawLiveMap()` in
-  `html/js/app.js` um eine selbst eingebundene Kartengrafik erweitert
-  werden.
 
 ## Datenbankschema
 
@@ -592,9 +583,6 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `server/sv_roles.lua` - Rollen & Berechtigungen: frei anlegbare Rollen
   (Erstellen/Bearbeiten/Löschen), Berechtigungsprüfung (`Roles.HasPermission`),
   Erstbefüllung der drei Basisrollen aus `Config.DefaultRolePermissions`.
-- `server/sv_tracking.lua` - Live-Karte: liest serverseitig per
-  `GetEntityCoords` die Position jedes angemeldeten Fahrers, verknüpft sie
-  mit dessen laufendem Auftrag/Wegpunkt für den Reiter "Live-Karte".
 - `server/sv_locations.lua` - Orte (Reiter "Orte"): CRUD auf `st_locations`,
   Erstbefüllung aus `Config.SeedLocations`, "Aktuelle Position übernehmen"
   (ermittelt serverseitig per `GetEntityCoords`/`GetEntityHeading`),
@@ -625,10 +613,17 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `client/cl_orders.lua` - Bodenmarker an relevanten Standorten aus dem
   Reiter "Orte" (kein NPC), Be-/Entladen per Taste E mit Fortschrittsbalken.
 - `html/` - NUI-Frontend (Sperrbildschirm, berechtigungsbasierte Reiter -
-  `NAV_ITEMS`/`buildSidebar` in `js/app.js` -, Rollenverwaltung, Live-Karte
-  per `<canvas>`). Der Client führt dabei keine Geschäftslogik aus - jede
-  Aktion wird serverseitig neu geprüft, die Reiter-Sichtbarkeit ist reine
-  Bequemlichkeit.
+  `NAV_ITEMS`/`buildSidebar` in `js/app.js` -, Rollenverwaltung). Der Client
+  führt dabei keine Geschäftslogik aus - jede Aktion wird serverseitig neu
+  geprüft, die Reiter-Sichtbarkeit ist reine Bequemlichkeit.
+
+**Wichtig bei eigenen NUI-Erweiterungen:** niemals `confirm()`/`alert()`/
+`prompt()` im NUI-JavaScript verwenden - CEF (der Browser-Unterbau der
+FiveM-NUI) unterstützt diese synchronen JS-Dialoge nicht richtig, das
+Spiel friert dabei **komplett** ein (kein Fehler, keine Wiederherstellung
+außer per Ressourcen-/Server-Neustart). Bestätigungen laufen in diesem
+Projekt stattdessen ausschließlich über `openConfirmModal()`
+(`html/js/app.js`) - ein normales, asynchrones NUI-Modal.
 
 Das System ist modular aufgebaut: neue Auftragstypen, zusätzliche
 Fahrzeugklassen oder weitere Rollen-Berechtigungen lassen sich über

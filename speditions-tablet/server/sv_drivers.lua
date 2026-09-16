@@ -167,21 +167,119 @@ local function verifyShiftState(driverId, expectedOnShift)
     end
 end
 
-function Drivers.StartShift(src)
+--- Fahrzeuge, die sich ein Fahrer beim Fahrerkarte-Einstecken selbst
+--- zuweisen darf: verfügbar, nicht archiviert, und nicht gerade von einem
+--- ANDEREN Fahrer beansprucht, der selbst schon im Dienst ist (sonst
+--- könnten sich zwei Fahrer gleichzeitig denselben LKW "greifen"). Der
+--- eigene, bereits zugewiesene LKW zählt bewusst mit dazu, damit ein Fahrer
+--- nach einer Zwischenablage (z.B. Tablet kurz geschlossen) denselben LKW
+--- erneut wählen kann.
+local function availableVehiclesForShift(driverId)
+    return MySQL.query.await([[
+        SELECT v.id, v.name, v.plate, v.vehicle_class, v.mileage, v.fuel,
+            t.id AS trailer_id, t.name AS trailer_name, t.type AS trailer_type
+        FROM st_vehicles v
+        LEFT JOIN st_trailers t ON t.assigned_vehicle_id = v.id
+        WHERE v.archived = 0 AND v.status = 'verfuegbar'
+            AND NOT EXISTS (
+                SELECT 1 FROM st_drivers d
+                WHERE d.assigned_vehicle_id = v.id AND d.on_shift = 1 AND d.id != ?
+            )
+        ORDER BY v.name ASC
+    ]], { driverId })
+end
+
+--- Anhänger, die sich ein Fahrer beim Fahrerkarte-Einstecken selbst ankuppeln
+--- darf - analog availableVehiclesForShift: nicht gerade an ein Fahrzeug
+--- gekuppelt, das ein ANDERER, bereits im Dienst befindlicher Fahrer fährt.
+local function availableTrailersForShift(driverId)
+    return MySQL.query.await([[
+        SELECT t.id, t.name, t.plate, t.type
+        FROM st_trailers t
+        WHERE t.archived = 0 AND t.status = 'verfuegbar'
+            AND (t.assigned_vehicle_id IS NULL OR NOT EXISTS (
+                SELECT 1 FROM st_drivers d
+                WHERE d.assigned_vehicle_id = t.assigned_vehicle_id AND d.on_shift = 1 AND d.id != ?
+            ))
+        ORDER BY t.name ASC
+    ]], { driverId })
+end
+
+--- Auswahl für das "Fahrerkarte einstecken"-Formular: freie Fahrzeuge +
+--- freie Anhänger (inkl. Anhängertyp-Bezeichnungen für die NUI).
+function Drivers.ShiftOptions(src)
     local emp = Employees.RequirePermission(src, 'driver_actions')
     local driver = Drivers.EnsureDriverRecord(emp.id)
+    return {
+        vehicles = availableVehiclesForShift(driver.id),
+        trailers = availableTrailersForShift(driver.id),
+        trailerTypes = Config.TrailerTypes,
+    }
+end
+
+--- "Fahrerkarte einstecken" - startet die Schicht. Der Fahrer wählt dabei
+--- selbst ein freies Fahrzeug (ersetzt die frühere reine GF-Zuweisung, die
+--- als eigener Vorgang im Fuhrpark aber weiterhin möglich bleibt) UND
+--- entweder einen Anhänger (wird automatisch an das gewählte Fahrzeug
+--- angekuppelt, siehe Trailers.AssignInternal) oder markiert die Fahrt
+--- explizit als "Werkstattfahrt" (workshopMode = true, kein Anhänger nötig -
+--- die bestehende Anhängertyp-Prüfung bei der Disposition, s.
+--- server/sv_orders.lua, sorgt dann von selbst dafür, dass ein Fahrer ohne
+--- Anhänger keine Frachtaufträge annehmen kann). Genau eine der beiden
+--- Optionen ist Pflicht, damit der Fahrer bewusst eine Wahl trifft.
+function Drivers.StartShift(src, vehicleId, trailerId, workshopMode)
+    local emp = Employees.RequirePermission(src, 'driver_actions')
+    local driver = Drivers.EnsureDriverRecord(emp.id)
+
+    vehicleId = Utils.SanitizeNumber(vehicleId, 1)
+    trailerId = trailerId and Utils.SanitizeNumber(trailerId, 1) or nil
+    workshopMode = workshopMode == true
+
+    if not vehicleId then error('missing_fields') end
+    if not trailerId and not workshopMode then error('missing_trailer_or_workshop') end
+    if trailerId and workshopMode then error('missing_fields') end
+
+    local vehicle = Vehicles.GetById(vehicleId)
+    if not vehicle then error('vehicle_not_found') end
+    if Utils.ToBool(vehicle.archived) then error('vehicle_archived') end
+    if vehicle.status ~= 'verfuegbar' then error('vehicle_unavailable') end
+
+    local claimedBy = MySQL.single.await(
+        'SELECT id FROM st_drivers WHERE assigned_vehicle_id = ? AND on_shift = 1 AND id != ?',
+        { vehicleId, driver.id }
+    )
+    if claimedBy then error('vehicle_unavailable') end
+
+    Vehicles.AssignInternal(emp, vehicleId, driver.id)
+
+    if trailerId then
+        local trailer = Trailers.GetById(trailerId)
+        if not trailer then error('trailer_not_found') end
+        if Utils.ToBool(trailer.archived) then error('trailer_unavailable') end
+        if trailer.status ~= 'verfuegbar' then error('trailer_unavailable') end
+        Trailers.AssignInternal(emp, trailerId, vehicleId)
+    end
+
     MySQL.update.await('UPDATE st_drivers SET on_shift = 1, shift_started_at = NOW() WHERE id = ?', { driver.id })
     verifyShiftState(driver.id, true)
-    Logs.Write(emp.id, 'shift_started', ('%s hat die Fahrerkarte eingesteckt (Fahrt gestartet).'):format(emp.name))
+    Logs.Write(emp.id, 'shift_started', ('%s hat die Fahrerkarte eingesteckt (Fahrt gestartet, Fahrzeug %s%s).'):format(
+        emp.name, vehicle.plate, workshopMode and ', Werkstattfahrt ohne Anhänger' or ''
+    ))
     return { ok = true }
 end
 
---- "Fahrerkarte abziehen" - beendet die Schicht.
+--- "Fahrerkarte abziehen" - beendet die Schicht UND gibt das Fahrzeug wieder
+--- für andere Fahrer frei (der Anhänger bleibt am Fahrzeug hängen, nicht am
+--- Fahrer - wer als nächstes dieses Fahrzeug wählt, sieht/übernimmt ihn
+--- automatisch mit).
 function Drivers.EndShift(src)
     local emp = Employees.RequirePermission(src, 'driver_actions')
     local driver = Drivers.EnsureDriverRecord(emp.id)
     MySQL.update.await('UPDATE st_drivers SET on_shift = 0, shift_started_at = NULL WHERE id = ?', { driver.id })
     verifyShiftState(driver.id, false)
+    if driver.assigned_vehicle_id then
+        Vehicles.AssignInternal(emp, driver.assigned_vehicle_id, nil)
+    end
     Logs.Write(emp.id, 'shift_ended', ('%s hat die Fahrerkarte abgezogen (Fahrt beendet).'):format(emp.name))
     return { ok = true }
 end
@@ -325,8 +423,13 @@ RPC.Register('driver:setStatus', function(src, payload)
     return Drivers.SetStatus(src, payload.status)
 end)
 
-RPC.Register('driver:startShift', function(src)
-    return Drivers.StartShift(src)
+RPC.Register('driver:shiftOptions', function(src)
+    return Drivers.ShiftOptions(src)
+end)
+
+RPC.Register('driver:startShift', function(src, payload)
+    payload = payload or {}
+    return Drivers.StartShift(src, payload.vehicleId, payload.trailerId, payload.workshopMode)
 end)
 
 RPC.Register('driver:endShift', function(src)

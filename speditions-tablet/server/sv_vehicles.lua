@@ -182,9 +182,13 @@ function Vehicles.Reactivate(src, vehicleId)
     return { ok = true }
 end
 
---- Weist ein Fahrzeug einem Fahrer zu (oder hebt die Zuweisung auf, wenn driverId = nil).
-function Vehicles.Assign(src, vehicleId, driverId)
-    local emp = Employees.RequirePermission(src, 'fleet_manage')
+--- Weist ein Fahrzeug einem Fahrer zu (oder hebt die Zuweisung auf, wenn
+--- driverId = nil). Kern-Logik ohne Berechtigungsprüfung, damit
+--- Drivers.StartShift (Fahrer wählt sich beim Fahrerkarte-Einstecken selbst
+--- ein Fahrzeug, siehe server/sv_drivers.lua) sie mit dem eigenen
+--- Mitarbeiter-Datensatz wiederverwenden kann, statt 'fleet_manage' zu
+--- benötigen.
+local function assignVehicleInternal(emp, vehicleId, driverId)
     local vehicle = Vehicles.GetById(vehicleId)
     if not vehicle then error('vehicle_not_found') end
     if Utils.ToBool(vehicle.archived) then error('vehicle_archived') end
@@ -226,6 +230,12 @@ function Vehicles.Assign(src, vehicleId, driverId)
     RPC.PushToPermission('dispatch', 'fleet:changed', {})
 
     return { ok = true }
+end
+Vehicles.AssignInternal = assignVehicleInternal
+
+function Vehicles.Assign(src, vehicleId, driverId)
+    local emp = Employees.RequirePermission(src, 'fleet_manage')
+    return assignVehicleInternal(emp, vehicleId, driverId)
 end
 
 --- Vollständige Fahrzeugakte inkl. letzter Aufträge.

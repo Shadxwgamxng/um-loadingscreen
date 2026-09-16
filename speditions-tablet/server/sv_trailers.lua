@@ -97,8 +97,11 @@ end
 --- Kuppelt einen Anhänger an ein Fahrzeug an (oder ab, wenn vehicleId = nil).
 --- Ein Fahrzeug kann immer nur EINEN Anhänger gleichzeitig haben - ein
 --- bereits an dieses Fahrzeug gekuppelter Anhänger wird zuerst abgekuppelt.
-function Trailers.Assign(src, trailerId, vehicleId)
-    local emp = Employees.RequirePermission(src, 'fleet_manage')
+--- Kern-Logik ohne Berechtigungsprüfung, damit Drivers.StartShift (Fahrer
+--- kuppelt sich beim Fahrerkarte-Einstecken selbst einen Anhänger an, siehe
+--- server/sv_drivers.lua) sie mit dem eigenen Mitarbeiter-Datensatz
+--- wiederverwenden kann, statt 'fleet_manage' zu benötigen.
+local function assignTrailerInternal(emp, trailerId, vehicleId)
     local trailer = Trailers.GetById(trailerId)
     if not trailer then error('trailer_not_found') end
 
@@ -118,6 +121,12 @@ function Trailers.Assign(src, trailerId, vehicleId)
 
     RPC.PushToPermission('dispatch', 'fleet:changed', {})
     return { ok = true }
+end
+Trailers.AssignInternal = assignTrailerInternal
+
+function Trailers.Assign(src, trailerId, vehicleId)
+    local emp = Employees.RequirePermission(src, 'fleet_manage')
+    return assignTrailerInternal(emp, trailerId, vehicleId)
 end
 
 --- Löscht (archiviert) einen Anhänger. mode = 'archive' (Standard) oder 'hard'.

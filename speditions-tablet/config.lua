@@ -14,6 +14,19 @@ Config.CompanyName = 'Baltic Freight Spedition GmbH'
 Config.OpenCommand = 'tablet'
 Config.OpenKey = 'F6' -- Keybind wird clientseitig via RegisterCommand + Keymapping gesetzt
 
+-- Prop, das dem Spieler in die Hand gelegt wird, solange das Tablet
+-- geöffnet ist (client/cl_main.lua) - rein optisch, ohne Bewegungs-
+-- einschränkung. offset/rotation ggf. nachjustieren (X = seitlich,
+-- Y = vor/zurück, Z = hoch/runter, rotation in Grad); bone ist der
+-- Ped-Knochen, an den angehängt wird (28422 = SKEL_L_Hand).
+Config.TabletProp = {
+    enabled = true,
+    model = 'prop_cs_tablet',
+    bone = 28422,
+    offset = { x = 0.03, y = 0.02, z = -0.02 },
+    rotation = { x = 0.0, y = 0.0, z = 0.0 },
+}
+
 -- Wenn aktiviert, öffnet sich das Tablet NICHT mehr per Command/Keybind,
 -- sondern ausschließlich, wenn das konfigurierte Item benutzt wird
 -- (automatisch per ESX.RegisterUsableItem bzw.
@@ -83,8 +96,7 @@ Config.RoleLabels = {
 -- Bearbeiten einer Rolle wählen kann (Reiter "Rollen").
 Config.Permissions = {
     { key = 'driver_actions',    label = 'Fahrerfunktionen (Aufträge fahren, Fahrerkarte, eigene Statistik, Nachrichten empfangen)', group = 'Fahrer' },
-    { key = 'dispatch',          label = 'Disposition (Fahrerübersicht, Auftragspool disponieren, Fahrer kontaktieren, Live-Karte)', group = 'Disposition' },
-    { key = 'live_map_view',     label = 'Live-Karte einsehen (Fahrerpositionen, Aufträge, gesetzte Navi-Routen)', group = 'Disposition' },
+    { key = 'dispatch',          label = 'Disposition (Fahrerübersicht, Auftragspool disponieren, Fahrer kontaktieren)', group = 'Disposition' },
     { key = 'fleet_manage',      label = 'Fuhrparkverwaltung (Fahrzeuge anlegen/bearbeiten/löschen/zuweisen)', group = 'Fuhrpark' },
     { key = 'locations_manage',  label = 'Orte verwalten (Be-/Entladepunkte anlegen/bearbeiten/löschen)', group = 'Fuhrpark' },
     { key = 'employees_manage',  label = 'Mitarbeiterverwaltung (einstellen, Rolle/Status ändern, Passwörter zurücksetzen)', group = 'Personal' },
@@ -100,9 +112,9 @@ Config.Permissions = {
 -- Anlegen der jeweiligen Rolle in st_roles relevant, siehe oben).
 Config.DefaultRolePermissions = {
     fahrer = { 'driver_actions' },
-    disponent = { 'dispatch', 'live_map_view' },
+    disponent = { 'dispatch' },
     geschaeftsfuehrung = {
-        'dispatch', 'live_map_view', 'fleet_manage', 'locations_manage', 'employees_manage', 'roles_manage',
+        'dispatch', 'fleet_manage', 'locations_manage', 'employees_manage', 'roles_manage',
         'finance_view', 'finance_payout', 'wages_manage', 'activity_log_view', 'stats_view',
     },
 }

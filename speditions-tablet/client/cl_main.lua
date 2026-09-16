@@ -5,6 +5,41 @@
 local tabletOpen = false
 local pendingRpc = {}
 local rpcCounter = 0
+local tabletPropEntity = nil
+
+--- Hängt das konfigurierte Tablet-Prop an die Hand des Spielers, solange
+--- das Tablet geöffnet ist (rein optisch, keine Animation/Bewegungssperre).
+local function attachTabletProp()
+    local cfg = Config.TabletProp
+    if not (cfg and cfg.enabled) then return end
+
+    local modelHash = GetHashKey(cfg.model)
+    RequestModel(modelHash)
+    local timeout = GetGameTimer() + 3000
+    while not HasModelLoaded(modelHash) and GetGameTimer() < timeout do Wait(0) end
+    if not HasModelLoaded(modelHash) then
+        print(('^1[speditions-tablet]^7 Tablet-Prop-Modell "%s" konnte nicht geladen werden.'):format(cfg.model))
+        return
+    end
+
+    local ped = PlayerPedId()
+    tabletPropEntity = CreateObject(modelHash, GetEntityCoords(ped), true, true, false)
+    local off, rot = cfg.offset or {}, cfg.rotation or {}
+    AttachEntityToEntity(
+        tabletPropEntity, ped, GetPedBoneIndex(ped, cfg.bone or 28422),
+        off.x or 0.0, off.y or 0.0, off.z or 0.0,
+        rot.x or 0.0, rot.y or 0.0, rot.z or 0.0,
+        true, true, false, true, 1, true
+    )
+    SetModelAsNoLongerNeeded(modelHash)
+end
+
+local function removeTabletProp()
+    if tabletPropEntity and DoesEntityExist(tabletPropEntity) then
+        DeleteEntity(tabletPropEntity)
+    end
+    tabletPropEntity = nil
+end
 
 --- Ruft eine RPC-Action serverseitig auf - identischer Weg wie die NUI, aber
 --- direkt aus Client-Lua nutzbar (z.B. für den Lenkzeit-Tracker, der auch
@@ -22,6 +57,7 @@ local function openTablet()
     tabletOpen = true
     SetNuiFocus(true, true)
     SendNUIMessage({ type = 'open', companyName = Config.CompanyName })
+    attachTabletProp()
 end
 
 local function closeTablet()
@@ -29,6 +65,7 @@ local function closeTablet()
     tabletOpen = false
     SetNuiFocus(false, false)
     SendNUIMessage({ type = 'close' })
+    removeTabletProp()
 end
 
 local itemRequired = Config.RequireItem and Config.RequireItem.enabled
@@ -83,6 +120,18 @@ end)
 RegisterNUICallback('close', function(_, cb)
     closeTablet()
     cb('ok')
+end)
+
+--- Sicherheitsnetz: NUI-Fokus ist ein globaler, nicht ressourcen-gebundener
+--- Spielzustand - bleibt er aus irgendeinem Grund (z.B. ein früherer,
+--- inzwischen behobener Bug mit einem blockierenden JS-Dialog) hängen,
+--- überlebt das sogar einen Ressourcen-Neustart und sperrt den Spieler
+--- dauerhaft in der UI. Bei jedem Stopp dieser Ressource daher hart
+--- zurücksetzen, unabhängig vom zuletzt bekannten tabletOpen-Zustand.
+AddEventHandler('onResourceStop', function(resourceName)
+    if resourceName ~= GetCurrentResourceName() then return end
+    SetNuiFocus(false, false)
+    removeTabletProp()
 end)
 
 -- ---------------------------------------------------------

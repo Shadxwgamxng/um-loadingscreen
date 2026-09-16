@@ -30,7 +30,6 @@ server_scripts {
     'server/sv_radio.lua',
     'server/sv_hours.lua',
     'server/sv_orders.lua',
-    'server/sv_tracking.lua',
     'server/sv_website_bridge.lua',
     'server/sv_employees.lua',
     'server/sv_notifications.lua',

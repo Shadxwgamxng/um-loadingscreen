@@ -177,9 +177,9 @@ function Locations.Delete(src, locationId)
 end
 
 --- Liefert die aktuelle Position des aufrufenden Spielers serverseitig
---- (kein zusätzliches Client->Server-Event nötig, siehe server/sv_tracking.lua
---- für dasselbe Muster) - Grundlage für den "Aktuelle Position übernehmen"-
---- Button im Anlegen/Bearbeiten-Formular.
+--- (kein zusätzliches Client->Server-Event nötig, GetPlayerPed funktioniert
+--- direkt mit der Server-ID) - Grundlage für den "Aktuelle Position
+--- übernehmen"-Button im Anlegen/Bearbeiten-Formular.
 function Locations.GetCurrentPosition(src)
     Employees.RequirePermission(src, 'locations_manage')
     local ped = GetPlayerPed(src)

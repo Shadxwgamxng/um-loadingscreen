@@ -65,8 +65,11 @@ const ERROR_MESSAGES = {
     missing_fields: 'Bitte alle Pflichtfelder ausfüllen.',
     plate_taken: 'Dieses Kennzeichen ist bereits vergeben.',
     vehicle_not_found: 'Fahrzeug nicht gefunden.',
-    vehicle_unavailable: 'Fahrzeug steht aktuell nicht zur Verfügung.',
+    vehicle_unavailable: 'Dieses Fahrzeug ist gerade nicht verfügbar - evtl. hat es sich in der Zwischenzeit ein anderer Fahrer genommen. Bitte Auswahl neu öffnen.',
     vehicle_archived: 'Fahrzeug ist archiviert.',
+    trailer_not_found: 'Anhänger nicht gefunden.',
+    trailer_unavailable: 'Dieser Anhänger ist gerade nicht verfügbar - evtl. hat ihn sich in der Zwischenzeit ein anderer Fahrer genommen. Bitte Auswahl neu öffnen.',
+    missing_trailer_or_workshop: 'Bitte entweder einen Anhänger auswählen oder Werkstattfahrt (kein Anhänger) wählen.',
     driver_not_found: 'Fahrer nicht gefunden.',
     order_not_found: 'Auftrag nicht gefunden.',
     order_not_open: 'Auftrag ist nicht mehr offen.',
@@ -276,6 +279,19 @@ function modalInputValue(id) {
     return el ? el.value : '';
 }
 
+// Ersetzt das native window.confirm() - in der FiveM-NUI (CEF) friert ein
+// synchroner JS-Dialog (confirm/alert/prompt) das GESAMTE Spiel ein, weil
+// der Renderprozess auf eine Antwort wartet, die das Spiel nie zustellen
+// kann (kein natives Handling für JS-Dialoge). actionCall ist ein fertiger
+// JS-Aufruf als String (z.B. "Actions.reallyDeleteTrailer(5)"), analog zu
+// den bereits vorhandenen onclick-Handlern mit Template-Literals.
+function openConfirmModal(title, message, confirmLabel, actionCall) {
+    openModal(title, '', `<p style="font-size:13px;color:var(--text-1);">${escapeHtml(message)}</p>`, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-danger" onclick="${actionCall}">${escapeHtml(confirmLabel)}</button>
+    `);
+}
+
 // ---------------------------------------------------------
 // Navigation
 // ---------------------------------------------------------
@@ -292,7 +308,6 @@ const NAV_ITEMS = [
     { id: 'driver-vehicle', label: 'Mein Fahrzeug', icon: '🚛', perm: 'driver_actions' },
     { id: 'driver-messages', label: 'Nachrichten', icon: '✉️', perm: 'driver_actions' },
     { id: 'dispatch-drivers', label: 'Fahrerübersicht', icon: '👥', perm: 'dispatch' },
-    { id: 'dispatch-map', label: 'Live-Karte', icon: '🗺️', perm: 'live_map_view' },
     { id: 'dispatch-pool', label: 'Auftragspool', icon: '📋', perm: 'dispatch' },
     { id: 'dispatch-active', label: 'Aktive Aufträge', icon: '🚚', perm: 'dispatch' },
     { id: 'dispatch-completed', label: 'Abgeschlossen', icon: '✅', perm: 'dispatch' },
@@ -329,9 +344,8 @@ function buildSidebar(permissions) {
     });
 }
 
-// Manche Ansichten (aktuell nur die Live-Karte) pollen periodisch, solange
-// sie aktiv sind - dieses Intervall wird beim Verlassen der Ansicht
-// automatisch gestoppt.
+// Manche Ansichten können periodisch pollen, solange sie aktiv sind -
+// dieses Intervall wird beim Verlassen der Ansicht automatisch gestoppt.
 let activeViewInterval = null;
 
 async function showView(id) {
@@ -776,77 +790,6 @@ async function refreshAfterRolesChanged() {
     refreshIfViewing(['gf-roles', 'gf-employees', 'gf-payroll']);
 }
 
-// ---------------------------------------------------------
-// Live-Karte (Disposition) - schematisches Positionsraster, KEIN echtes
-// Kartenbild (die Ressource bringt keine GTA-Kartengrafik mit) - Fahrer
-// UND Firmenstandorte (Reiter "Orte", als Orientierungspunkte) werden
-// auf denselben, ungefähren Weltkoordinaten-Bereich der GTA-V-Karte
-// abgebildet, damit die relative Lage zueinander stimmt.
-// ---------------------------------------------------------
-
-const MAP_BOUNDS = { minX: -4300, maxX: 4700, minY: -4300, maxY: 8200 };
-const LIVE_MAP_STATUS_COLOR = { verfuegbar: '#22c55e', im_einsatz: '#3b82f6', pause: '#eab308', offline: '#6b7280' };
-
-function worldToCanvas(x, y, w, h) {
-    const px = ((x - MAP_BOUNDS.minX) / (MAP_BOUNDS.maxX - MAP_BOUNDS.minX)) * w;
-    const py = h - ((y - MAP_BOUNDS.minY) / (MAP_BOUNDS.maxY - MAP_BOUNDS.minY)) * h; // Y invertiert: Norden (GTA Y+) = oben
-    return [px, py];
-}
-
-function drawLiveMap(canvas, data) {
-    const ctx = canvas.getContext('2d');
-    const w = canvas.width;
-    const h = canvas.height;
-
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(0, 0, w, h);
-
-    ctx.strokeStyle = '#1b2a4a';
-    ctx.lineWidth = 1;
-    const gridStep = 64;
-    for (let gx = 0; gx <= w; gx += gridStep) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke(); }
-    for (let gy = 0; gy <= h; gy += gridStep) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke(); }
-
-    ctx.fillStyle = '#4a5b82';
-    (data.locations || []).forEach((loc) => {
-        const [px, py] = worldToCanvas(loc.x, loc.y, w, h);
-        ctx.beginPath();
-        ctx.arc(px, py, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-    });
-
-    (data.drivers || []).forEach((drv) => {
-        if (drv.waypoint && drv.position) {
-            const [dx, dy] = worldToCanvas(drv.position.x, drv.position.y, w, h);
-            const [wx, wy] = worldToCanvas(drv.waypoint.x, drv.waypoint.y, w, h);
-            ctx.strokeStyle = '#3b82f6';
-            ctx.setLineDash([4, 4]);
-            ctx.beginPath(); ctx.moveTo(dx, dy); ctx.lineTo(wx, wy); ctx.stroke();
-            ctx.setLineDash([]);
-
-            ctx.fillStyle = '#eab308';
-            ctx.beginPath(); ctx.arc(wx, wy, 4, 0, Math.PI * 2); ctx.fill();
-        }
-
-        if (drv.position) {
-            const stale = drv.positionAgeSeconds != null && drv.positionAgeSeconds > 30;
-            const [px, py] = worldToCanvas(drv.position.x, drv.position.y, w, h);
-
-            ctx.fillStyle = stale ? '#6b7280' : (LIVE_MAP_STATUS_COLOR[drv.status] || '#6b7280');
-            ctx.beginPath();
-            ctx.arc(px, py, 6, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.strokeStyle = '#0b1220';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-
-            ctx.fillStyle = '#f3f6fb';
-            ctx.font = '11px sans-serif';
-            ctx.fillText(drv.name, px + 9, py + 4);
-        }
-    });
-}
-
 // =========================================================
 // VIEW RENDERERS
 // =========================================================
@@ -907,7 +850,7 @@ VIEWS['driver-card'] = async (root) => {
                 <p class="card-hint">Vor der Annahme eines Auftrags musst du hier deine Fahrt starten, damit deine Lenk-/Ruhezeiten erfasst werden.</p>
                 ${d.driver.onShift
                     ? `<button class="btn btn-sm btn-danger" onclick="Actions.endShift()">Fahrerkarte abziehen (Fahrt beenden)</button>`
-                    : `<button class="btn btn-sm btn-primary" onclick="Actions.startShift()">Fahrerkarte einstecken (Fahrt starten)</button>`}
+                    : `<button class="btn btn-sm btn-primary" onclick="Actions.openStartShiftModal()">Fahrerkarte einstecken (Fahrt starten)</button>`}
             </div>
             <div class="driver-card-section">
                 <h4>Lenk- &amp; Ruhezeiten</h4>
@@ -1104,46 +1047,6 @@ VIEWS['dispatch-drivers'] = async (root) => {
         <h1 class="view-title">Fahrerübersicht</h1>
         <p class="view-subtitle">Alle aktiven Fahrer mit Status und aktuellem Fahrzeug.</p>
         <div class="section">${table(['Status', 'Fahrer', 'Fahrzeug', 'Fahrzeugstatus', ''], rows)}</div>`;
-};
-
-VIEWS['dispatch-map'] = async (root) => {
-    root.innerHTML = `
-        <h1 class="view-title">Live-Karte</h1>
-        <p class="view-subtitle">Schematisches Live-Positionsraster aller angemeldeten Fahrer (aktualisiert alle 5 Sekunden) - kein echtes Kartenbild, aber Fahrer und Firmenstandorte werden auf denselben Weltkoordinaten abgebildet. Gelber Punkt + gestrichelte Linie: aktuell gesetzter Navi-Wegpunkt aus dem laufenden Auftrag.</p>
-        <div class="live-map-canvas-wrap"><canvas id="live-map-canvas" class="live-map-canvas" width="640" height="890"></canvas></div>
-        <div class="live-map-legend">
-            <span><span class="dot dot-green"></span>Verfügbar</span>
-            <span><span class="dot dot-blue"></span>Im Einsatz</span>
-            <span><span class="dot dot-yellow"></span>Pause</span>
-            <span><span class="dot dot-gray"></span>Offline / keine Positionsdaten</span>
-        </div>
-        <div class="section" style="margin-top:16px;" id="live-map-driver-list"></div>`;
-
-    const canvas = document.getElementById('live-map-canvas');
-    const listEl = document.getElementById('live-map-driver-list');
-
-    const refresh = async () => {
-        const d = await call('dispatch:liveMap');
-        drawLiveMap(canvas, d);
-        listEl.innerHTML = d.drivers.map((drv) => {
-            const orderLabel = drv.order
-                ? `Auftrag #${drv.order.id} - ${escapeHtml(drv.order.cargo)}: ${escapeHtml(drv.order.startLocation)} → ${escapeHtml(drv.order.endLocation)} (${escapeHtml((ORDER_STATUS_META[drv.order.status] && ORDER_STATUS_META[drv.order.status].label) || drv.order.status)})`
-                : 'Kein laufender Auftrag';
-            const posLabel = !drv.position
-                ? 'Keine Positionsdaten (offline)'
-                : (drv.positionAgeSeconds > 30 ? `Zuletzt gesehen vor ${drv.positionAgeSeconds}s` : 'Live');
-            return `<div class="live-map-driver-row">
-                <div>
-                    <div class="live-map-driver-name">${escapeHtml(drv.name)} ${badge(DRIVER_STATUS_META[drv.status])}</div>
-                    <div class="live-map-driver-order">${orderLabel}</div>
-                </div>
-                <div class="card-hint">${posLabel}</div>
-            </div>`;
-        }).join('') || '<div class="card-hint">Keine aktiven Fahrer.</div>';
-    };
-
-    await refresh();
-    activeViewInterval = setInterval(refresh, 5000);
 };
 
 VIEWS['dispatch-pool'] = async (root) => {
@@ -1773,8 +1676,45 @@ Actions.debugGenerateOrder = async () => {
     showView('driver-orders');
 };
 
-Actions.startShift = async () => {
-    await call('driver:startShift');
+function trailerTypeLabel(trailerTypes, key) {
+    return (trailerTypes.find((t) => t.key === key) || {}).label || key;
+}
+
+Actions.openStartShiftModal = async () => {
+    const d = await call('driver:shiftOptions');
+
+    if (d.vehicles.length === 0) {
+        openModal('Fahrerkarte einstecken', '', `
+            <p style="font-size:13px;color:var(--text-1);">Aktuell ist kein freies Fahrzeug verfügbar - entweder sind alle im Einsatz/in Wartung, oder bereits von einem anderen Fahrer im Dienst beansprucht. Wende dich an die Geschäftsführung/Disposition.</p>
+        `, `<button class="btn btn-ghost" onclick="closeModal()">Schließen</button>`);
+        return;
+    }
+
+    const vehicleOptions = d.vehicles.map((v) => `<option value="${v.id}">${escapeHtml(v.name)} (${escapeHtml(v.plate)}, ${escapeHtml(v.vehicle_class)})${v.trailer_id ? ` - bereits angekuppelt: ${escapeHtml(v.trailer_name)}` : ''}</option>`).join('');
+    const trailerOptions = d.trailers.map((t) => `<option value="${t.id}">${escapeHtml(t.name)} (${escapeHtml(t.plate)}) - ${escapeHtml(trailerTypeLabel(d.trailerTypes, t.type))}</option>`).join('');
+
+    openModal('Fahrerkarte einstecken', 'Wähle dein Fahrzeug und einen Anhänger.', `
+        <label>Fahrzeug</label>
+        <select id="shift-vehicle">${vehicleOptions}</select>
+
+        <label style="margin-top:12px;">Anhänger</label>
+        <select id="shift-trailer" onchange="document.getElementById('shift-workshop-hint').classList.toggle('hidden', this.value !== '')">
+            <option value="">- Werkstattfahrt (kein Anhänger) -</option>
+            ${trailerOptions}
+        </select>
+        <p id="shift-workshop-hint" class="card-hint">Ohne Anhänger kannst du keine Frachtaufträge annehmen, bis du dir einen ankuppelst - für reine Werkstatt-/Testfahrten reicht das aber aus.</p>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmStartShift()">Fahrerkarte einstecken</button>
+    `);
+};
+
+Actions.confirmStartShift = async () => {
+    const vehicleId = Number(modalInputValue('shift-vehicle')) || null;
+    const trailerRaw = modalInputValue('shift-trailer');
+    const trailerId = trailerRaw ? Number(trailerRaw) : null;
+    await call('driver:startShift', { vehicleId, trailerId, workshopMode: !trailerId });
+    closeModal();
     toast('Fahrerkarte eingesteckt', 'Deine Fahrt hat begonnen - Lenk-/Ruhezeiten werden erfasst.', 'success');
     showView('driver-card');
 };
@@ -2267,9 +2207,12 @@ Actions.confirmTrailerAssign = async (trailerId, vehicleId) => {
     showView('gf-trailers');
 };
 
-Actions.confirmDeleteTrailer = async (trailerId) => {
-    if (!confirm('Diesen Anhänger wirklich archivieren?')) return;
+Actions.confirmDeleteTrailer = (trailerId) => {
+    openConfirmModal('Anhänger archivieren?', 'Diesen Anhänger wirklich archivieren?', 'Archivieren', `Actions.reallyDeleteTrailer(${trailerId})`);
+};
+Actions.reallyDeleteTrailer = async (trailerId) => {
     await call('gf:trailers:delete', { trailerId, mode: 'archive' });
+    closeModal();
     toast('Anhänger archiviert', '', 'success');
     showView('gf-trailers');
 };
@@ -2367,9 +2310,12 @@ Actions.confirmEditLocation = async (locationId) => {
     showView('gf-locations');
 };
 
-Actions.confirmDeleteLocation = async (locationId) => {
-    if (!confirm('Diesen Ort wirklich löschen?')) return;
+Actions.confirmDeleteLocation = (locationId) => {
+    openConfirmModal('Ort löschen?', 'Diesen Ort wirklich löschen?', 'Löschen', `Actions.reallyDeleteLocation(${locationId})`);
+};
+Actions.reallyDeleteLocation = async (locationId) => {
     await call('gf:locations:delete', { locationId });
+    closeModal();
     toast('Ort gelöscht', '', 'success');
     showView('gf-locations');
 };
