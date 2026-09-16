@@ -1216,22 +1216,6 @@ VIEWS['dispatch-map'] = async (root) => {
     activeViewInterval = setInterval(refresh, LIVE_MAP_POLL_MS);
 };
 
-Actions.toggleMapCalibration = () => {
-    calibrationActive = !calibrationActive;
-    calibrationPoints = [];
-    calibrationResult = null;
-    renderCalibrationMarkers();
-    document.querySelector('.live-map-wrap').classList.toggle('calibrating', calibrationActive);
-    renderCalibrationPanel();
-};
-
-Actions.resetMapCalibration = () => {
-    calibrationPoints = [];
-    calibrationResult = null;
-    renderCalibrationMarkers();
-    renderCalibrationPanel();
-};
-
 function renderCalibrationMarkers(pending) {
     const markersEl = document.getElementById('live-map-calibration-markers');
     if (!markersEl) return;
@@ -1243,17 +1227,6 @@ function renderCalibrationMarkers(pending) {
     </div>` : '';
     markersEl.innerHTML = confirmed + pendingHtml;
 }
-
-Actions.mapImageClicked = (event) => {
-    if (!calibrationActive || calibrationResult) return;
-    const img = document.getElementById('live-map-img');
-    const rect = img.getBoundingClientRect();
-    const px = ((event.clientX - rect.left) / rect.width) * 100;
-    const py = ((event.clientY - rect.top) / rect.height) * 100;
-
-    renderCalibrationMarkers({ px, py });
-    renderCalibrationPendingPoint(px, py);
-};
 
 function commitCalibrationPoint(px, py, x, y) {
     calibrationPoints.push({ px, py, x, y });
@@ -1273,21 +1246,6 @@ function commitCalibrationPoint(px, py, x, y) {
     renderCalibrationMarkers();
     renderCalibrationPanel();
 }
-
-Actions.useCurrentPositionForCalibration = async (px, py) => {
-    const pos = await call('dispatch:currentPosition');
-    commitCalibrationPoint(px, py, pos.x, pos.y);
-};
-
-Actions.confirmManualCalibrationPoint = (px, py) => {
-    const x = Number(modalInputValue('calib-x'));
-    const y = Number(modalInputValue('calib-y'));
-    if (!Number.isFinite(x) || !Number.isFinite(y)) {
-        toast('Fehler', 'Bitte X und Y eintragen.', 'error');
-        return;
-    }
-    commitCalibrationPoint(px, py, x, y);
-};
 
 VIEWS['dispatch-pool'] = async (root) => {
     const [pool, drivers] = await Promise.all([call('dispatch:openOrders'), call('dispatch:drivers')]);
@@ -1783,6 +1741,48 @@ VIEWS['gf-log'] = async (root) => {
 // =========================================================
 
 const Actions = {};
+
+Actions.toggleMapCalibration = () => {
+    calibrationActive = !calibrationActive;
+    calibrationPoints = [];
+    calibrationResult = null;
+    renderCalibrationMarkers();
+    document.querySelector('.live-map-wrap').classList.toggle('calibrating', calibrationActive);
+    renderCalibrationPanel();
+};
+
+Actions.resetMapCalibration = () => {
+    calibrationPoints = [];
+    calibrationResult = null;
+    renderCalibrationMarkers();
+    renderCalibrationPanel();
+};
+
+Actions.mapImageClicked = (event) => {
+    if (!calibrationActive || calibrationResult) return;
+    const img = document.getElementById('live-map-img');
+    const rect = img.getBoundingClientRect();
+    const px = ((event.clientX - rect.left) / rect.width) * 100;
+    const py = ((event.clientY - rect.top) / rect.height) * 100;
+
+    renderCalibrationMarkers({ px, py });
+    renderCalibrationPendingPoint(px, py);
+};
+
+Actions.useCurrentPositionForCalibration = async (px, py) => {
+    const pos = await call('dispatch:currentPosition');
+    commitCalibrationPoint(px, py, pos.x, pos.y);
+};
+
+Actions.confirmManualCalibrationPoint = (px, py) => {
+    const x = Number(modalInputValue('calib-x'));
+    const y = Number(modalInputValue('calib-y'));
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        toast('Fehler', 'Bitte X und Y eintragen.', 'error');
+        return;
+    }
+    commitCalibrationPoint(px, py, x, y);
+};
 
 Actions.login = async () => {
     const username = document.getElementById('login-username').value.trim();
