@@ -33,6 +33,10 @@ local function getQbCore()
     return QBCore
 end
 
+--- Öffentlicher Zugriff auf das QBCore-Objekt (z.B. für CreateUseableItem in
+--- sv_main.lua), damit die Erkennungslogik nicht doppelt existiert.
+Bridge.GetQbCore = getQbCore
+
 CreateThread(function()
     if Config.MoneyBridge == 'esx' and not getEsx() then
         print('^1[speditions-tablet]^7 Config.MoneyBridge ist "esx", aber es_extended wurde nicht gefunden. Bargeld-Aus-/Einzahlung ist deaktiviert (nur generische Events).')

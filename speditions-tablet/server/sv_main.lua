@@ -154,10 +154,11 @@ end)
 CreateThread(function()
     if not (Config.RequireItem and Config.RequireItem.enabled) then return end
 
-    local esx = nil
+    local esx, qb = nil, nil
     for _ = 1, 30 do
         esx = Bridge.GetEsx()
-        if esx and esx.RegisterUsableItem then break end
+        qb = Bridge.GetQbCore()
+        if (esx and esx.RegisterUsableItem) or (qb and qb.Functions and qb.Functions.CreateUseableItem) then break end
         Wait(1000)
     end
 
@@ -166,7 +167,12 @@ CreateThread(function()
             TriggerClientEvent('speditions-tablet:client:openFromItem', playerSrc)
         end)
         print(('^2[speditions-tablet]^7 Tablet oeffnet sich ueber Item "%s" (ESX.RegisterUsableItem).'):format(Config.RequireItem.itemName))
+    elseif qb and qb.Functions and qb.Functions.CreateUseableItem then
+        qb.Functions.CreateUseableItem(Config.RequireItem.itemName, function(playerSrc)
+            TriggerClientEvent('speditions-tablet:client:openFromItem', playerSrc)
+        end)
+        print(('^2[speditions-tablet]^7 Tablet oeffnet sich ueber Item "%s" (QBCore.Functions.CreateUseableItem).'):format(Config.RequireItem.itemName))
     else
-        print('^1[speditions-tablet]^7 Config.RequireItem ist aktiv, aber ESX wurde nicht gefunden - das Tablet kann so nicht per Item geoeffnet werden. Fuer andere Inventare feuere selbst das Event speditions-tablet:server:openFromItem.')
+        print('^1[speditions-tablet]^7 Config.RequireItem ist aktiv, aber weder ESX noch QBCore wurden gefunden - das Tablet kann so nicht per Item geoeffnet werden. Fuer andere Inventare (z.B. ox_inventory/qb-inventory ohne QBCore.Functions.CreateUseableItem) feuere selbst das Event speditions-tablet:server:openFromItem.')
     end
 end)

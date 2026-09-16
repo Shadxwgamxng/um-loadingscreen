@@ -88,16 +88,20 @@ oder aktualisiert Passwort/Rolle, falls der Login-Name bereits existiert.
 `Config.RequireItem = { enabled = true, itemName = 'essence' }` deaktiviert
 den freien Command/Keybind komplett - das Tablet öffnet sich dann nur noch,
 wenn das konfigurierte Item benutzt wird:
-- Mit **ESX** passiert das automatisch über `ESX.RegisterUsableItem`
-  (`server/sv_main.lua`), solange `Config.MoneyBridge` (s.u.) ESX findet.
-- Mit einem anderen Inventarsystem (ox_inventory, qb-inventory, ...) lässt du
-  dein eigenes Item-Skript beim Gebrauch selbst
-  `TriggerEvent('speditions-tablet:server:openFromItem')` (server-seitig,
-  `source` = der Spieler) feuern.
+- Mit **ESX** oder **QBCore** passiert das automatisch (`server/sv_main.lua`
+  erkennt beim Ressourcenstart, welches der beiden Frameworks läuft, und
+  registriert das Item entsprechend über `ESX.RegisterUsableItem` bzw.
+  `QBCore.Functions.CreateUseableItem`) - unabhängig von `Config.MoneyBridge`.
+  Das Item muss in deinem Inventarsystem (z.B. `qb-core`/`ox_inventory`
+  `items.lua`) natürlich bereits existieren.
+- Mit einem reinen Inventarsystem ohne eines der beiden Frameworks
+  (z.B. ox_inventory standalone) lässt du dein eigenes Item-Skript beim
+  Gebrauch selbst `TriggerEvent('speditions-tablet:server:openFromItem')`
+  (server-seitig, `source` = der Spieler) feuern.
 
 ### Bargeld bei Aus-/Einzahlung
 
-`Config.MoneyBridge = 'esx' | 'qbcore' | 'custom'` (Standard: `'esx'`):
+`Config.MoneyBridge = 'esx' | 'qbcore' | 'custom'` (Standard: `'qbcore'`):
 Führt die Geschäftsführung eine **Auszahlung** durch, bekommt sie den Betrag
 als echtes Bargeld in die Hand. Damit das nicht zur Geldvermehrung
 missbraucht werden kann, zieht eine **Einzahlung** ihr symmetrisch echtes
@@ -508,7 +512,9 @@ Alle Stellschrauben befinden sich in `config.lua`:
   Echtzeit-Updates an alle angemeldeten Mitarbeiter mit einer bestimmten
   Berechtigung (statt einer fest verdrahteten Rolle).
 - `server/sv_bridge.lua` - Optionale Framework-Anbindung (ESX/QBCore) für
-  Bargeld bei Aus-/Einzahlung, inkl. ESX-Objekt für `ESX.RegisterUsableItem`.
+  Bargeld bei Aus-/Einzahlung, inkl. ESX-/QBCore-Objekt für die
+  Item-Registrierung (`ESX.RegisterUsableItem`/`QBCore.Functions.CreateUseableItem`)
+  in `sv_main.lua`.
 - `server/sv_bootstrap.lua` - Tablet-eigenes Login (Name + Passwort,
   Session je Server-Slot in `loggedIn[src]`), Passwort-Hashing,
   `tablet_grant`-Command, Erstkonto-Seeding aus `Config.InitialAccounts`,

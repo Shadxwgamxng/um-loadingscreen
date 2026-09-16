@@ -16,10 +16,11 @@ Config.OpenKey = 'F6' -- Keybind wird clientseitig via RegisterCommand + Keymapp
 
 -- Wenn aktiviert, öffnet sich das Tablet NICHT mehr per Command/Keybind,
 -- sondern ausschließlich, wenn das konfigurierte Item benutzt wird
--- (per ESX.RegisterUsableItem). Für andere Inventarsysteme (ox_inventory,
--- qb-inventory, ...) lässt du dein eigenes Item-Skript beim Gebrauch selbst
--- das Event 'speditions-tablet:server:openFromItem' (Ziel-Spieler als src)
--- feuern.
+-- (automatisch per ESX.RegisterUsableItem bzw.
+-- QBCore.Functions.CreateUseableItem, je nachdem welches Framework läuft).
+-- Für ein reines Inventarsystem ohne diese Funktion (z.B. ox_inventory ohne
+-- QBCore) lässt du dein eigenes Item-Skript beim Gebrauch selbst das Event
+-- 'speditions-tablet:server:openFromItem' (Ziel-Spieler als src) feuern.
 Config.RequireItem = {
     enabled = true,
     itemName = 'essence', -- Testwert - auf den echten Tablet-Item-Namen anpassen
@@ -301,7 +302,7 @@ Config.DefaultPayoutTarget = 'Unternehmensbankkonto'
 -- binden automatisch an das jeweilige Framework an, 'custom' feuert nur
 -- die Events speditions-tablet:server:cashPayout/-cashDeposit, die du
 -- selbst in deinem eigenen Wirtschaftssystem abfangen kannst.
-Config.MoneyBridge = 'esx' -- 'esx' | 'qbcore' | 'custom'
+Config.MoneyBridge = 'qbcore' -- 'esx' | 'qbcore' | 'custom'
 
 -- =========================================================
 -- CB-FUNK
