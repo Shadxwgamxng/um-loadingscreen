@@ -136,6 +136,21 @@ function Roles.SetWebsiteRoleKey(src, roleKey, websiteRoleKey)
     reload()
     RPC.PushBroadcast('roles:changed', {})
     Logs.Write(emp.id, 'role_website_mapping', ('%s hat die Rolle "%s" mit der Website-Rolle "%s" verknüpft.'):format(emp.name, role.label, websiteRoleKey))
+
+    -- Mitarbeiter, die VOR dieser Zuordnung mit dieser Rolle eingestellt
+    -- wurden, wurden beim Einstellen mangels Zuordnung nie an die Website
+    -- gemeldet (WebsiteBridge.PushEmployeeUpdate brach da nur mit einem
+    -- Debug-Log ab, siehe dort) - ohne dieses Nachholen blieben sie sonst
+    -- dauerhaft unsynchronisiert (Stempeluhr/Fahrerkarte/Lenkzeiten liefen
+    -- für sie auf der Website-Seite ins Leere), bis sich sonst noch etwas
+    -- an ihrem Datensatz geändert hätte.
+    if WebsiteBridge then
+        local employees = MySQL.query.await('SELECT id FROM st_employees WHERE role = ?', { roleKey })
+        for _, e in ipairs(employees) do
+            WebsiteBridge.PushEmployeeUpdate(e.id)
+        end
+    end
+
     return { ok = true }
 end
 
