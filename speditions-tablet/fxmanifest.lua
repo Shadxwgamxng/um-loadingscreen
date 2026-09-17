@@ -13,6 +13,18 @@ shared_scripts {
     'config.lua'
 }
 
+-- Escrow (Keymaster "Build for Escrow"/Asset-Escrow) verschlüsselt beim
+-- Bauen automatisch ALLE unten deklarierten shared_scripts/server_scripts/
+-- client_scripts/ui_page/files - inklusive config.lua. escrow_ignore_files
+-- nimmt config.lua davon aus, damit ihr (bzw. der Zielserver) es nach dem
+-- Lock weiterhin normal im Texteditor bearbeiten könnt (Config.Website,
+-- Standorte, Firmenname, ...), ohne für jede Änderung neu escrowen zu
+-- müssen. sql/*.sql und README.md sind ohnehin nie betroffen - Escrow
+-- erfasst ausschließlich die oben deklarierten Skript-/UI-Dateien.
+escrow_ignore_files {
+    'config.lua'
+}
+
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
     'server/sv_utils.lua',
