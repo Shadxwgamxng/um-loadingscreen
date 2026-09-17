@@ -45,9 +45,9 @@ local function reload()
     byName = freshByName
 end
 
---- Erstbefüllung aus Config.SeedLocations, falls noch nicht vorhanden (z.B.
---- Bestandsinstallationen nach sql/upgrade_v13.sql). ON DUPLICATE KEY macht
---- das race-sicher, falls zwei Aufrufer gleichzeitig zum ersten Mal laden.
+--- Erstbefüllung aus Config.SeedLocations, falls noch nicht vorhanden. ON
+--- DUPLICATE KEY macht das race-sicher, falls zwei Aufrufer gleichzeitig
+--- zum ersten Mal laden.
 local function seedLocations()
     for _, loc in ipairs(Config.SeedLocations or {}) do
         MySQL.insert.await(

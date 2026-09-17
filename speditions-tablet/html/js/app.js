@@ -78,7 +78,7 @@ const ERROR_MESSAGES = {
     cancel_request_not_found: 'Abbruch-Anfrage nicht gefunden.',
     cancel_request_already_resolved: 'Diese Abbruch-Anfrage wurde bereits bearbeitet.',
     shift_not_started: 'Du musst zuerst deine Fahrerkarte einstecken (Reiter Fahrerkarte, Fahrt starten), bevor du einen Auftrag annehmen kannst.',
-    shift_update_failed: 'Fahrerkarte konnte nicht gespeichert werden - fehlt evtl. sql/upgrade_v7.sql (Spalten on_shift/shift_started_at in st_drivers)?',
+    shift_update_failed: 'Fahrerkarte konnte nicht gespeichert werden - fehlen evtl. die Spalten on_shift/shift_started_at in st_drivers (sql/install.sql aktuell?)?',
     no_cargo_route_available: 'Aktuell gibt es keine passende Fracht-/Standortkombination für einen neuen Auftrag.',
     order_already_closed: 'Auftrag ist bereits abgeschlossen.',
     not_your_order: 'Das ist nicht dein Auftrag.',
@@ -737,10 +737,7 @@ VIEWS['driver-orders'] = async (root) => {
         ${!pool.onShift ? `<p class="view-subtitle" style="color:var(--yellow);">⚠ Du musst zuerst deine Fahrerkarte einstecken (Reiter Fahrerkarte, Fahrt starten), bevor du einen Auftrag annehmen kannst.</p>` : ''}
         <div class="section">${table(['#', 'Fracht', 'Strecke', 'Distanz', 'Fahrzeug', 'Status', 'Aktion'], rows)}</div>
 
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:24px;">
-            <h1 class="view-title" style="margin:0;">Offener Auftragspool</h1>
-            ${pool.debugEnabled ? `<button class="btn btn-sm" onclick="Actions.debugGenerateOrder()">🧪 Auftrag generieren (Test)</button>` : ''}
-        </div>
+        <h1 class="view-title" style="margin-top:24px;">Offener Auftragspool</h1>
         <p class="view-subtitle">${pool.dispatcherAvailable
             ? 'Ein Disponent ist gerade online - Aufträge werden von ihm zugewiesen.'
             : 'Aktuell ist kein Disponent verfügbar - du kannst dir einen offenen Auftrag selbst übernehmen.'}</p>
@@ -1465,12 +1462,6 @@ Actions.resolveCancelRequest = async (requestId, approve) => {
     await call('dispatch:resolveCancelRequest', { requestId, approve });
     toast(approve ? 'Abbruch genehmigt' : 'Abbruch abgelehnt', '', approve ? 'success' : 'info');
     showView('dispatch-active');
-};
-
-Actions.debugGenerateOrder = async () => {
-    const r = await call('driver:debugGenerateOrder');
-    toast('Testauftrag erzeugt', `Auftrag #${r.orderId} wurde in den offenen Pool gelegt.`, 'success');
-    showView('driver-orders');
 };
 
 function trailerTypeLabel(trailerTypes, key) {

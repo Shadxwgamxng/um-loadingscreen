@@ -158,7 +158,7 @@ end
 --- der von UPDATE gemeldeten Zeilenanzahl - MySQL zählt dort "geänderte",
 --- nicht "getroffene" Zeilen, ein UPDATE auf denselben Wert würde also fälschlich
 --- als Fehlschlag durchgehen). So bleibt eine z.B. fehlende Migration
---- (st_drivers.on_shift existiert nicht - siehe sql/upgrade_v7.sql) erkennbar,
+--- (st_drivers.on_shift existiert nicht - sql/install.sql nicht aktuell?) erkennbar,
 --- ohne bei einem harmlosen "nochmal derselbe Wert"-Fall falsch anzuschlagen.
 local function verifyShiftState(driverId, expectedOnShift)
     local row = MySQL.single.await('SELECT on_shift FROM st_drivers WHERE id = ?', { driverId })

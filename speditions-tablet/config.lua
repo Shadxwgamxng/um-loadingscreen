@@ -339,12 +339,6 @@ Config.OrderGeneration = {
     },
 }
 
--- Blendet im Tablet (Reiter "Aufträge", Offener Auftragspool) für Fahrer
--- einen Button "Auftrag generieren" ein, der sofort - unabhängig vom oben
--- konfigurierten Intervall - einen neuen Testauftrag erzeugt. Nur zum
--- Testen gedacht: für den Live-Betrieb wieder auf false stellen.
-Config.AllowManualOrderGeneration = true
-
 -- =========================================================
 -- LENK- UND RUHEZEITEN
 -- =========================================================

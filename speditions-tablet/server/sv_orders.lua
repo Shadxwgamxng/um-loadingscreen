@@ -846,25 +846,11 @@ end)
 RPC.Register('driver:openOrders', function(src)
     local emp = Employees.RequirePermission(src, 'driver_actions')
     local driver = Drivers.EnsureDriverRecord(emp.id)
-    print(('^3[speditions-tablet debug]^7 openOrders emp.id=%s driver.id=%s on_shift=%s (type %s) -> ToBool=%s'):format(
-        tostring(emp.id), tostring(driver.id), tostring(driver.on_shift), type(driver.on_shift), tostring(Utils.ToBool(driver.on_shift))
-    ))
     return {
         orders = Orders.ListOpen(),
         dispatcherAvailable = isDispatcherAvailable(),
         onShift = Utils.ToBool(driver.on_shift),
-        debugEnabled = Config.AllowManualOrderGeneration == true,
     }
-end)
-
---- Nur zum Testen (siehe Config.AllowManualOrderGeneration): erzeugt sofort
---- einen neuen Pool-Auftrag, unabhängig vom automatischen Intervall.
-RPC.Register('driver:debugGenerateOrder', function(src)
-    Employees.RequirePermission(src, 'driver_actions')
-    if not Config.AllowManualOrderGeneration then error('unknown_action') end
-    local orderId = Orders.GenerateOne()
-    if not orderId then error('no_cargo_route_available') end
-    return { ok = true, orderId = orderId }
 end)
 
 RPC.Register('driver:selfAssignOrder', function(src, payload)

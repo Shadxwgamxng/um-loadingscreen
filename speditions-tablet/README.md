@@ -14,34 +14,9 @@ verwaltet.
 ## Installation
 
 1. Ressource nach `resources/[speditions]/speditions-tablet` kopieren.
-2. `sql/install.sql` in die Datenbank importieren (bei einer bereits
-   bestehenden Installation stattdessen der Reihe nach `sql/upgrade_v2.sql`
-   bis `sql/upgrade_v14.sql` ausführen, um Lenk-/Ruhezeiten, Gefahrgut,
-   Ein-/Auszahlungen, Gehälter/Stempeluhr, den Lieferschein, die
-   Fahrerkarten-Pflicht, die Abbruch-Anfragen, das Tablet-eigene Login
-   (Name + Passwort), die frei anlegbaren Rollen, den optionalen
-   Website-Sync (siehe unten), Orte und Anhänger (siehe unten) sowie den
-   Gehälter-Bugfix für frei angelegte Rollen nachzurüsten).
-   **`sql/upgrade_v7.sql` löscht dabei alle bestehenden Aufträge** - siehe
-   Kommentar am Anfang der Datei für den Grund. **Ab sofort werden Aufträge
-   ohnehin bei JEDEM Ressourcenstart automatisch geleert** (siehe unten).
-   **`sql/upgrade_v9.sql` setzt bei bestehenden Mitarbeiterkonten noch KEIN
-   Passwort** - siehe Kommentar am Anfang der Datei und den Abschnitt
-   "Mitarbeiter anmelden" unten. `sql/upgrade_v10.sql` legt die drei
-   mitgelieferten Basisrollen beim nächsten Ressourcenstart automatisch mit
-   ihren bisherigen Berechtigungen an - am Verhalten bestehender
-   Installationen ändert sich dadurch zunächst nichts. `sql/upgrade_v13.sql`
-   legt nur die neuen Tabellen/Spalten an - die mitgelieferten Standardorte
-   (`Config.SeedLocations`) werden beim nächsten Ressourcenstart automatisch
-   eingetragen, siehe Abschnitt "Orte" unten. **`sql/upgrade_v14.sql` ist
-   Pflicht, sobald du im Rollen-Editor mindestens eine eigene Rolle über die
-   drei mitgelieferten Basisrollen hinaus angelegt hast** - ohne dieses
-   Upgrade schlägt das Setzen eines Stundenlohns für so eine Rolle im Reiter
-   "Gehälter" mit einem Datenbankfehler fehl (`st_wage_rates.role` war noch
-   ein festes ENUM aus den Anfängen des Gehaltssystems). `sql/upgrade_v15.sql`
-   ist nur relevant, falls auf der Website noch veraltete/doppelte Orte
-   auftauchen (siehe Abschnitt "Orte" unten) - leert `st_locations` einmalig,
-   damit die 59 echten Standardorte danach sauber neu eingetragen werden.
+2. `sql/install.sql` einmalig in die Datenbank importieren - legt das
+   komplette, aktuelle Schema an (alle Tabellen/Spalten dieser Version in
+   einem Rutsch, keine schrittweisen Upgrade-Skripte mehr nötig).
 3. In `server.cfg`:
    ```
    ensure oxmysql
@@ -296,11 +271,16 @@ Orte müssen dann über den Reiter "Orte" gepflegt werden.
 finalen 59-Orte-Liste befüllt (z.B. mit Platzhalternamen während der
 Entwicklung), bleiben diese alten Einträge zusätzlich zu den neuen echten
 Orten stehen - die Erstbefüllung überschreibt nur Namensgleiche, entfernt
-aber nie andere Namen. Einmalig `sql/upgrade_v15.sql` ausführen (leert
+aber nie andere Namen. Einmalig folgendes SQL ausführen (leert
 `st_locations` komplett - eigene, im Tablet nachträglich angelegte Orte
-gehen dabei mit verloren) und die Ressource neu starten, danach wird
-automatisch sauber aus `Config.SeedLocations` neu befüllt und über
-`locations.sync` an die Website gemeldet.
+gehen dabei mit verloren)
+```sql
+DELETE FROM `st_locations`;
+ALTER TABLE `st_locations` AUTO_INCREMENT = 1;
+```
+und die Ressource neu starten, danach wird automatisch sauber aus
+`Config.SeedLocations` neu befüllt und über `locations.sync` an die
+Website gemeldet.
 
 Jeder Ort trägt Frachtarten-Tags (Quelle = hier abholbare Fracht, Ziel = hier
 anlieferbare Fracht); die automatische Auftragsgenerierung wählt nur
@@ -387,11 +367,6 @@ bestehende Gefahrgut-Berechtigungsprüfung bei Fahrern.
   (`Config.CargoUnits`), Gefahrgut-Kennzeichnung, Entfernung, Abhol-/Zielort
   samt GPS-Koordinaten, zugewiesenes Fahrzeug, Ausstellungsdatum,
   disponierender Mitarbeiter und Lieferfrist.
-- **"Auftrag generieren"-Testbutton**: Im Reiter "Aufträge" (offener
-  Auftragspool) erzeugt ein Fahrer per Klick sofort einen neuen Testauftrag,
-  unabhängig vom automatischen Intervall - gesteuert über
-  `Config.AllowManualOrderGeneration` (Standard `true`; für den Live-Betrieb
-  auf `false` stellen, dann verschwindet der Button).
 - **Bekannte Einschränkungen**: Die Zeit- und Nähe-Prüfung für das Be-/
   Entladen läuft ausschließlich clientseitig (kein serverseitiger Schutz vor
   Manipulation der lokalen Wartezeit) - für ein PvE-Logistikfeature wie
@@ -513,7 +488,6 @@ Alle Stellschrauben befinden sich in `config.lua`:
   Aufträge nach Anzahl online + am Tablet angemeldeter Fahrer
   (`intervalMsByDriverCount`, Standard: 1-2 Fahrer alle 12-15 Min., ab 3
   Fahrern alle 10-12 Min.; 0 Fahrer online = keine Generierung)
-- `Config.AllowManualOrderGeneration` - blendet den "Auftrag generieren"-Testbutton für Fahrer ein (Standard `true`, für Live-Betrieb auf `false` stellen)
 - `Config.OrderCancelPenalty` - Vertragsstrafe (Standard 500$), wenn ein Fahrer einen Auftrag ohne Disponenten-Freigabe selbst abbricht
 - `Config.VehicleClasses`, `Config.CargoTypes`, `Config.HazardousCargo`,
   `Config.DriverPermissions`
@@ -699,13 +673,9 @@ FiveM-Server - der Spielserver muss dafür keinen eingehenden Port öffnen:
 
 **Einrichtung**:
 
-1. `sql/upgrade_v11.sql` und `sql/upgrade_v12.sql` importieren (ergänzt
-   `st_employees.discord_id`, `st_roles.website_role_key` sowie den Wert
-   `'website'` für `st_orders.source`) - bei einer Neuinstallation ist das
-   bereits in `sql/install.sql` enthalten.
-2. Auf der Website die Umgebungsvariable `TABLET_API_KEY` auf einen langen
+1. Auf der Website die Umgebungsvariable `TABLET_API_KEY` auf einen langen
    Zufallsstring setzen.
-3. In `config.lua` den `Config.Website`-Block ausfüllen:
+2. In `config.lua` den `Config.Website`-Block ausfüllen:
    ```lua
    Config.Website = {
        enabled = true,

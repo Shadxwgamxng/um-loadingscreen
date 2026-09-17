@@ -51,10 +51,9 @@ local function reload()
 end
 
 --- Erstbefüllung der drei mitgelieferten Basisrollen aus
---- Config.DefaultRolePermissions, falls sie noch nicht existieren (z.B.
---- Bestandsinstallationen nach sql/upgrade_v10.sql). ON DUPLICATE KEY
---- macht das race-sicher, falls zwei Aufrufer gleichzeitig zum ersten Mal
---- laden.
+--- Config.DefaultRolePermissions, falls sie noch nicht existieren. ON
+--- DUPLICATE KEY macht das race-sicher, falls zwei Aufrufer gleichzeitig
+--- zum ersten Mal laden.
 local function seedBuiltinRoles()
     for roleKey, label in pairs(Config.RoleLabels) do
         local perms = Config.DefaultRolePermissions[roleKey] or {}
