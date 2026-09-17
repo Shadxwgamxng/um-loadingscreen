@@ -179,6 +179,31 @@ function Employees.SetStatus(src, employeeId, status)
     return { ok = true }
 end
 
+--- System-Variante von Employees.SetStatus(..., 'inaktiv') für den Website-
+--- Sync: wird aufgerufen, wenn auf der Website ein mit dem Tablet
+--- verknüpftes Konto gelöscht wird (server/sv_website_bridge.lua, Befehl
+--- deactivate_employee). Kein hartes SQL-Löschen im Tablet - würde
+--- Auftrags-/Transaktions-/Log-Historie verwaisen lassen, die noch auf
+--- diesen Mitarbeiter verweist; Deaktivieren ist im Tablet ohnehin die
+--- etablierte "Entfernen"-Variante für Mitarbeiter (siehe Employees.SetStatus).
+function Employees.DeactivateFromWebsite(employeeId)
+    local target = MySQL.single.await('SELECT * FROM st_employees WHERE id = ?', { employeeId })
+    if not target then error('employee_not_found') end
+    if target.status == 'inaktiv' then return { ok = true } end
+
+    if Roles.HasPermission(target.role, 'employees_manage') then
+        if Roles.CountActiveEmployeesWithPermission('employees_manage', employeeId) < 1 then
+            error('last_management_account')
+        end
+    end
+
+    MySQL.update.await("UPDATE st_employees SET status = 'inaktiv' WHERE id = ?", { employeeId })
+    Employees.RefreshLoginById(employeeId)
+    Logs.Write(nil, 'employee_status_change', ('%s wurde deaktiviert (Konto auf der Website gelöscht).'):format(target.name))
+
+    return { ok = true }
+end
+
 --- Setzt/ändert die Discord-Nutzer-ID eines Mitarbeiters (nur relevant für
 --- Config.Website/Website-Sync - verknüpft das Konto für den
 --- Discord-OAuth-Login auf der Website). Leerer String hebt die Verknüpfung

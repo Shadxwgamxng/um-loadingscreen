@@ -287,6 +287,15 @@ local function handleUpdateDriverPermissions(data)
     return Drivers.SetPermissionsFromWebsite(employeeId, data.permissions)
 end
 
+--- `deactivate_employee`: Geschäftsführung hat auf der Website ein mit dem
+--- Tablet verknüpftes Konto gelöscht - deaktiviert das Tablet-Konto
+--- entsprechend (siehe Employees.DeactivateFromWebsite).
+local function handleDeactivateEmployee(data)
+    local employeeId = tonumber(data.tabletEmployeeId)
+    if not employeeId then error('invalid_command_payload') end
+    return Employees.DeactivateFromWebsite(employeeId)
+end
+
 local commandHandlers = {
     assign_order = handleAssignOrder,
     cancel_order = handleCancelOrder,
@@ -294,6 +303,7 @@ local commandHandlers = {
     update_vehicle = handleUpdateVehicle,
     create_employee = handleCreateEmployee,
     update_driver_permissions = handleUpdateDriverPermissions,
+    deactivate_employee = handleDeactivateEmployee,
 }
 
 local function ackCommand(commandId, ok, errMsg)

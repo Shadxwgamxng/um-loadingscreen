@@ -673,6 +673,16 @@ FiveM-Server - der Spielserver muss dafür keinen eingehenden Port öffnen:
     bereits Tablet-verknüpften Mitarbeiters vollständig durch die von der
     Website übergebene Auswahl (`Drivers.SetPermissionsFromWebsite`,
     Payload `{tabletEmployeeId, permissions}`).
+  - `deactivate_employee` - wird gelöscht ein mit dem Tablet verknüpftes
+    Konto auf der Website, deaktiviert das Tablet-Konto entsprechend
+    (`Employees.DeactivateFromWebsite`, Payload `{tabletEmployeeId}`). Kein
+    hartes SQL-Löschen im Tablet - würde Auftrags-/Transaktions-/Log-
+    Historie verwaisen lassen; Deaktivieren ist die im Tablet ohnehin
+    etablierte "Entfernen"-Variante für Mitarbeiter (siehe Reiter
+    "Mitarbeiter", Status "inaktiv"). Greift die eingebaute Sperre "letztes
+    aktives Konto mit Mitarbeiterverwaltung", bleibt der Mitarbeiter auf
+    dem Tablet aktiv, obwohl er auf der Website gelöscht wurde - siehe
+    Server-Konsole (`last_management_account`).
 
 **Einrichtung**:
 
