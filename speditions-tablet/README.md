@@ -610,7 +610,8 @@ es nicht aktiv eingeschaltet wird.
 FiveM-Server - der Spielserver muss dafür keinen eingehenden Port öffnen:
 
 - **Push** (Tablet → Website): bei jeder relevanten Änderung (Auftrag
-  disponiert/angenommen/abgeschlossen/**neu angelegt**, Fahrzeug
+  disponiert/**selbst zugewiesen (kein Disponent online)**/**neu
+  disponiert**/angenommen/abgeschlossen/**neu angelegt**, Fahrzeug
   angelegt/geändert, Mitarbeiter eingestellt/Rolle geändert, periodische
   Lenkzeiten-Meldung) schickt `server/sv_website_bridge.lua` sofort einen
   Webhook an `.../api/tablet/webhook`. Einmalig beim Ressourcenstart UND bei

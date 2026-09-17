@@ -412,6 +412,7 @@ function Orders.SelfAssign(src, orderId)
     insertOrderHistory(orderId, 'disponiert', emp.id, ('%s hat sich den Auftrag selbst zugewiesen (kein Disponent online).'):format(emp.name))
 
     RPC.PushToPermission('dispatch', 'orders:activeChanged', { orderId = orderId })
+    if WebsiteBridge then WebsiteBridge.PushOrderUpdate(orderId) end
 
     return { ok = true }
 end
@@ -446,6 +447,9 @@ function Orders.Reassign(src, orderId, newDriverId)
     if driverSrc then
         Utils.NotifyClient(driverSrc, ('Auftrag #%s wurde dir neu zugewiesen.'):format(orderId), 'info')
     end
+
+    RPC.PushToPermission('dispatch', 'orders:activeChanged', { orderId = orderId })
+    if WebsiteBridge then WebsiteBridge.PushOrderUpdate(orderId) end
 
     return { ok = true }
 end
