@@ -320,7 +320,10 @@ CREATE TABLE IF NOT EXISTS `st_driver_hours` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `st_wage_rates` (
-    `role` ENUM('fahrer','disponent','geschaeftsfuehrung') NOT NULL,
+    -- Verweist auf st_roles.role_key (frei erweiterbar) - kein ENUM mehr,
+    -- seit die Geschäftsführung eigene Rollen anlegen kann (analog
+    -- st_employees.role).
+    `role` VARCHAR(50) NOT NULL,
     `hourly_rate` DECIMAL(10,2) NOT NULL DEFAULT 0,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`role`)

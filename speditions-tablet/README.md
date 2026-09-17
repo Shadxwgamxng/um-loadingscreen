@@ -17,12 +17,12 @@ verwaltet.
 1. Ressource nach `resources/[speditions]/speditions-tablet` kopieren.
 2. `sql/install.sql` in die Datenbank importieren (bei einer bereits
    bestehenden Installation stattdessen der Reihe nach `sql/upgrade_v2.sql`
-   bis `sql/upgrade_v13.sql` ausführen, um Lenk-/Ruhezeiten, Gefahrgut,
+   bis `sql/upgrade_v14.sql` ausführen, um Lenk-/Ruhezeiten, Gefahrgut,
    Ein-/Auszahlungen, Gehälter/Stempeluhr, den Lieferschein, die
    Fahrerkarten-Pflicht, die Abbruch-Anfragen, das Tablet-eigene Login
    (Name + Passwort), die frei anlegbaren Rollen, den optionalen
-   Website-Sync (siehe unten) sowie Orte und Anhänger (siehe unten)
-   nachzurüsten).
+   Website-Sync (siehe unten), Orte und Anhänger (siehe unten) sowie den
+   Gehälter-Bugfix für frei angelegte Rollen nachzurüsten).
    **`sql/upgrade_v7.sql` löscht dabei alle bestehenden Aufträge** - siehe
    Kommentar am Anfang der Datei für den Grund. **Ab sofort werden Aufträge
    ohnehin bei JEDEM Ressourcenstart automatisch geleert** (siehe unten).
@@ -34,7 +34,12 @@ verwaltet.
    Installationen ändert sich dadurch zunächst nichts. `sql/upgrade_v13.sql`
    legt nur die neuen Tabellen/Spalten an - die mitgelieferten Standardorte
    (`Config.SeedLocations`) werden beim nächsten Ressourcenstart automatisch
-   eingetragen, siehe Abschnitt "Orte" unten.
+   eingetragen, siehe Abschnitt "Orte" unten. **`sql/upgrade_v14.sql` ist
+   Pflicht, sobald du im Rollen-Editor mindestens eine eigene Rolle über die
+   drei mitgelieferten Basisrollen hinaus angelegt hast** - ohne dieses
+   Upgrade schlägt das Setzen eines Stundenlohns für so eine Rolle im Reiter
+   "Gehälter" mit einem Datenbankfehler fehl (`st_wage_rates.role` war noch
+   ein festes ENUM aus den Anfängen des Gehaltssystems).
 3. In `server.cfg`:
    ```
    ensure oxmysql
