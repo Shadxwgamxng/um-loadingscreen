@@ -165,6 +165,16 @@ function WebsiteBridge.PushTripReport(data)
     WebsiteBridge.PushEvent('trip.report', data)
 end
 
+--- Meldet eine einzelne Firmenfinanz-Transaktion (Auftrags-Einnahme, Aus-/
+--- Einzahlung, Gehalt) an die Website - siehe Finance.AddTransaction
+--- (server/sv_finance.lua), der EINZIGE Schreibpfad für Firmengeld und
+--- damit die einzige Stelle, die das aufruft. Läuft dadurch lückenlos für
+--- jede Art von Bewegung, nicht nur für Aufträge.
+function WebsiteBridge.PushFinanceTransaction(data)
+    if not websiteConfigured() then return end
+    WebsiteBridge.PushEvent('finance.transaction', data)
+end
+
 --- Meldet die gültigen Standortnamen (aus st_locations, siehe
 --- server/sv_locations.lua) an die Website - Grundlage für die Auswahl bei
 --- "Neuer Auftrag" auf der Website (siehe Orders.CreateFromWebsite:

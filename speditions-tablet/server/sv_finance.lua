@@ -17,6 +17,11 @@ end
 
 --- Fügt eine Transaktion hinzu und schreibt den neuen Saldo in den Cache.
 --- amount ist VORZEICHENBEHAFTET (Einnahme positiv, Auszahlung negativ).
+--- Einziger Schreibpfad für st_transactions/st_company_balance - jede Art
+--- von Firmengeld-Bewegung (Auftrags-Einnahme, Aus-/Einzahlung, Gehalt)
+--- läuft hier durch, deshalb ist das auch der einzige Ort, an dem die
+--- Website-Meldung (finance.transaction) ausgelöst werden muss, um JEDE
+--- Bewegung lückenlos zu erfassen.
 function Finance.AddTransaction(txType, amount, opts)
     opts = opts or {}
     amount = Utils.Round2(amount)
@@ -34,7 +39,32 @@ function Finance.AddTransaction(txType, amount, opts)
 
     MySQL.update.await('UPDATE st_company_balance SET balance = balance + ? WHERE id = 1', { amount })
 
-    RPC.PushToPermission('finance_view', 'finance:balanceChanged', { balance = Finance.GetBalance() })
+    local newBalance = Finance.GetBalance()
+    RPC.PushToPermission('finance_view', 'finance:balanceChanged', { balance = newBalance })
+
+    if WebsiteBridge then
+        local row = MySQL.single.await([[
+            SELECT t.id, t.type, t.amount, t.description, t.created_at,
+                   de.name AS driver_name, ce.name AS created_by_name
+            FROM st_transactions t
+            LEFT JOIN st_drivers d ON d.id = t.driver_id
+            LEFT JOIN st_employees de ON de.id = d.employee_id
+            LEFT JOIN st_employees ce ON ce.id = t.created_by
+            WHERE t.id = ?
+        ]], { txId })
+        if row then
+            WebsiteBridge.PushFinanceTransaction({
+                tabletTransactionId = row.id,
+                type = row.type,
+                amount = tonumber(row.amount),
+                description = row.description,
+                driverName = row.driver_name,
+                createdByName = row.created_by_name,
+                createdAt = row.created_at,
+                newBalance = newBalance,
+            })
+        end
+    end
 
     return txId
 end

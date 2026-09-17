@@ -717,6 +717,15 @@ FiveM-Server - der Spielserver muss dafür keinen eingehenden Port öffnen:
     erneuter Push (z.B. nach Ressourcen-Neustart) erzeugt dort nie einen
     doppelten Eintrag. Private/sonstige Fahrten trägt die Geschäftsführung
     weiterhin manuell im Website-Fahrtenbuch ein.
+  - `finance.transaction` - bei JEDER Firmenkonto-Bewegung
+    (`Finance.AddTransaction` in `server/sv_finance.lua` ist der einzige
+    Schreibpfad für `st_transactions`/`st_company_balance` - Auftrags-
+    Einnahme, Aus-/Einzahlung, Gehaltsauszahlung laufen alle hier durch,
+    daher lückenlos). Meldet Typ, Betrag, Beschreibung, Fahrer-/Ausführer-
+    Name und den neuen Saldo; die Website zeigt das unter "Finanzen" im
+    Abschnitt "Ingame-Umsatz" an - unabhängig von den dort separat
+    geführten Rechnungen. `tabletTransactionId` ist wieder der
+    Abgleichsschlüssel gegen doppelte Einträge.
 - **Pull** (Website → Tablet): alle `Config.Website.pollIntervalMs` fragt
   das Tablet `.../api/tablet/commands` ab und führt dort hinterlegte
   Befehle aus; das Ergebnis wird per `.../api/tablet/commands/{id}/ack`
