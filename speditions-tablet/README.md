@@ -39,7 +39,10 @@ verwaltet.
    drei mitgelieferten Basisrollen hinaus angelegt hast** - ohne dieses
    Upgrade schlägt das Setzen eines Stundenlohns für so eine Rolle im Reiter
    "Gehälter" mit einem Datenbankfehler fehl (`st_wage_rates.role` war noch
-   ein festes ENUM aus den Anfängen des Gehaltssystems).
+   ein festes ENUM aus den Anfängen des Gehaltssystems). `sql/upgrade_v15.sql`
+   ist nur relevant, falls auf der Website noch veraltete/doppelte Orte
+   auftauchen (siehe Abschnitt "Orte" unten) - leert `st_locations` einmalig,
+   damit die 59 echten Standardorte danach sauber neu eingetragen werden.
 3. In `server.cfg`:
    ```
    ensure oxmysql
@@ -187,7 +190,13 @@ unter anderem Namen) - prüfe in dem Fall `ensure pma-voice` in `server.cfg`
 und ob die Ressource beim Start tatsächlich fehlerfrei durchläuft.
 
 **Fehlerdiagnose "pma-voice lehnt die Kanalwahl ab"** (Serverkonsole zeigt
-`pma-voice:radioChangeRejected`): pma-voice selbst lehnt einen Kanal
+`pma-voice:radioChangeRejected`): **zuerst** in `server.cfg` prüfen, ob dort
+irgendwo `setr voice_enableRadios 0` (oder `0` ohne `setr`) gesetzt ist - der
+pma-voice-Standardwert ist `1` (aktiviert), auf manchen server.cfg-Vorlagen
+wird er aber explizit auf `0` überschrieben, was **jeden** Kanalwechsel jedes
+Skripts ablehnt, unabhängig von Fremd-Skripten. Fehlt der Eintrag oder steht
+er auf `0`, `setr voice_enableRadios 1` ergänzen/ändern und Server neu
+starten. Bleibt der Fehler danach bestehen, lehnt pma-voice einen Kanal
 ausschließlich dann ab, wenn ein ANDERES, zusätzlich installiertes Skript
 über den pma-voice-Export `addChannelCheck(channel, cb)` einen eigenen
 Zugriffs-Check für diesen Kanal registriert hat und dessen Callback für den
@@ -386,6 +395,16 @@ ausschließlich die Datenbank die Quelle der Wahrheit; Änderungen an
 `Config.SeedLocations` nach der Erstbefüllung haben keine Wirkung mehr,
 Orte müssen dann über den Reiter "Orte" gepflegt werden.
 
+**Alte/veraltete Orte auf der Website:** Wurde `st_locations` schon VOR der
+finalen 59-Orte-Liste befüllt (z.B. mit Platzhalternamen während der
+Entwicklung), bleiben diese alten Einträge zusätzlich zu den neuen echten
+Orten stehen - die Erstbefüllung überschreibt nur Namensgleiche, entfernt
+aber nie andere Namen. Einmalig `sql/upgrade_v15.sql` ausführen (leert
+`st_locations` komplett - eigene, im Tablet nachträglich angelegte Orte
+gehen dabei mit verloren) und die Ressource neu starten, danach wird
+automatisch sauber aus `Config.SeedLocations` neu befüllt und über
+`locations.sync` an die Website gemeldet.
+
 Jeder Ort trägt Frachtarten-Tags (Quelle = hier abholbare Fracht, Ziel = hier
 anlieferbare Fracht); die automatische Auftragsgenerierung wählt nur
 Frachtarten, für die es mindestens einen passenden Start- **und**
@@ -495,10 +514,15 @@ bestehende Gefahrgut-Berechtigungsprüfung bei Fahrern.
 ### Auftrags-Reset bei jedem Neustart
 
 Bei jedem Ressourcenstart (Server-Neustart, `/refresh` + `ensure`, oder ein
-manueller Neustart der Ressource) werden **alle bestehenden Aufträge**
-(inkl. Verlauf und Abbruch-Anfragen) automatisch gelöscht - so startet
-jede Session mit einem sauberen Auftragspool. Fahrerstatistik und
-Transaktions-Ledger bleiben davon unberührt.
+manueller Neustart der Ressource) werden **alle im Spiel entstandenen
+Aufträge** (automatisch generiert oder von einem Disponenten manuell
+angelegt, inkl. Verlauf und Abbruch-Anfragen) automatisch gelöscht - so
+startet jede Session mit einem sauberen Auftragspool. **Von der Website aus
+angelegte Aufträge (`source = 'website'`) überleben einen Neustart** und
+bleiben inkl. ihres aktuellen Status/Verlaufs erhalten, damit ein
+Website-Auftrag nicht verloren geht, bevor ihn im Spiel überhaupt jemand
+gesehen/disponiert hat. Fahrerstatistik und Transaktions-Ledger bleiben
+davon unberührt.
 
 ### Fahrer bricht Auftrag ab (mit Genehmigung/Vertragsstrafe)
 

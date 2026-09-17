@@ -147,15 +147,23 @@ function Employees.RequirePermission(src, permissionKey)
     return emp
 end
 
+-- 'source' sofort in eine lokale Variable capturen, BEVOR irgendein await/
+-- yield passiert (Payroll.ForceClockOut macht mehrere DB-Aufrufe) - 'source'
+-- ist ein von FiveM vor jedem Event-Aufruf neu gesetzter globaler Wert, ein
+-- erneutes Lesen nach einem yield koennte theoretisch schon den naechsten
+-- Event-Aufruf treffen. Gleiches Muster wie server/sv_radio.lua.
 AddEventHandler('playerDropped', function()
-    local emp = loggedIn[source]
+    local src = source
+    local emp = loggedIn[src]
     if emp then
-        local ok, err = pcall(Payroll.ForceClockOut, emp.id, emp.name)
+        local ok, didClockOut = pcall(Payroll.ForceClockOut, emp.id, emp.name)
         if not ok then
-            print(('^1[speditions-tablet]^7 Automatisches Ausstempeln bei Verbindungsabbruch fehlgeschlagen fuer %s: %s'):format(emp.name, tostring(err)))
+            print(('^1[speditions-tablet]^7 Automatisches Ausstempeln bei Verbindungsabbruch fehlgeschlagen fuer %s: %s'):format(emp.name, tostring(didClockOut)))
+        elseif didClockOut then
+            print(('^2[speditions-tablet]^7 %s wurde beim Verlassen des Servers automatisch ausgestempelt.'):format(emp.name))
         end
     end
-    Employees.Logout(source)
+    Employees.Logout(src)
 end)
 
 -- =========================================================

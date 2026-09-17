@@ -24,19 +24,30 @@ local function insertOrderHistory(orderId, status, changedBy, note)
 end
 
 -- Löscht bei JEDEM Ressourcenstart (Server-Neustart, /refresh + /start, oder
--- ein manueller Ressourcen-Neustart) alle bestehenden Aufträge - auf
--- ausdrücklichen Wunsch, damit nie "hängende" Aufträge von vor dem Neustart
--- übrig bleiben. Fahrerstatistik/Transaktionen bleiben davon unberührt.
+-- ein manueller Ressourcen-Neustart) alle IM SPIEL entstandenen Aufträge
+-- (source = 'auto'/'disponent') - auf ausdrücklichen Wunsch, damit nie
+-- "hängende" Aufträge von vor dem Neustart übrig bleiben. Von der Website
+-- aus angelegte Aufträge (source = 'website') überleben einen Neustart
+-- bewusst, da sie sonst verloren gingen, bevor sie im Spiel überhaupt
+-- gesehen/disponiert werden konnten. Die Child-Tabellen (Historie,
+-- Zwischenstopps, Abbruch-Anfragen) sind per ON DELETE CASCADE an
+-- st_orders gebunden (siehe sql/install.sql) und räumen sich beim Löschen
+-- der jeweiligen Aufträge automatisch mit auf. Fahrerstatistik/
+-- Transaktionen bleiben davon unberührt.
 CreateThread(function()
-    MySQL.query.await('DELETE FROM st_order_history')
-    MySQL.query.await('DELETE FROM st_order_cancel_requests')
-    MySQL.query.await('DELETE FROM st_order_stops')
-    MySQL.query.await('DELETE FROM st_orders')
-    MySQL.query.await('ALTER TABLE st_orders AUTO_INCREMENT = 1')
-    MySQL.query.await('ALTER TABLE st_order_history AUTO_INCREMENT = 1')
-    MySQL.query.await('ALTER TABLE st_order_cancel_requests AUTO_INCREMENT = 1')
-    MySQL.query.await('ALTER TABLE st_order_stops AUTO_INCREMENT = 1')
-    print('^3[speditions-tablet]^7 Alle Aufträge beim Ressourcenstart zurückgesetzt.')
+    local remainingRow = MySQL.single.await("SELECT COUNT(*) AS c FROM st_orders WHERE source = 'website'")
+    local remaining = remainingRow and tonumber(remainingRow.c) or 0
+
+    MySQL.query.await("DELETE FROM st_orders WHERE source != 'website'")
+
+    if remaining == 0 then
+        MySQL.query.await('ALTER TABLE st_orders AUTO_INCREMENT = 1')
+        MySQL.query.await('ALTER TABLE st_order_history AUTO_INCREMENT = 1')
+        MySQL.query.await('ALTER TABLE st_order_cancel_requests AUTO_INCREMENT = 1')
+        MySQL.query.await('ALTER TABLE st_order_stops AUTO_INCREMENT = 1')
+    end
+
+    print(('^3[speditions-tablet]^7 Ingame-Aufträge beim Ressourcenstart zurückgesetzt (%d von der Website erstellte Aufträge bleiben erhalten).'):format(remaining))
 end)
 
 --- Prüft, ob ein Fahrer eine bestimmte Fahrerberechtigung besitzt (z.B.

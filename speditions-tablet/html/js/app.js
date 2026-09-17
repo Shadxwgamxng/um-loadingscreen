@@ -1569,6 +1569,8 @@ Actions.login = async () => {
     State.employee = data.employee;
     State.role = data.employee.role;
     State.config = data;
+    hideAllScreens();
+    document.getElementById('boot-screen').classList.remove('hidden');
     boot(data);
 };
 
