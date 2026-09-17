@@ -126,11 +126,28 @@ function WebsiteBridge.PushOrderUpdate(orderId)
     })
 end
 
---- Meldet den aktuellen Zustand eines Fahrzeugs an die Website.
+--- Meldet den aktuellen Zustand eines Fahrzeugs an die Website - inklusive
+--- des aktuell zugewiesenen Fahrers (falls einer per Drivers.StartShift/
+--- EndShift oder Vehicles.Assign zugewiesen/freigegeben wurde), damit die
+--- "Aktive Fahrzeuge"-Übersicht in der Website-Disposition den echten
+--- Stand aus dem Spiel zeigt statt nur website-eigener Fahrzeug-Logins.
 function WebsiteBridge.PushVehicleUpdate(vehicleId)
     if not websiteConfigured() then return end
     local vehicle = Vehicles.GetById(vehicleId)
     if not vehicle then return end
+
+    local driverName, activeSince = nil, nil
+    local assignment = MySQL.single.await([[
+        SELECT e.name, va.assigned_at FROM st_vehicle_assignments va
+        JOIN st_drivers d ON d.id = va.driver_id
+        JOIN st_employees e ON e.id = d.employee_id
+        WHERE va.vehicle_id = ? AND va.unassigned_at IS NULL
+        ORDER BY va.assigned_at DESC LIMIT 1
+    ]], { vehicleId })
+    if assignment then
+        driverName = assignment.name
+        activeSince = assignment.assigned_at
+    end
 
     WebsiteBridge.PushEvent('vehicle.upsert', {
         tabletVehicleId = vehicle.id,
@@ -138,6 +155,8 @@ function WebsiteBridge.PushVehicleUpdate(vehicleId)
         vehicleClass = vehicle.vehicle_class,
         mileage = tonumber(vehicle.mileage) or 0,
         status = vehicle.status,
+        driverName = driverName,
+        activeSince = activeSince,
     })
 end
 

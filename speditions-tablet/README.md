@@ -583,12 +583,17 @@ es nicht aktiv eingeschaltet wird.
 **Architektur**: Beide Richtungen laufen über ausgehende HTTP-Requests vom
 FiveM-Server - der Spielserver muss dafür keinen eingehenden Port öffnen:
 
-- **Push** (Tablet → Website): bei jeder relevanten Änderung (Auftrag
-  disponiert/**selbst zugewiesen (kein Disponent online)**/**neu
-  disponiert**/angenommen/abgeschlossen/**neu angelegt**, Fahrzeug
-  angelegt/geändert, Mitarbeiter eingestellt/Rolle geändert, periodische
-  Lenkzeiten-Meldung) schickt `server/sv_website_bridge.lua` sofort einen
-  Webhook an `.../api/tablet/webhook`. Einmalig beim Ressourcenstart UND bei
+- **Push** (Tablet → Website): bei jeder relevanten Änderung (Auftrag **neu
+  im offenen Pool generiert** (`Orders.GenerateOne`)/disponiert/selbst
+  zugewiesen (kein Disponent online)/neu disponiert/angenommen/
+  abgeschlossen/neu angelegt, Fahrzeug angelegt/geändert/**Fahrer
+  zu-/abgewiesen** (Fahrerkarte einstecken/abziehen, Fuhrpark-Zuweisung),
+  Mitarbeiter eingestellt/Rolle geändert, periodische Lenkzeiten-Meldung)
+  schickt `server/sv_website_bridge.lua` sofort einen Webhook an
+  `.../api/tablet/webhook` — ein neu generierter Pool-Auftrag ist dadurch
+  ab sofort auch auf der Website sichtbar und von dort aus disponierbar
+  (Reiter "Auftragspool"), statt erst beim Disponieren im Spiel bekannt zu
+  werden. Einmalig beim Ressourcenstart UND bei
   jeder Änderung im Reiter "Orte" (angelegt/bearbeitet/gelöscht) wird
   zusätzlich `locations.sync` gepusht - meldet die gültigen Standortnamen/
   Frachtarten (`Locations.List()`/`Config.CargoTypes`), Grundlage für die

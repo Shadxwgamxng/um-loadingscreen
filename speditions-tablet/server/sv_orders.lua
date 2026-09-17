@@ -169,6 +169,7 @@ function Orders.GenerateOne()
 
     insertOrderHistory(orderId, 'offen', nil, 'Automatisch generiert.')
     RPC.PushToPermission('dispatch', 'orders:newOpenOrder', { orderId = orderId })
+    if WebsiteBridge then WebsiteBridge.PushOrderUpdate(orderId) end
 
     return orderId
 end

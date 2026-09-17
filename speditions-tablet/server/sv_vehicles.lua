@@ -285,6 +285,7 @@ local function assignVehicleInternal(emp, vehicleId, driverId)
     end
 
     RPC.PushToPermission('dispatch', 'fleet:changed', {})
+    if WebsiteBridge then WebsiteBridge.PushVehicleUpdate(vehicleId) end
 
     return { ok = true }
 end
