@@ -186,6 +186,28 @@ behebt nicht die eigentliche Ursache (meist läuft `pma-voice` gar nicht oder
 unter anderem Namen) - prüfe in dem Fall `ensure pma-voice` in `server.cfg`
 und ob die Ressource beim Start tatsächlich fehlerfrei durchläuft.
 
+**Fehlerdiagnose "pma-voice lehnt die Kanalwahl ab"** (Serverkonsole zeigt
+`pma-voice:radioChangeRejected`): pma-voice selbst lehnt einen Kanal
+ausschließlich dann ab, wenn ein ANDERES, zusätzlich installiertes Skript
+über den pma-voice-Export `addChannelCheck(channel, cb)` einen eigenen
+Zugriffs-Check für diesen Kanal registriert hat und dessen Callback für den
+Charakter `false` zurückgibt (z.B. ein separates Funkgerät-Item-System) -
+dieses Tablet registriert selbst keinen solchen Check. pma-voice loggt jede
+`addChannelCheck`-Registrierung mit dem Namen der verantwortlichen Ressource,
+aber **nur wenn `voice_debugMode` auf mindestens `1` steht** (Standard `0` =
+unsichtbar). In `server.cfg`:
+```
+setr voice_debugMode 1
+```
+setzen, Server neu starten und im **kompletten** Startkonsolen-Log (nicht
+erst beim Fehler selbst) nach `added a check to channel` suchen - die dort
+genannte Ressource ist die tatsächliche Ursache und muss auf deren eigener
+Seite konfiguriert/deaktiviert werden, das kann dieses Tablet nicht
+beeinflussen. Taucht dort trotz aktiviertem `voice_debugMode` gar keine
+Zeile auf, läuft vermutlich ein abweichender pma-voice-Fork/eine alte
+Version mit anderer Ablehnungslogik - in dem Fall die pma-voice-Version
+selbst prüfen/aktualisieren.
+
 **Sounds:** `html/sounds/ptt.m4a` beim Beginn/Ende des eigenen Sprechens
 (pma-voice-Event `radioActive`), `channel_switch.m4a` beim Kanalwechsel,
 `incoming_call.m4a` als Dauerschleife, solange ein Anruf klingelt - stoppt
@@ -535,9 +557,13 @@ noch nicht ausgezahlten Stunden samt daraus berechnetem Betrag. Ein Klick
 auf "Auszahlen" berechnet das Gehalt serverseitig neu (der Client kann
 den Betrag nicht vorgeben), zieht ihn vom Unternehmensguthaben ab und
 übergibt ihn - genau wie bei einer normalen Auszahlung - als echtes
-Bargeld, hier allerdings an den **Mitarbeiter selbst** (nicht an die
-ausführende Geschäftsführung), sofern dieser gerade online und am
-Tablet erkannt ist.
+Bargeld an den **Mitarbeiter selbst** (nicht an die ausführende
+Geschäftsführung). **Voraussetzung: der Mitarbeiter muss gerade online
+und am Tablet eingeloggt sein** - ist das nicht der Fall, ist der
+"Auszahlen"-Button in der Übersicht deaktiviert (Badge "Nicht online")
+und ein Klickversuch (z.B. per API) wird serverseitig mit
+`employee_not_online` abgelehnt, statt das Gehalt zu verbuchen und das
+Bargeld verfallen zu lassen.
 
 Verlässt ein eingestempelter Mitarbeiter den Server (Disconnect, egal ob
 gewollt oder durch Verbindungsabbruch), wird er automatisch ausgestempelt

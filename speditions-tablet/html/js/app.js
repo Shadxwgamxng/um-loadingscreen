@@ -49,6 +49,7 @@ const ERROR_MESSAGES = {
     already_clocked_in: 'Du bist bereits eingestempelt.',
     not_clocked_in: 'Du bist nicht eingestempelt.',
     nothing_to_pay: 'Für diesen Mitarbeiter steht aktuell kein Gehalt aus.',
+    employee_not_online: 'Dieser Mitarbeiter ist gerade nicht online/am Tablet eingeloggt - Gehalt kann nur als echtes Bargeld an den anwesenden Charakter ausgezahlt werden.',
     dispatcher_available: 'Ein Disponent ist gerade online - Aufträge werden von ihm zugewiesen.',
     driver_not_online: 'Dieser Fahrer ist gerade nicht online.',
     driver_radio_off: 'Dieser Fahrer hat sein CB-Funkgerät nicht eingeschaltet.',
@@ -1470,12 +1471,15 @@ VIEWS['gf-payroll'] = async (root) => {
     const employeeRows = overview.employees.map((e) => `<tr>
         <td>${escapeHtml(e.name)}</td>
         <td>${escapeHtml(ratesRes.roleLabels[e.role] || e.role)}</td>
-        <td>${e.clockedIn ? badge({ label: 'Eingestempelt', dot: 'green' }) : badge({ label: 'Ausgestempelt', dot: 'gray' })}</td>
+        <td>
+            ${e.clockedIn ? badge({ label: 'Eingestempelt', dot: 'green' }) : badge({ label: 'Ausgestempelt', dot: 'gray' })}
+            ${e.online ? '' : ` ${badge({ label: 'Nicht online', dot: 'red' })}`}
+        </td>
         <td>${formatHm(e.unpaidSeconds)}</td>
         <td>${formatMoney(e.hourlyRate)}/Std.</td>
         <td style="font-weight:700;">${formatMoney(e.amount)}</td>
         <td class="btn-row">
-            <button class="btn btn-sm btn-primary" ${e.amount <= 0 ? 'disabled' : ''} onclick="Actions.payEmployee(${e.id}, ${escapeHtml(JSON.stringify(e.name))})">Auszahlen</button>
+            <button class="btn btn-sm btn-primary" ${e.amount <= 0 || !e.online ? 'disabled' : ''} onclick="Actions.payEmployee(${e.id}, ${escapeHtml(JSON.stringify(e.name))})" title="${e.online ? '' : 'Mitarbeiter ist gerade nicht online/am Tablet eingeloggt'}">Auszahlen</button>
         </td>
     </tr>`);
 

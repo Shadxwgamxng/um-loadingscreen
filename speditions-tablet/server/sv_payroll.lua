@@ -153,6 +153,7 @@ function Payroll.GetOverview()
             hourlyRate = rate,
             amount = Utils.Round2((seconds / 3600) * rate),
             clockedIn = Payroll.GetActiveSession(e.id) ~= nil,
+            online = Utils.FindSrcByEmployeeId(e.id) ~= nil,
         }
     end
     return list
@@ -169,6 +170,14 @@ function Payroll.PayEmployee(src, employeeId)
 
     local target = MySQL.single.await('SELECT * FROM st_employees WHERE id = ?', { employeeId })
     if not target then error('employee_not_found') end
+
+    -- Das Gehalt bekommt der MITARBEITER als echtes Bargeld - ist er gerade
+    -- nicht online und am Tablet eingeloggt, wird die Auszahlung komplett
+    -- verweigert (statt trotzdem zu verbuchen und das Bargeld einfach
+    -- verfallen zu lassen). Erst hier ermittelt, damit noch gar nichts
+    -- gebucht wird, falls das fehlschlägt.
+    local targetSrc = Utils.FindSrcByEmployeeId(employeeId)
+    if not targetSrc then error('employee_not_online') end
 
     local seconds = Payroll.GetUnpaidSeconds(employeeId)
     local rate = Payroll.GetWageRate(target.role)
@@ -201,14 +210,11 @@ function Payroll.PayEmployee(src, employeeId)
         createdBy = emp.id,
     })
 
-    -- Das Gehalt bekommt der MITARBEITER als Bargeld, nicht die
-    -- ausführende Geschäftsführung - nur möglich, wenn dieser Mitarbeiter
-    -- gerade online UND am Tablet erkannt ist.
-    local targetSrc = Utils.FindSrcByEmployeeId(employeeId)
-    local cashGiven = false
-    if targetSrc then
-        cashGiven = Bridge.AddCash(targetSrc, amount)
-    end
+    -- targetSrc wurde bereits ganz oben ermittelt und geprüft (das Gehalt
+    -- bekommt der MITARBEITER als Bargeld, nicht die ausführende
+    -- Geschäftsführung) - Bridge.AddCash kann trotzdem noch fehlschlagen
+    -- (z.B. Framework-Anbindung down), das wird separat geloggt.
+    local cashGiven = Bridge.AddCash(targetSrc, amount)
 
     MySQL.insert.await(
         'INSERT INTO st_payroll_payouts (employee_id, hours, hourly_rate, amount, executed_by, transaction_id, cash_given) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -217,12 +223,10 @@ function Payroll.PayEmployee(src, employeeId)
 
     Logs.Write(emp.id, 'payroll_paid', ('%s hat %s das Gehalt ausgezahlt (%.2f Std. x %s = %s).%s'):format(
         emp.name, target.name, hours, rate, amount,
-        cashGiven and ' Bargeld ausgehändigt.' or (targetSrc and ' Bargeld-Anbindung fehlgeschlagen.' or ' Mitarbeiter nicht online, kein Bargeld übergeben.')
+        cashGiven and ' Bargeld ausgehändigt.' or ' Bargeld-Anbindung fehlgeschlagen.'
     ))
 
-    if targetSrc then
-        Utils.NotifyClient(targetSrc, ('Dir wurde ein Gehalt von %s ausgezahlt.'):format(amount), 'success')
-    end
+    Utils.NotifyClient(targetSrc, ('Dir wurde ein Gehalt von %s ausgezahlt.'):format(amount), 'success')
 
     return { amount = amount, hours = hours, cashGiven = cashGiven, newBalance = Finance.GetBalance() }
 end
