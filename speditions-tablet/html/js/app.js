@@ -52,10 +52,6 @@ const ERROR_MESSAGES = {
     employee_not_online: 'Dieser Mitarbeiter ist gerade nicht online/am Tablet eingeloggt - Gehalt kann nur als echtes Bargeld an den anwesenden Charakter ausgezahlt werden.',
     dispatcher_available: 'Ein Disponent ist gerade online - Aufträge werden von ihm zugewiesen.',
     driver_not_online: 'Dieser Fahrer ist gerade nicht online.',
-    driver_radio_off: 'Dieser Fahrer hat sein CB-Funkgerät nicht eingeschaltet.',
-    driver_busy: 'Es läuft bereits ein Anruf mit diesem Fahrer bzw. auf deiner Leitung.',
-    no_incoming_call: 'Kein eingehender Anruf.',
-    no_active_call: 'Kein laufendes Gespräch.',
     insufficient_player_cash: 'Du hast nicht genug Bargeld dabei, um diesen Betrag einzuzahlen.',
     employee_inactive: 'Dieses Mitarbeiterkonto ist deaktiviert.',
     forbidden_role: 'Keine Berechtigung für diese Aktion.',
@@ -378,16 +374,9 @@ window.addEventListener('message', (event) => {
     if (data.type === 'open') handleOpen(data.companyName);
     else if (data.type === 'close') handleClose();
     else if (data.type === 'push') handlePush(data.event, data.data);
-    else if (data.type === 'radioInteract') document.getElementById('cb-radio').classList.toggle('cb-radio-focused', !!data.on);
-    else if (data.type === 'radioIncomingCall') radioOnIncomingCall(data.callerName);
-    else if (data.type === 'radioCallAnswered') radioOnCallAnswered();
-    else if (data.type === 'radioCallEnded') radioOnCallEnded(data.reason);
-    else if (data.type === 'radioPtt') document.getElementById('snd-ptt').play().catch(() => {});
-    else if (data.type === 'radioTalkers') radioSetTalkers(data.names);
 });
 
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') nuiPost('radioForceRelease', {}); // Notausstieg, falls das Funkgerät den Mauszeiger noch belegt
     if (!document.getElementById('lock-screen').classList.contains('hidden')) { unlockTablet(); return; }
     if (e.key === 'Escape') requestClose();
 });
@@ -563,201 +552,6 @@ document.getElementById('timeclock-btn').addEventListener('click', async () => {
     }
     refreshTimeclock();
 });
-
-// ---------------------------------------------------------
-// CB-Funk - ein-/ausschalten läuft über das Tablet, danach ist das
-// Bedienfeld auch bei geschlossenem Tablet sichtbar/verschiebbar
-// (siehe Config.CbRadio.interactKey, um es dann noch bedienen zu können).
-// ---------------------------------------------------------
-
-const Radio = { on: false, channel: 1, volume: 80, muted: false, callState: 'idle' }; // callState: idle|ringing|active
-
-function radioRefreshUi() {
-    document.getElementById('cb-channel').textContent = String(Radio.channel).padStart(2, '0');
-    document.getElementById('cb-lcd-mute').classList.toggle('active', Radio.muted);
-    document.getElementById('cb-mute-btn').classList.toggle('active', Radio.muted);
-    const notch = document.querySelector('#cb-knob-vol .cb-knob-notch');
-    if (notch) notch.style.transform = `translateX(-50%) rotate(${-135 + (Radio.volume / 100) * 270}deg)`;
-    document.getElementById('cb-radio-dot').classList.toggle('on', Radio.on);
-    document.getElementById('cb-radio-toggle-label').textContent = Radio.on ? `CB-Funk (Kanal ${Radio.channel})` : 'CB-Funk';
-
-    const knobF = document.getElementById('cb-knob-f');
-    const knobSq = document.getElementById('cb-knob-sq');
-    knobF.classList.remove('cb-knob-decline', 'cb-knob-hangup');
-    knobSq.classList.remove('cb-knob-accept');
-    if (Radio.callState === 'ringing') {
-        knobF.classList.add('cb-knob-decline');
-        knobSq.classList.add('cb-knob-accept');
-    } else if (Radio.callState === 'active') {
-        knobF.classList.add('cb-knob-hangup');
-    }
-}
-
-function radioSetCallBanner(text) {
-    const el = document.getElementById('cb-call-banner');
-    if (text) { el.textContent = text; el.classList.remove('hidden'); }
-    else { el.classList.add('hidden'); }
-}
-
-// Zeigt auf dem LCD an, wer gerade auf dem Kanal spricht (lokaler Spieler
-// über pma-voice:radioActive, andere Spieler über das intern von pma-voice
-// gefeuerte Event pma-voice:setTalkingOnRadio - siehe cl_radio.lua).
-function radioSetTalkers(names) {
-    const el = document.getElementById('cb-lcd-talker');
-    if (names && names.length) {
-        el.textContent = `🔊 ${names.join(', ')}`;
-        el.classList.remove('hidden');
-    } else {
-        el.textContent = '';
-        el.classList.add('hidden');
-    }
-}
-
-function radioOnIncomingCall(callerName) {
-    Radio.callState = 'ringing';
-    radioSetCallBanner(`📞 Anruf: ${callerName}`);
-    radioRefreshUi();
-    const snd = document.getElementById('snd-call');
-    snd.currentTime = 0;
-    snd.play().catch(() => {});
-}
-
-function radioOnCallAnswered() {
-    // Nur relevant für die anrufende Seite (Disponent) - die Empfängerseite
-    // setzt ihren Zustand bereits direkt beim Klick auf "Annehmen".
-    Radio.callState = 'active';
-    radioSetCallBanner('📞 Im Gespräch');
-    radioRefreshUi();
-    toast('Anruf angenommen', '', 'success');
-    refreshIfViewing(['dispatch-drivers']);
-}
-
-function radioOnCallEnded(reason) {
-    Radio.callState = 'idle';
-    radioSetCallBanner(null);
-    radioRefreshUi();
-    document.getElementById('snd-call').pause();
-    const labels = { declined: 'Anruf abgelehnt', missed: 'Anruf nicht angenommen', hangup: 'Gespräch beendet', radio_off: 'Funk ausgeschaltet', disconnected: 'Verbindung getrennt' };
-    if (labels[reason]) toast(labels[reason], '', 'info');
-    refreshIfViewing(['dispatch-drivers']);
-}
-
-document.getElementById('cb-radio-toggle').addEventListener('click', async () => {
-    if (Radio.on) {
-        await call('me:radio:powerOff');
-        Radio.on = false;
-        await nuiPost('radioPower', { on: false });
-        document.getElementById('cb-radio').classList.add('hidden');
-        toast('CB-Funk ausgeschaltet', '', 'info');
-    } else {
-        await call('me:radio:powerOn');
-        Radio.on = true;
-        await nuiPost('radioPower', { on: true, channel: Radio.channel, volume: Radio.volume });
-        document.getElementById('cb-radio').classList.remove('hidden');
-        toast('CB-Funk eingeschaltet', `Kanal ${String(Radio.channel).padStart(2, '0')}`, 'success');
-    }
-    radioRefreshUi();
-});
-
-function radioPlayChannelSwitchSound() {
-    const snd = document.getElementById('snd-channel');
-    snd.currentTime = 0;
-    snd.play().catch(() => {});
-}
-
-document.getElementById('cb-ch-up').addEventListener('click', () => {
-    Radio.channel = Radio.channel >= 9 ? 1 : Radio.channel + 1;
-    nuiPost('radioSetChannel', { channel: Radio.channel });
-    radioPlayChannelSwitchSound();
-    radioRefreshUi();
-});
-document.getElementById('cb-ch-down').addEventListener('click', () => {
-    Radio.channel = Radio.channel <= 1 ? 9 : Radio.channel - 1;
-    nuiPost('radioSetChannel', { channel: Radio.channel });
-    radioPlayChannelSwitchSound();
-    radioRefreshUi();
-});
-
-document.getElementById('cb-knob-f').addEventListener('click', async () => {
-    if (Radio.callState === 'ringing') {
-        await nuiPost('radioDeclineCall', {});
-        Radio.callState = 'idle';
-        radioSetCallBanner(null);
-        document.getElementById('snd-call').pause();
-        radioRefreshUi();
-    } else if (Radio.callState === 'active') {
-        await nuiPost('radioHangup', {});
-        Radio.callState = 'idle';
-        radioSetCallBanner(null);
-        radioRefreshUi();
-    }
-});
-
-document.getElementById('cb-knob-sq').addEventListener('click', async () => {
-    if (Radio.callState !== 'ringing') return;
-    await nuiPost('radioAnswerCall', {});
-    Radio.callState = 'active';
-    radioSetCallBanner('📞 Im Gespräch');
-    document.getElementById('snd-call').pause();
-    radioRefreshUi();
-});
-
-document.getElementById('cb-knob-vol').addEventListener('wheel', (e) => {
-    e.preventDefault();
-    Radio.volume = Math.max(0, Math.min(100, Radio.volume + (e.deltaY < 0 ? 5 : -5)));
-    nuiPost('radioSetVolume', { volume: Radio.volume });
-    radioRefreshUi();
-}, { passive: false });
-
-document.getElementById('cb-mute-btn').addEventListener('click', () => {
-    Radio.muted = !Radio.muted;
-    nuiPost('radioToggleMute', {});
-    radioRefreshUi();
-});
-
-// Ziehen: nur auslösen, wenn NICHT auf einem der (nicht-dekorativen)
-// Bedienelemente oder dem Größenziehpunkt geklickt wird - der Rest des
-// Foto-Nachbaus dient als Ziehfläche. Größe ändern: separater Ziehpunkt
-// unten rechts, skaliert das ganze Bedienfeld.
-(() => {
-    const radioEl = document.getElementById('cb-radio');
-    const body = document.getElementById('cb-radio-drag-handle');
-    const resizeHandle = document.getElementById('cb-resize-handle');
-    let dragging = false, offsetX = 0, offsetY = 0;
-    let resizing = false, resizeStartX = 0, startScale = 1;
-    let scale = 1;
-
-    body.addEventListener('mousedown', (e) => {
-        if (e.target.closest('.cb-knob-vol, #cb-knob-f, #cb-knob-sq, .cb-btn, .cb-ch-btn, .cb-resize-handle')) return;
-        dragging = true;
-        const rect = radioEl.getBoundingClientRect();
-        offsetX = e.clientX - rect.left;
-        offsetY = e.clientY - rect.top;
-        e.preventDefault();
-    });
-
-    resizeHandle.addEventListener('mousedown', (e) => {
-        resizing = true;
-        resizeStartX = e.clientX;
-        startScale = scale;
-        e.preventDefault();
-        e.stopPropagation();
-    });
-
-    document.addEventListener('mousemove', (e) => {
-        if (dragging) {
-            radioEl.style.left = `${e.clientX - offsetX}px`;
-            radioEl.style.top = `${e.clientY - offsetY}px`;
-            radioEl.style.bottom = 'auto';
-        } else if (resizing) {
-            scale = Math.max(0.6, Math.min(2, startScale + (e.clientX - resizeStartX) / 300));
-            body.style.transform = `scale(${scale})`;
-        }
-    });
-    document.addEventListener('mouseup', () => { dragging = false; resizing = false; });
-})();
-
-radioRefreshUi();
 
 function handlePush(event, data) {
     const map = {
@@ -1040,7 +834,6 @@ VIEWS['dispatch-drivers'] = async (root) => {
         <td class="btn-row">
             <button class="btn btn-sm" onclick="Actions.messageDriver(${r.driver_id}, ${escapeHtml(JSON.stringify(r.name))})">Nachricht</button>
             <button class="btn btn-sm" onclick="Actions.remindDriver(${r.driver_id})">Lenkzeit erinnern</button>
-            <button class="btn btn-sm" onclick="Actions.callDriver(${r.driver_id}, ${escapeHtml(JSON.stringify(r.name))})">📞 Anrufen</button>
         </td>
     </tr>`);
 
@@ -1754,11 +1547,6 @@ Actions.confirmMessageDriver = async (driverId) => {
 Actions.remindDriver = async (driverId) => {
     await call('dispatch:remindDriver', { driverId });
     toast('Erinnerung gesendet', 'Der Fahrer wurde an seine Lenk-/Ruhezeiten erinnert.', 'success');
-};
-
-Actions.callDriver = async (driverId, driverName) => {
-    await call('dispatch:callDriver', { driverId });
-    toast('Anruf gestartet', `Es klingelt bei ${driverName}...`, 'info');
 };
 
 Actions.openDispatchModal = (orderId, requiresPermission) => {

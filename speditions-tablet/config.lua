@@ -36,7 +36,7 @@ Config.TabletProp = {
 -- 'speditions-tablet:server:openFromItem' (Ziel-Spieler als src) feuern.
 Config.RequireItem = {
     enabled = true,
-    itemName = 'essence', -- Testwert - auf den echten Tablet-Item-Namen anpassen
+    itemName = 'tablet_baltic',
 }
 
 -- Klingelton, der bei jedem nativen In-Game-Hinweis abgespielt wird (neue
@@ -322,11 +322,21 @@ Config.AverageSpeedKmh = 65
 -- Zusätzlicher Puffer in Minuten auf die berechnete Fahrzeit
 Config.DeadlineBufferMinutes = 8
 
--- Automatische Auftragsgenerierung
+-- Automatische Auftragsgenerierung - der Takt hängt von der Anzahl aktuell
+-- online UND am Tablet angemeldeten Mitarbeiter mit Fahrerberechtigung
+-- ('driver_actions') ab: je mehr Fahrer da sind, um so öfter kommt Nachschub.
+-- 'maxDrivers' ist die jeweils OBERE Grenze der Stufe (die erste Stufe, in
+-- die die aktuelle Fahreranzahl noch passt, gewinnt) - die letzte Stufe
+-- sollte immer 'math.huge' als Obergrenze haben, damit auch bei sehr vielen
+-- Fahrern noch ein Takt greift. Sind 0 Fahrer online, wird nichts generiert
+-- (niemand könnte den Auftrag ohnehin annehmen).
 Config.OrderGeneration = {
     enabled = true,
-    intervalMs = 6 * 60 * 1000, -- alle 6 Minuten ein neuer Pool-Auftrag
-    maxOpenOrders = 12,          -- maximale Anzahl unbearbeiteter (offener) Aufträge im Pool
+    maxOpenOrders = 12, -- maximale Anzahl unbearbeiteter (offener) Aufträge im Pool
+    intervalMsByDriverCount = {
+        { maxDrivers = 2, minMs = 12 * 60 * 1000, maxMs = 15 * 60 * 1000 }, -- 1-2 Fahrer: alle 12-15 Min.
+        { maxDrivers = math.huge, minMs = 10 * 60 * 1000, maxMs = 12 * 60 * 1000 }, -- ab 3 Fahrern: alle 10-12 Min.
+    },
 }
 
 -- Blendet im Tablet (Reiter "Aufträge", Offener Auftragspool) für Fahrer
@@ -379,31 +389,6 @@ Config.DefaultPayoutTarget = 'Unternehmensbankkonto'
 Config.MoneyBridge = 'qbcore' -- 'esx' | 'qbcore' | 'custom'
 
 -- =========================================================
--- CB-FUNK
--- =========================================================
--- Bindet an pma-voice an (exports 'setRadioChannel'/'setRadioVolume'/
--- 'setCallChannel'). Das Funkgerät wird über das Tablet ein-/ausgeschaltet;
--- danach bleibt das Bedienfeld auch bei geschlossenem Tablet sichtbar. Um
--- es zu bedienen (ziehen, Größe ändern, Kanal/Lautstärke/Stumm), während
--- das Tablet geschlossen ist (z.B. während der Fahrt), `interactKey`
--- EINMAL DRÜCKEN schaltet den Mauszeiger dafür an, nochmal drücken wieder
--- aus (kein Gedrückthalten). Ist das Tablet bereits offen, ist das
--- Funkgerät automatisch mitbedienbar. Reagiert die Taste bei dir nicht:
--- in den FiveM-Einstellungen unter "Tastenbelegung" nach "CB-Funk" suchen -
--- ein anderes Skript könnte dieselbe Taste bereits belegt haben, dann hilft
--- nur eine manuelle Neubelegung dort. Gültige Tastennamen: siehe
--- FiveM-Keymapping-Referenz
--- (https://docs.fivem.net/docs/game-references/input-mapper-parameter-ids/keyboard).
-Config.CbRadio = {
-    minChannel = 1,
-    maxChannel = 9,
-    defaultChannel = 1,
-    defaultVolume = 80, -- 0-100
-    interactKey = 'F7',
-    callRingSeconds = 20, -- wie lange ein Anruf klingelt, bevor automatisch aufgelegt wird
-}
-
--- =========================================================
 -- GEHÄLTER / STEMPELUHR
 -- =========================================================
 -- Stundenlohn je Rolle. Wird nur EINMALIG beim ersten Ressourcenstart in die
@@ -429,9 +414,9 @@ Config.DefaultHourlyWage = {
 -- Spielserver muss dafür keinen eingehenden Port öffnen. Siehe
 -- server/sv_website_bridge.lua und den README-Abschnitt "Website-Sync".
 Config.Website = {
-    enabled = false,
-    baseUrl = 'https://deine-domain.de', -- ohne abschließenden Slash
-    apiKey = 'CHANGE_ME',
+    enabled = true,
+    baseUrl = 'https://baltic-freight.de', -- ohne abschließenden Slash
+    apiKey = '65edea5d20f5c976fd943d2860dd059f2dd280dde321af18cb2e7056ba7b4334',
     pollIntervalMs = 5000, -- wie oft auf offene Befehle von der Website geprüft wird
     driverHoursReportIntervalMs = 60000, -- wie oft Lenkzeiten an die Website gemeldet werden
 }

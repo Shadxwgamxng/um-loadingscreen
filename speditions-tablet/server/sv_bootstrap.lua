@@ -151,7 +151,7 @@ end
 -- yield passiert (Payroll.ForceClockOut macht mehrere DB-Aufrufe) - 'source'
 -- ist ein von FiveM vor jedem Event-Aufruf neu gesetzter globaler Wert, ein
 -- erneutes Lesen nach einem yield koennte theoretisch schon den naechsten
--- Event-Aufruf treffen. Gleiches Muster wie server/sv_radio.lua.
+-- Event-Aufruf treffen.
 AddEventHandler('playerDropped', function()
     local src = source
     local emp = loggedIn[src]

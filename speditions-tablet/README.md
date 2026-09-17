@@ -10,7 +10,6 @@ verwaltet.
 
 - [oxmysql](https://github.com/overextended/oxmysql)
 - MySQL/MariaDB-Datenbank
-- Optional: [pma-voice](https://github.com/AvarianKnight/pma-voice) für den CB-Funk (siehe unten) - ohne pma-voice wird das Bedienfeld weiterhin angezeigt und lässt sich bedienen, hat aber keine echte Audio-Wirkung.
 
 ## Installation
 
@@ -107,7 +106,7 @@ oder aktualisiert Passwort/Rolle, falls der Login-Name bereits existiert.
 
 ### Tablet nur per Item öffnen
 
-`Config.RequireItem = { enabled = true, itemName = 'essence' }` deaktiviert
+`Config.RequireItem = { enabled = true, itemName = 'tablet_baltic' }` deaktiviert
 den freien Command/Keybind komplett - das Tablet öffnet sich dann nur noch,
 wenn das konfigurierte Item benutzt wird:
 - Mit **ESX** oder **QBCore** passiert das automatisch (`server/sv_main.lua`
@@ -161,108 +160,6 @@ sich einen offenen Auftrag im "Offener Auftragspool"-Bereich unter "Meine
 Aufträge" selbst zuweisen ("Übernehmen"). Sobald wieder jemand mit
 Dispositionsrecht online ist, wird der Button gesperrt und die normale
 Disposition greift wieder. Siehe `Orders.SelfAssign` in `server/sv_orders.lua`.
-
-### CB-Funk
-
-Bindet an [pma-voice](https://github.com/AvarianKnight/pma-voice) an (Exports
-`setRadioChannel`/`setRadioVolume`/`setCallChannel`). Ein-/Ausschalten läuft
-ausschließlich über den Knopf oben im Tablet - danach bleibt das Bedienfeld
-auch bei geschlossenem Tablet sichtbar, verschiebbar (Ziehpunkt in der
-Bezel-Fläche) und über den Ziehpunkt unten rechts in der Größe änderbar. Um
-es zu bedienen (ziehen, Größe ändern, Kanal 01-09, Lautstärke, Stumm),
-während das Tablet geschlossen ist (z.B. während der Fahrt),
-`Config.CbRadio.interactKey` (Standard `F7`) EINMAL DRÜCKEN schaltet den
-Mauszeiger dafür an, nochmal drücken wieder aus - kein Gedrückthalten, damit
-man nie "hängen" bleiben kann. Reagiert die Taste nicht: in den
-FiveM-Einstellungen unter "Tastenbelegung" nach "CB-Funk" suchen, ein
-anderes Skript könnte dieselbe Taste bereits belegt haben. Ist das Tablet
-ohnehin offen, ist das Funkgerät automatisch mitbedienbar. Sprechen
-(Push-to-Talk) läuft über pma-voice's eigene Standard-Taste, sobald ein
-Kanal eingestellt ist - dafür baut dieses Skript nichts Eigenes.
-
-**Fehlerdiagnose "CB-Funk geht nicht/kein Ton":** Ist `pma-voice` nicht
-gestartet (falscher Ressourcenname, Absturz, o.ä.), meldet `client/cl_radio.lua`
-das jetzt einmalig deutlich statt komplett stillzuschweigen: eine `^1`-Zeile
-in der Client-Konsole (F8) mit dem tatsächlichen `GetResourceState('pma-voice')`-Wert,
-zusätzlich ein In-Game-Warnhinweis beim Einschalten des Funkgeräts. Das
-behebt nicht die eigentliche Ursache (meist läuft `pma-voice` gar nicht oder
-unter anderem Namen) - prüfe in dem Fall `ensure pma-voice` in `server.cfg`
-und ob die Ressource beim Start tatsächlich fehlerfrei durchläuft.
-
-**Fehlerdiagnose "pma-voice lehnt die Kanalwahl ab"** (Serverkonsole zeigt
-`pma-voice:radioChangeRejected`): **zuerst** in `server.cfg` prüfen, ob dort
-irgendwo `setr voice_enableRadios 0` (oder `0` ohne `setr`) gesetzt ist - der
-pma-voice-Standardwert ist `1` (aktiviert), auf manchen server.cfg-Vorlagen
-wird er aber explizit auf `0` überschrieben, was **jeden** Kanalwechsel jedes
-Skripts ablehnt, unabhängig von Fremd-Skripten. Fehlt der Eintrag oder steht
-er auf `0`, `setr voice_enableRadios 1` ergänzen/ändern und Server neu
-starten. Bleibt der Fehler danach bestehen, lehnt pma-voice einen Kanal
-ausschließlich dann ab, wenn ein ANDERES, zusätzlich installiertes Skript
-über den pma-voice-Export `addChannelCheck(channel, cb)` einen eigenen
-Zugriffs-Check für diesen Kanal registriert hat und dessen Callback für den
-Charakter `false` zurückgibt (z.B. ein separates Funkgerät-Item-System) -
-dieses Tablet registriert selbst keinen solchen Check. pma-voice loggt jede
-`addChannelCheck`-Registrierung mit dem Namen der verantwortlichen Ressource,
-aber **nur wenn `voice_debugMode` auf mindestens `1` steht** (Standard `0` =
-unsichtbar). In `server.cfg`:
-```
-setr voice_debugMode 1
-```
-setzen, Server neu starten und im **kompletten** Startkonsolen-Log (nicht
-erst beim Fehler selbst) nach `added a check to channel` suchen - die dort
-genannte Ressource ist die tatsächliche Ursache und muss auf deren eigener
-Seite konfiguriert/deaktiviert werden, das kann dieses Tablet nicht
-beeinflussen. Taucht dort trotz aktiviertem `voice_debugMode` gar keine
-Zeile auf, läuft vermutlich ein abweichender pma-voice-Fork/eine alte
-Version mit anderer Ablehnungslogik - in dem Fall die pma-voice-Version
-selbst prüfen/aktualisieren.
-
-**Sounds:** `html/sounds/ptt.m4a` beim Beginn/Ende des eigenen Sprechens
-(pma-voice-Event `radioActive`), `channel_switch.m4a` beim Kanalwechsel,
-`incoming_call.m4a` als Dauerschleife, solange ein Anruf klingelt - stoppt
-sofort bei Annahme/Ablehnung/Auflegen. Eigene Dateien austauschbar, gleicher
-Dateiname genügt.
-
-**Anrufe:** Die Geschäftsführung/Disponenten können Fahrer über den
-"📞 Anrufen"-Button in der Fahrerübersicht direkt anrufen - nur möglich,
-wenn der Fahrer online, am Tablet erkannt und sein CB-Funk eingeschaltet
-ist. Der Anruf läuft über einen eigenen, privaten pma-voice-Call-Kanal
-(komplett getrennt vom normalen Funkkanal - das gewohnte Mithören auf dem
-eingestellten Kanal wird dadurch nicht gestört). Beim Fahrer klingelt es am
-CB-Funk: die zwei rechten Knöpfe werden zu **Ablehnen (rot)** und
-**Annehmen (grün)**; nach Annahme wird der rote Knopf zum Auflegen. Klingelt
-`Config.CbRadio.callRingSeconds` (Standard 20s) lang niemand ran, wird
-automatisch aufgelegt.
-
-**Hinweis zum Design:** Auf Wunsch orientiert sich das Bedienfeld an einem
-mitgeschickten Foto eines physischen CB-Funkgeräts (Lautstärke-Knopf links,
-Display mit Kanalanzeige, "MUTE CTCSS"-Taste, die zwei rechten Knöpfe,
-CH-Wippe unten rechts) - da das Originalfoto selbst nicht als Bilddatei in
-die Ressource übernommen werden konnte, ist es als CSS/HTML-Nachbau
-umgesetzt, keine Bilddatei. Die übrigen im Foto vorhandenen, aber nicht
-benötigten Tasten (AM/FM MENU, EMG/VOX, SCAN/MSCAN, MEM/MSAVE) sind rein
-dekorativ nachgebaut und ohne Funktion - es wurden bewusst keine
-zusätzlichen Bedienelemente ergänzt. Das Bedienfeld ist immer voll deckend
-(nicht durchsichtig), unabhängig davon, ob es gerade bedient wird.
-
-**Anzeige "wer spricht":** Auf dem LCD erscheint der **Tablet-Name** (nicht
-der Steam-/Rockstar-Name) des/der gerade auf dem Kanal sprechenden Spieler -
-also genau der Name, mit dem sich der jeweilige Mitarbeiter am Tablet
-angemeldet hat (`server/sv_radio.lua`, RPC `radio:employeeName`, liest
-`Employees.GetLoggedIn`). Ist ein Sprecher am Tablet gerade nicht
-angemeldet, erscheint ersatzweise "Spieler #<server-id>". Für den eigenen
-Spieler nutzt `client/cl_radio.lua` das offizielle pma-voice-Event
-`pma-voice:radioActive`. Für ANDERE Spieler bietet pma-voice selbst kein
-eigenes Export/Event an - `cl_radio.lua` hört daher zusätzlich das intern
-von pma-voice gefeuerte Event `pma-voice:setTalkingOnRadio` mit
-(FiveM-Events sind nicht ressourcen-exklusiv, das ist technisch
-unproblematisch), verifiziert direkt im pma-voice-Quellcode
-(`client/module/radio.lua`), und löst den Server pro Sprecher (mit
-Client-Cache) zum jeweiligen Tablet-Namen auf. Da es sich bei
-`setTalkingOnRadio` um ein **internes, nicht offiziell dokumentiertes**
-Event von pma-voice handelt, könnte ein zukünftiges pma-voice-Update dessen
-Name/Parameter ändern - die Anzeige würde dann stillschweigend leer
-bleiben (kein Fehler, aber auch keine automatische Warnung).
 
 ## Rollen & Berechtigungen
 
@@ -612,7 +509,10 @@ Alle Stellschrauben befinden sich in `config.lua`:
   Frachtart für den Lieferschein
 - `Config.TrailerTypes` - Katalog der fünf Anhängertypen (Reiter "Anhänger");
   `Config.CargoTrailerType` - welche Frachtart welchen Anhängertyp verlangt
-- `Config.OrderGeneration` - Intervall und maximale Poolgröße
+- `Config.OrderGeneration` - maximale Poolgröße sowie der Takt neuer
+  Aufträge nach Anzahl online + am Tablet angemeldeter Fahrer
+  (`intervalMsByDriverCount`, Standard: 1-2 Fahrer alle 12-15 Min., ab 3
+  Fahrern alle 10-12 Min.; 0 Fahrer online = keine Generierung)
 - `Config.AllowManualOrderGeneration` - blendet den "Auftrag generieren"-Testbutton für Fahrer ein (Standard `true`, für Live-Betrieb auf `false` stellen)
 - `Config.OrderCancelPenalty` - Vertragsstrafe (Standard 500$), wenn ein Fahrer einen Auftrag ohne Disponenten-Freigabe selbst abbricht
 - `Config.VehicleClasses`, `Config.CargoTypes`, `Config.HazardousCargo`,
@@ -656,7 +556,6 @@ Alle Stellschrauben befinden sich in `config.lua`:
   (ermittelt serverseitig per `GetEntityCoords`/`GetEntityHeading`),
   `locations:changed`-Broadcast an alle angemeldeten Mitarbeiter.
 - `server/sv_finance.lua` - Transaktions-Ledger, Guthaben, Ein-/Auszahlungen.
-- `server/sv_radio.lua` - CB-Funk ein-/ausschalten, Anrufe (privater pma-voice-Call-Kanal).
 - `server/sv_payroll.lua` - Stundenlöhne, Stempeluhr, Gehaltsauszahlung.
 - `server/sv_vehicles.lua` - Fuhrparkverwaltung.
 - `server/sv_trailers.lua` - Anhängerverwaltung (Reiter "Anhänger"): CRUD auf
@@ -677,7 +576,6 @@ Alle Stellschrauben befinden sich in `config.lua`:
   andere Client-Skripte nutzbar) sowie native In-Game-Hinweise/Wegpunkte sind hier verdrahtet.
 - `client/cl_hours.lua` - Erkennt per Kennzeichen-Abgleich, ob der Fahrer
   gerade sein zugewiesenes Firmenfahrzeug fährt, und meldet Fahrzeit an den Server.
-- `client/cl_radio.lua` - CB-Funk, bindet an pma-voice an (Kanal/Lautstärke/Stumm, Anzeige "wer spricht").
 - `client/cl_orders.lua` - Bodenmarker an relevanten Standorten aus dem
   Reiter "Orte" (kein NPC), Be-/Entladen per Taste E mit Fortschrittsbalken.
 - `html/` - NUI-Frontend (Sperrbildschirm, berechtigungsbasierte Reiter -

@@ -173,9 +173,43 @@ function Orders.GenerateOne()
     return orderId
 end
 
+--- Zählt online UND am Tablet angemeldete Mitarbeiter mit Fahrerberechtigung
+--- - Grundlage für den dynamischen Takt der automatischen Auftragsgenerierung
+--- (siehe Config.OrderGeneration.intervalMsByDriverCount). Gleiches Muster
+--- wie isDispatcherAvailable() oben.
+local function countOnlineDrivers()
+    local count = 0
+    for _, playerId in ipairs(GetPlayers()) do
+        local src = tonumber(playerId)
+        local emp = Employees.GetLoggedIn(src)
+        if emp and Roles.HasPermission(emp.role, 'driver_actions') then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+--- Ermittelt die Wartezeit bis zum nächsten automatisch generierten Auftrag
+--- anhand der aktuellen Fahreranzahl (siehe Config.OrderGeneration). Ohne
+--- online Fahrer wird kurz danach einfach erneut geprüft, statt einen
+--- Auftrag zu generieren, den ohnehin niemand annehmen könnte.
+local function nextGenerationDelayMs()
+    local driverCount = countOnlineDrivers()
+    if driverCount == 0 then return 120000 end
+
+    for _, tier in ipairs(Config.OrderGeneration.intervalMsByDriverCount) do
+        if driverCount <= tier.maxDrivers then
+            return math.random(tier.minMs, tier.maxMs)
+        end
+    end
+
+    local lastTier = Config.OrderGeneration.intervalMsByDriverCount[#Config.OrderGeneration.intervalMsByDriverCount]
+    return math.random(lastTier.minMs, lastTier.maxMs)
+end
+
 CreateThread(function()
     while true do
-        Wait(Config.OrderGeneration.intervalMs or 360000)
+        Wait(nextGenerationDelayMs())
         if Config.OrderGeneration.enabled then
             local ok, err = pcall(function()
                 if Orders.CountOpen() < (Config.OrderGeneration.maxOpenOrders or 12) then
