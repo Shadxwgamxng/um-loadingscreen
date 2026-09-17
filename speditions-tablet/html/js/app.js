@@ -1037,9 +1037,9 @@ VIEWS['dispatch-drivers'] = async (root) => {
         <td>${r.vehicle_name ? `${escapeHtml(r.vehicle_name)} (${escapeHtml(r.vehicle_plate)})` : '-'}</td>
         <td>${r.vehicle_status ? badge(VEHICLE_STATUS_META[r.vehicle_status]) : '-'}</td>
         <td class="btn-row">
-            <button class="btn btn-sm" onclick="Actions.messageDriver(${r.driver_id}, ${JSON.stringify(r.name)})">Nachricht</button>
+            <button class="btn btn-sm" onclick="Actions.messageDriver(${r.driver_id}, ${escapeHtml(JSON.stringify(r.name))})">Nachricht</button>
             <button class="btn btn-sm" onclick="Actions.remindDriver(${r.driver_id})">Lenkzeit erinnern</button>
-            <button class="btn btn-sm" onclick="Actions.callDriver(${r.driver_id}, ${JSON.stringify(r.name)})">📞 Anrufen</button>
+            <button class="btn btn-sm" onclick="Actions.callDriver(${r.driver_id}, ${escapeHtml(JSON.stringify(r.name))})">📞 Anrufen</button>
         </td>
     </tr>`);
 
@@ -1059,7 +1059,7 @@ VIEWS['dispatch-pool'] = async (root) => {
         <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
         <td>${Number(o.distance_km).toLocaleString('de-DE')} km</td>
         <td>${formatMoney(o.value)}</td>
-        <td><button class="btn btn-sm btn-primary" onclick="Actions.openDispatchModal(${o.id}, ${JSON.stringify(o.requires_permission || null)})">Disponieren</button></td>
+        <td><button class="btn btn-sm btn-primary" onclick="Actions.openDispatchModal(${o.id}, ${escapeHtml(JSON.stringify(o.requires_permission || null))})">Disponieren</button></td>
     </tr>`);
 
     root.innerHTML = `
@@ -1222,7 +1222,7 @@ VIEWS['gf-employees'] = async (root) => {
         <td>${badge(EMPLOYMENT_STATUS_META[e.status])}</td>
         <td>${formatDate(e.hired_at)}</td>
         <td>
-            <button class="btn btn-sm" onclick="Actions.openSetDiscordIdModal(${e.id}, '${escapeHtml(e.name)}', ${JSON.stringify(e.discord_id || '')})">${e.discord_id ? escapeHtml(e.discord_id) : 'nicht verknüpft'}</button>
+            <button class="btn btn-sm" onclick="Actions.openSetDiscordIdModal(${e.id}, '${escapeHtml(e.name)}', ${escapeHtml(JSON.stringify(e.discord_id || ''))})">${e.discord_id ? escapeHtml(e.discord_id) : 'nicht verknüpft'}</button>
         </td>
         <td class="btn-row">
             <button class="btn btn-sm" onclick="Actions.openResetPasswordModal(${e.id}, '${escapeHtml(e.name)}')">Passwort zurücksetzen</button>
@@ -1256,7 +1256,7 @@ VIEWS['gf-roles'] = async (root) => {
         </td>
         <td class="btn-row">
             <button class="btn btn-sm" onclick="Actions.openEditRoleModal('${r.key}')">Bearbeiten</button>
-            ${r.isBuiltin ? '' : `<button class="btn btn-sm btn-danger" onclick="Actions.deleteRole('${r.key}', ${JSON.stringify(r.label)})">Löschen</button>`}
+            ${r.isBuiltin ? '' : `<button class="btn btn-sm btn-danger" onclick="Actions.deleteRole('${r.key}', ${escapeHtml(JSON.stringify(r.label))})">Löschen</button>`}
         </td>
     </tr>`);
 
@@ -1475,7 +1475,7 @@ VIEWS['gf-payroll'] = async (root) => {
         <td>${formatMoney(e.hourlyRate)}/Std.</td>
         <td style="font-weight:700;">${formatMoney(e.amount)}</td>
         <td class="btn-row">
-            <button class="btn btn-sm btn-primary" ${e.amount <= 0 ? 'disabled' : ''} onclick="Actions.payEmployee(${e.id}, ${JSON.stringify(e.name)})">Auszahlen</button>
+            <button class="btn btn-sm btn-primary" ${e.amount <= 0 ? 'disabled' : ''} onclick="Actions.payEmployee(${e.id}, ${escapeHtml(JSON.stringify(e.name))})">Auszahlen</button>
         </td>
     </tr>`);
 
