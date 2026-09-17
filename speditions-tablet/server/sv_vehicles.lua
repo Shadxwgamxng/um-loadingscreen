@@ -67,6 +67,63 @@ function Vehicles.Create(src, data)
     return { vehicleId = vehicleId }
 end
 
+--- System-Variante von Vehicles.Create für den Website-Sync (kein Spieler-
+--- `src`, keine Berechtigungsprüfung - wird ausschließlich aus einem
+--- bereits API-Key-geprüften Website-Befehl heraus aufgerufen, siehe
+--- server/sv_website_bridge.lua). Die Website legt das Fahrzeug bei
+--- "Auch im Tablet anlegen" zeitgleich bei sich selbst an (per Kennzeichen
+--- als gemeinsamem Schlüssel) - WebsiteBridge.PushVehicleUpdate meldet das
+--- neue Fahrzeug danach zurück und verknüpft es dort automatisch (kein
+--- Website-Konflikt möglich, da dort per Kennzeichen statt einer erst
+--- später bekannten Tablet-ID gesucht wird).
+function Vehicles.CreateFromWebsite(data)
+    local name = Utils.SanitizeString(data.name, 100)
+    local model = Utils.SanitizeString(data.model, 100)
+    local plate = Utils.SanitizeString(data.plate, 20)
+    local vehicleClass = Utils.SanitizeString(data.vehicleClass, 50)
+    local mileage = Utils.SanitizeNumber(data.mileage, 0) or 0
+
+    if not (name and model and plate and vehicleClass) then error('missing_fields') end
+
+    local existing = MySQL.single.await('SELECT id FROM st_vehicles WHERE plate = ? LIMIT 1', { plate })
+    if existing then error('plate_taken') end
+
+    local vehicleId = MySQL.insert.await(
+        [[INSERT INTO st_vehicles (name, model, plate, vehicle_class, mileage, fuel, status)
+          VALUES (?, ?, ?, ?, ?, 100, 'verfuegbar')]],
+        { name, model, plate, vehicleClass, mileage }
+    )
+
+    logVehicleEvent(vehicleId, 'created', 'Fahrzeug von der Website aus erstellt.')
+    Logs.Write(nil, 'vehicle_create_website', ('Fahrzeug %s (%s) wurde von der Website aus erstellt.'):format(name, plate))
+    RPC.PushToPermission('dispatch', 'fleet:changed', {})
+    if WebsiteBridge then WebsiteBridge.PushVehicleUpdate(vehicleId) end
+
+    return { vehicleId = vehicleId }
+end
+
+--- System-Variante von Vehicles.Delete(..., 'archive') für den Website-
+--- Sync: wird aufgerufen, wenn auf der Website ein mit dem Tablet
+--- verknüpftes Fahrzeug gelöscht wird (Befehl archive_vehicle). Kein
+--- hartes SQL-Löschen im Tablet - würde Auftrags-/Fahrzeughistorie
+--- verwaisen lassen, die noch auf dieses Fahrzeug verweist; Archivieren
+--- ist im Tablet ohnehin die etablierte "Entfernen"-Variante für
+--- Fahrzeuge. Die Website kennt nur das Kennzeichen, keine interne ID.
+function Vehicles.ArchiveFromWebsite(plate)
+    local vehicle = MySQL.single.await('SELECT * FROM st_vehicles WHERE plate = ? LIMIT 1', { plate })
+    if not vehicle then error('vehicle_not_found') end
+    if Utils.ToBool(vehicle.archived) then return { ok = true } end
+
+    MySQL.update.await('UPDATE st_drivers SET assigned_vehicle_id = NULL WHERE assigned_vehicle_id = ?', { vehicle.id })
+    MySQL.update.await("UPDATE st_vehicles SET archived = 1, status = 'ausser_betrieb' WHERE id = ?", { vehicle.id })
+    logVehicleEvent(vehicle.id, 'archived', 'Fahrzeug von der Website aus archiviert (dort gelöscht).')
+    Logs.Write(nil, 'vehicle_archive_website', ('Fahrzeug %s (%s) wurde von der Website aus archiviert.'):format(vehicle.name, plate))
+    RPC.PushToPermission('dispatch', 'fleet:changed', {})
+    if WebsiteBridge then WebsiteBridge.PushVehicleUpdate(vehicle.id) end
+
+    return { ok = true }
+end
+
 function Vehicles.Update(src, vehicleId, data)
     local emp = Employees.RequirePermission(src, 'fleet_manage')
 

@@ -296,6 +296,22 @@ local function handleDeactivateEmployee(data)
     return Employees.DeactivateFromWebsite(employeeId)
 end
 
+--- `create_vehicle`: Geschäftsführung hat auf der Website ein neues
+--- Fahrzeug mit Häkchen "Auch im Tablet anlegen" erstellt (siehe
+--- Vehicles.CreateFromWebsite).
+local function handleCreateVehicle(data)
+    if type(data.plate) ~= 'string' or data.plate == '' then error('invalid_command_payload') end
+    return Vehicles.CreateFromWebsite(data)
+end
+
+--- `archive_vehicle`: Geschäftsführung hat auf der Website ein mit dem
+--- Tablet verknüpftes Fahrzeug gelöscht - archiviert das Tablet-Fahrzeug
+--- entsprechend (siehe Vehicles.ArchiveFromWebsite).
+local function handleArchiveVehicle(data)
+    if type(data.plate) ~= 'string' or data.plate == '' then error('invalid_command_payload') end
+    return Vehicles.ArchiveFromWebsite(data.plate)
+end
+
 local commandHandlers = {
     assign_order = handleAssignOrder,
     cancel_order = handleCancelOrder,
@@ -304,6 +320,8 @@ local commandHandlers = {
     create_employee = handleCreateEmployee,
     update_driver_permissions = handleUpdateDriverPermissions,
     deactivate_employee = handleDeactivateEmployee,
+    create_vehicle = handleCreateVehicle,
+    archive_vehicle = handleArchiveVehicle,
 }
 
 local function ackCommand(commandId, ok, errMsg)

@@ -683,6 +683,18 @@ FiveM-Server - der Spielserver muss dafür keinen eingehenden Port öffnen:
     aktives Konto mit Mitarbeiterverwaltung", bleibt der Mitarbeiter auf
     dem Tablet aktiv, obwohl er auf der Website gelöscht wurde - siehe
     Server-Konsole (`last_management_account`).
+  - `create_vehicle` - auf der Website mit Häkchen "Auch im Tablet
+    anlegen" erstelltes Fahrzeug wird auch im Tablet angelegt
+    (`Vehicles.CreateFromWebsite`, Payload
+    `{plate, name, model, vehicleClass, mileage}`) - `plate` ist dabei der
+    gemeinsame Schlüssel, über den sich beide Seiten automatisch
+    zurückverknüpfen (kein Konflikt möglich, da die Website Fahrzeuge
+    grundsätzlich über das Kennzeichen statt einer erst später bekannten
+    Tablet-ID sucht).
+  - `archive_vehicle` - wird ein mit dem Tablet verknüpftes Fahrzeug auf
+    der Website gelöscht, archiviert das Tablet-Fahrzeug entsprechend
+    (`Vehicles.ArchiveFromWebsite`, Payload `{plate}`) - kein hartes
+    SQL-Löschen, aus demselben Grund wie bei `deactivate_employee`.
 
 **Einrichtung**:
 
