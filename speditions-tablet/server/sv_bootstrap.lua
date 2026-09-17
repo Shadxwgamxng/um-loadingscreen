@@ -148,6 +148,13 @@ function Employees.RequirePermission(src, permissionKey)
 end
 
 AddEventHandler('playerDropped', function()
+    local emp = loggedIn[source]
+    if emp then
+        local ok, err = pcall(Payroll.ForceClockOut, emp.id, emp.name)
+        if not ok then
+            print(('^1[speditions-tablet]^7 Automatisches Ausstempeln bei Verbindungsabbruch fehlgeschlagen fuer %s: %s'):format(emp.name, tostring(err)))
+        end
+    end
     Employees.Logout(source)
 end)
 

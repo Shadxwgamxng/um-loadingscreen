@@ -81,16 +81,40 @@ function Payroll.ClockIn(src)
     return { ok = true }
 end
 
-function Payroll.ClockOut(src)
-    local emp = Employees.RequireRole(src)
-    local active = Payroll.GetActiveSession(emp.id)
-    if not active then error('not_clocked_in') end
+--- Schließt eine offene Stempeluhr-Sitzung (falls vorhanden) und meldet das
+--- an Logs/Website - gemeinsamer Kern für das manuelle Ausstempeln
+--- (Payroll.ClockOut) und das automatische Ausstempeln bei
+--- Verbindungsabbruch (Payroll.ForceClockOut). Gibt false zurück, wenn
+--- ohnehin keine Sitzung offen war.
+local function closeActiveSession(employeeId, logAction, logMessage)
+    local active = Payroll.GetActiveSession(employeeId)
+    if not active then return false end
 
     local now = Utils.Now()
     MySQL.update.await('UPDATE st_timeclock_sessions SET clock_out_at = ? WHERE id = ?', { now, active.id })
-    Logs.Write(emp.id, 'clock_out', ('%s hat sich ausgestempelt.'):format(emp.name))
-    if WebsiteBridge then WebsiteBridge.PushTimeclockUpdate(emp.id, false, now) end
+    Logs.Write(employeeId, logAction, logMessage)
+    if WebsiteBridge then WebsiteBridge.PushTimeclockUpdate(employeeId, false, now) end
+    return true
+end
+
+function Payroll.ClockOut(src)
+    local emp = Employees.RequireRole(src)
+    local didClockOut = closeActiveSession(emp.id, 'clock_out', ('%s hat sich ausgestempelt.'):format(emp.name))
+    if not didClockOut then error('not_clocked_in') end
     return { ok = true }
+end
+
+--- Stempelt einen Mitarbeiter automatisch aus, z.B. wenn die Verbindung zum
+--- Server abbricht (siehe playerDropped in server/sv_bootstrap.lua) - ohne
+--- das würde eine offene Stempeluhr-Sitzung einfach weiterlaufen, obwohl der
+--- Mitarbeiter gar nicht mehr am Server ist, und beim nächsten Gehaltslauf
+--- mitbezahlt werden ("Gehalt farmen" im Offline-Zustand). Kein Fehler,
+--- falls ohnehin nicht eingestempelt war.
+function Payroll.ForceClockOut(employeeId, employeeName)
+    return closeActiveSession(
+        employeeId, 'clock_out_auto',
+        ('%s wurde beim Verlassen des Servers automatisch ausgestempelt.'):format(employeeName)
+    )
 end
 
 function Payroll.GetMyStatus(src)

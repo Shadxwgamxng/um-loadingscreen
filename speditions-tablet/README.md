@@ -534,6 +534,13 @@ Bargeld, hier allerdings an den **Mitarbeiter selbst** (nicht an die
 ausführende Geschäftsführung), sofern dieser gerade online und am
 Tablet erkannt ist.
 
+Verlässt ein eingestempelter Mitarbeiter den Server (Disconnect, egal ob
+gewollt oder durch Verbindungsabbruch), wird er automatisch ausgestempelt
+(`playerDropped` in `server/sv_bootstrap.lua` ruft `Payroll.ForceClockOut`
+auf, **bevor** die Session gelöscht wird) - ohne das würde die Stempeluhr
+offline einfach weiterlaufen und beim nächsten Gehaltslauf mitbezahlt
+werden, obwohl niemand mehr am Server ist.
+
 ## Konfiguration
 
 Alle Stellschrauben befinden sich in `config.lua`:
