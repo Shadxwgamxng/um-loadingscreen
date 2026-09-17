@@ -55,9 +55,17 @@ end
 
 --- Meldet ein Ereignis an die Website (siehe README "Website-Sync" für die
 --- Event-Typen). Aufrufer prüfen selbst NICHT, ob Website-Sync aktiv ist -
---- das übernimmt apiRequest (websiteConfigured()).
+--- das übernimmt apiRequest (websiteConfigured()). Loggt (anders als die
+--- reine Befehls-Abfrage unten) auch den ERFOLGSFALL mit dem Event-Typ -
+--- ohne das war die Serverkonsole bei jeder Aktion (Einstempeln, Auftrag
+--- abgeschlossen, ...) komplett still, selbst wenn der Sync geklappt hat,
+--- was das gezielte Testen unnötig erschwert hat.
 function WebsiteBridge.PushEvent(eventType, data)
-    apiRequest('POST', '/api/tablet/webhook', { type = eventType, data = data })
+    apiRequest('POST', '/api/tablet/webhook', { type = eventType, data = data }, function(ok)
+        if ok then
+            print(('^2[speditions-tablet]^7 Website-Sync: Ereignis "%s" erfolgreich übertragen.'):format(eventType))
+        end
+    end)
 end
 
 --- Meldet einen Mitarbeiter an die Website. Erfordert, dass seiner Rolle im
