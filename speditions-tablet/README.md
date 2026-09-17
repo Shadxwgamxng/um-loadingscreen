@@ -658,6 +658,27 @@ FiveM-Server - der Spielserver muss dafür keinen eingehenden Port öffnen:
   zusätzlich `locations.sync` gepusht - meldet die gültigen Standortnamen/
   Frachtarten (`Locations.List()`/`Config.CargoTypes`), Grundlage für die
   Standort-Auswahl beim Anlegen neuer Aufträge auf der Website.
+  Zusätzlich für Stempeluhr/Fahrerkarte/Fahrtenbuch (siehe README der
+  Website für die dortige Verarbeitung):
+  - `timeclock.update` - bei jedem Ein-/Ausstempeln (`Payroll.ClockIn`/
+    `ClockOut`, auch beim automatischen Schließen+Neustart einer Session
+    während einer Gehaltsauszahlung). Die Website übernimmt den Status 1:1 -
+    das eigene Ein-/Ausstempeln auf der Website ist für Tablet-verknüpfte
+    Mitarbeiter deaktiviert, um zwei unabhängige Zeiterfassungen zu vermeiden.
+  - `driver_shift.update` - bei jedem "Fahrerkarte einstecken/abziehen"
+    (`Drivers.StartShift`/`EndShift`) - setzt den Aktiv-Status der Fahrerkarte
+    auf der Website, ebenfalls ohne eigenen Website-Button für Tablet-
+    verknüpfte Fahrer.
+  - `driver_hours.report` (periodisch, wie zuvor) meldet inzwischen
+    zusätzlich `restingSince`, damit die Website den genauen Pausenbeginn
+    übernehmen kann statt nur "in Pause: ja/nein".
+  - `trip.report` - bei jedem abgeschlossenen Frachtauftrag
+    (`Orders.Complete`) wird automatisch ein Fahrtenbuch-Eintrag auf der
+    Website angelegt (Start-/Zielort, Kilometerstand vor/nach der Fahrt,
+    Fahrer, Kennzeichen). `tabletOrderId` ist der Abgleichsschlüssel, ein
+    erneuter Push (z.B. nach Ressourcen-Neustart) erzeugt dort nie einen
+    doppelten Eintrag. Private/sonstige Fahrten trägt die Geschäftsführung
+    weiterhin manuell im Website-Fahrtenbuch ein.
 - **Pull** (Website → Tablet): alle `Config.Website.pollIntervalMs` fragt
   das Tablet `.../api/tablet/commands` ab und führt dort hinterlegte
   Befehle aus; das Ergebnis wird per `.../api/tablet/commands/{id}/ack`
@@ -711,10 +732,15 @@ FiveM-Server - der Spielserver muss dafür keinen eingehenden Port öffnen:
    das Tablet-Konto mit dem zugehörigen Discord-OAuth-Login auf der Website
    zu verknüpfen.
 
-**Bekannte Einschränkungen**: die wöchentliche Lenkzeit wird nicht gesynct
-(das Tablet führt dafür keine Historie, nur den aktuellen Tag); der grobe,
-6-stufige Auftragsstatus der Website ist eine vereinfachte Abbildung des
-10-stufigen Tablet-Status. Ein komplett **neues** Fahrzeug von der Website aus im Spiel
+**Bekannte Einschränkungen**: das Tablet führt für die Lenkzeit nur eine
+Tageshistorie (keine Wochenhistorie) - die Wochensumme auf der Fahrerkarte
+der Website wird daher von der Website selbst aus den täglichen Meldungen
+hochgerechnet (Tageswechsel erkannt an ihrer eigenen Systemuhr, Reset jeweils
+Montag), nicht 1:1 vom Tablet übernommen; bei stark unterschiedlichen
+Zeitzonen zwischen Tablet-Server und Website-Server kann das um wenige
+Stunden abweichen. Der grobe, 6-stufige Auftragsstatus der Website ist eine
+vereinfachte Abbildung des 10-stufigen Tablet-Status. Ein komplett **neues**
+Fahrzeug von der Website aus im Spiel
 erscheinen zu lassen ist bewusst nicht umgesetzt (kein echtes FiveM-Spawn-
 Modell von der Website aus wählbar) - nur Statusänderungen an bereits
 existierenden, Tablet-verknüpften Fahrzeugen laufen in beide Richtungen.

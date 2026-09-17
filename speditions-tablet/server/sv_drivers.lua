@@ -265,6 +265,7 @@ function Drivers.StartShift(src, vehicleId, trailerId, workshopMode)
     Logs.Write(emp.id, 'shift_started', ('%s hat die Fahrerkarte eingesteckt (Fahrt gestartet, Fahrzeug %s%s).'):format(
         emp.name, vehicle.plate, workshopMode and ', Werkstattfahrt ohne Anhänger' or ''
     ))
+    if WebsiteBridge then WebsiteBridge.PushDriverShiftUpdate(emp.id, true) end
     return { ok = true }
 end
 
@@ -281,6 +282,7 @@ function Drivers.EndShift(src)
         Vehicles.AssignInternal(emp, driver.assigned_vehicle_id, nil)
     end
     Logs.Write(emp.id, 'shift_ended', ('%s hat die Fahrerkarte abgezogen (Fahrt beendet).'):format(emp.name))
+    if WebsiteBridge then WebsiteBridge.PushDriverShiftUpdate(emp.id, false) end
     return { ok = true }
 end
 

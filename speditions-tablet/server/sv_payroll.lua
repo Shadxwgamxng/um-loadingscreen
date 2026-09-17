@@ -74,8 +74,10 @@ function Payroll.ClockIn(src)
     local emp = Employees.RequireRole(src)
     if Payroll.GetActiveSession(emp.id) then error('already_clocked_in') end
 
-    MySQL.insert.await('INSERT INTO st_timeclock_sessions (employee_id, clock_in_at) VALUES (?, NOW())', { emp.id })
+    local now = Utils.Now()
+    MySQL.insert.await('INSERT INTO st_timeclock_sessions (employee_id, clock_in_at) VALUES (?, ?)', { emp.id, now })
     Logs.Write(emp.id, 'clock_in', ('%s hat sich eingestempelt.'):format(emp.name))
+    if WebsiteBridge then WebsiteBridge.PushTimeclockUpdate(emp.id, true, now) end
     return { ok = true }
 end
 
@@ -84,8 +86,10 @@ function Payroll.ClockOut(src)
     local active = Payroll.GetActiveSession(emp.id)
     if not active then error('not_clocked_in') end
 
-    MySQL.update.await('UPDATE st_timeclock_sessions SET clock_out_at = NOW() WHERE id = ?', { active.id })
+    local now = Utils.Now()
+    MySQL.update.await('UPDATE st_timeclock_sessions SET clock_out_at = ? WHERE id = ?', { now, active.id })
     Logs.Write(emp.id, 'clock_out', ('%s hat sich ausgestempelt.'):format(emp.name))
+    if WebsiteBridge then WebsiteBridge.PushTimeclockUpdate(emp.id, false, now) end
     return { ok = true }
 end
 
@@ -157,11 +161,15 @@ function Payroll.PayEmployee(src, employeeId)
     -- Session begonnen, damit die Zeiterfassung einfach weiterläuft.
     local active = Payroll.GetActiveSession(employeeId)
     if active then
-        MySQL.update.await('UPDATE st_timeclock_sessions SET clock_out_at = NOW() WHERE id = ?', { active.id })
+        local now = Utils.Now()
+        MySQL.update.await('UPDATE st_timeclock_sessions SET clock_out_at = ? WHERE id = ?', { now, active.id })
+        if WebsiteBridge then WebsiteBridge.PushTimeclockUpdate(employeeId, false, now) end
     end
     MySQL.update.await('UPDATE st_timeclock_sessions SET paid_at = NOW() WHERE employee_id = ? AND paid_at IS NULL', { employeeId })
     if active then
-        MySQL.insert.await('INSERT INTO st_timeclock_sessions (employee_id, clock_in_at) VALUES (?, NOW())', { employeeId })
+        local restarted = Utils.Now()
+        MySQL.insert.await('INSERT INTO st_timeclock_sessions (employee_id, clock_in_at) VALUES (?, ?)', { employeeId, restarted })
+        if WebsiteBridge then WebsiteBridge.PushTimeclockUpdate(employeeId, true, restarted) end
     end
 
     local txId = Finance.AddTransaction('gehalt', -amount, {

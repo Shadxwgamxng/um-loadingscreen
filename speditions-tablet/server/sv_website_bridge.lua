@@ -133,6 +133,38 @@ function WebsiteBridge.PushVehicleUpdate(vehicleId)
     })
 end
 
+--- Meldet einen Stempeluhr-Vorgang (Ein-/Ausstempeln) an die Website - siehe
+--- Payroll.ClockIn/ClockOut/PayEmployee (server/sv_payroll.lua). `at` ist der
+--- exakte Zeitpunkt, der auch in st_timeclock_sessions geschrieben wurde
+--- (Utils.Now()), damit Tablet und Website nie leicht auseinanderlaufen.
+function WebsiteBridge.PushTimeclockUpdate(tabletEmployeeId, clockedIn, at)
+    if not websiteConfigured() then return end
+    WebsiteBridge.PushEvent('timeclock.update', {
+        tabletEmployeeId = tabletEmployeeId,
+        clockedIn = clockedIn,
+        at = at,
+    })
+end
+
+--- Meldet Schichtbeginn/-ende (Fahrerkarte einstecken/abziehen) an die
+--- Website - siehe Drivers.StartShift/EndShift (server/sv_drivers.lua).
+function WebsiteBridge.PushDriverShiftUpdate(tabletEmployeeId, onShift)
+    if not websiteConfigured() then return end
+    WebsiteBridge.PushEvent('driver_shift.update', {
+        tabletEmployeeId = tabletEmployeeId,
+        onShift = onShift,
+    })
+end
+
+--- Meldet eine abgeschlossene Fracht als Fahrtenbuch-Eintrag an die Website -
+--- siehe Orders.Complete (server/sv_orders.lua). `tabletOrderId` ist der
+--- Abgleichsschlüssel, damit ein erneuter Push (z.B. nach Ressourcen-Neustart)
+--- niemals einen doppelten Eintrag im Website-Fahrtenbuch erzeugt.
+function WebsiteBridge.PushTripReport(data)
+    if not websiteConfigured() then return end
+    WebsiteBridge.PushEvent('trip.report', data)
+end
+
 --- Meldet die gültigen Standortnamen (aus st_locations, siehe
 --- server/sv_locations.lua) an die Website - Grundlage für die Auswahl bei
 --- "Neuer Auftrag" auf der Website (siehe Orders.CreateFromWebsite:
@@ -172,6 +204,7 @@ CreateThread(function()
                     tabletEmployeeId = driver.employee_id,
                     dailyMinutes = status.dailyMinutes,
                     resting = status.resting,
+                    restingSince = status.restingSince,
                 })
             end
         end

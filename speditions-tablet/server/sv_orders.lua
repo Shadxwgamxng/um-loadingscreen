@@ -504,9 +504,29 @@ function Orders.Complete(src, orderId)
     insertOrderHistory(orderId, 'abgeschlossen', emp.id, ('%s hat den Auftrag abgeschlossen (%s).'):format(emp.name, punctual == 1 and 'pünktlich' or 'verspätet'))
 
     if order.vehicle_id then
-        MySQL.update.await('UPDATE st_vehicles SET mileage = mileage + ? WHERE id = ?', { math.floor(tonumber(order.distance_km) + 0.5), order.vehicle_id })
+        local vehicle = Vehicles.GetById(order.vehicle_id)
+        local kmStart = vehicle and tonumber(vehicle.mileage) or 0
+        local kmAdded = math.floor(tonumber(order.distance_km) + 0.5)
+        MySQL.update.await('UPDATE st_vehicles SET mileage = mileage + ? WHERE id = ?', { kmAdded, order.vehicle_id })
         MySQL.update.await("UPDATE st_vehicles SET status = 'verfuegbar' WHERE id = ? AND status = 'im_einsatz'", { order.vehicle_id })
         Vehicles.LogEvent(order.vehicle_id, 'order_completed', ('Auftrag #%s abgeschlossen von %s.'):format(orderId, emp.name), orderId)
+
+        -- Fahrtenbuch: jede abgeschlossene Fracht wird als eine Fahrt an die
+        -- Website gemeldet (siehe WebsiteBridge.PushTripReport) - tabletOrderId
+        -- ist der Abgleichsschlüssel, damit das dort niemals doppelt landet.
+        if WebsiteBridge and vehicle then
+            WebsiteBridge.PushTripReport({
+                tabletOrderId = orderId,
+                tabletEmployeeId = emp.id,
+                driverName = emp.name,
+                vehiclePlate = vehicle.plate,
+                date = Utils.Now(),
+                start = order.start_location,
+                ['end'] = order.end_location,
+                kmStart = kmStart,
+                kmEnd = kmStart + kmAdded,
+            })
+        end
     end
 
     Finance.RecordOrderRevenue(orderId, driver.id, order.value, ('Auftrag #%s abgeschlossen (%s -> %s)'):format(orderId, order.start_location, order.end_location))
