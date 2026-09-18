@@ -360,6 +360,17 @@ local function ackCommand(commandId, ok, errMsg)
     apiRequest('POST', ('/api/tablet/commands/%s/ack'):format(commandId), { ok = ok, error = errMsg })
 end
 
+--- `error('order_not_found')` etc. (Standard-Level 1) lässt Lua automatisch
+--- "quelle:zeile: " vor die Meldung setzen (z.B.
+--- "@speditions-tablet/server/sv_orders.lua:644: order_not_found") - dieses
+--- Präfix macht den reinen Fehlercode für den exakten String-Abgleich auf
+--- der Website (TABLET_ORDER_ERRORS in use-tablet-command.ts) unbrauchbar.
+--- Entfernt es, falls vorhanden, bevor der Code über /ack an die Website geht.
+local function stripErrorLocation(err)
+    local msg = tostring(err)
+    return (msg:gsub('^.-:%d+:%s*', ''))
+end
+
 CreateThread(function()
     while true do
         Wait((Config.Website and Config.Website.pollIntervalMs) or 5000)
@@ -370,7 +381,7 @@ CreateThread(function()
                     local handler = commandHandlers[command.type]
                     if handler then
                         local success, result = pcall(handler, command.data or {})
-                        ackCommand(command.id, success, (not success) and tostring(result) or nil)
+                        ackCommand(command.id, success, (not success) and stripErrorLocation(result) or nil)
                     else
                         ackCommand(command.id, false, 'unknown_command_type')
                     end

@@ -644,7 +644,11 @@ FiveM-Server - der Spielserver muss dafür keinen eingehenden Port öffnen:
 - **Pull** (Website → Tablet): alle `Config.Website.pollIntervalMs` fragt
   das Tablet `.../api/tablet/commands` ab und führt dort hinterlegte
   Befehle aus; das Ergebnis wird per `.../api/tablet/commands/{id}/ack`
-  zurückgemeldet. Befehlstypen:
+  zurückgemeldet - bei einem Fehler als reiner Fehlercode (z.B.
+  `order_not_found`), damit die Website ihn übersetzen bzw. gezielt darauf
+  reagieren kann (`stripErrorLocation` in `sv_website_bridge.lua` entfernt
+  dafür das von Luas `error()` automatisch vorangestellte "datei:zeile: ").
+  Befehlstypen:
   - `assign_order`/`cancel_order` - Fahrzeug zuweisen/Auftrag abbrechen bei
     einem bereits im Tablet existierenden Auftrag.
   - `create_order` - ein auf der Website neu angelegter Auftrag landet im
