@@ -24,21 +24,26 @@ local function insertOrderHistory(orderId, status, changedBy, note)
 end
 
 -- Löscht bei JEDEM Ressourcenstart (Server-Neustart, /refresh + /start, oder
--- ein manueller Ressourcen-Neustart) alle IM SPIEL entstandenen Aufträge
--- (source = 'auto'/'disponent') - auf ausdrücklichen Wunsch, damit nie
--- "hängende" Aufträge von vor dem Neustart übrig bleiben. Von der Website
--- aus angelegte Aufträge (source = 'website') überleben einen Neustart
--- bewusst, da sie sonst verloren gingen, bevor sie im Spiel überhaupt
--- gesehen/disponiert werden konnten. Die Child-Tabellen (Historie,
--- Zwischenstopps, Abbruch-Anfragen) sind per ON DELETE CASCADE an
--- st_orders gebunden (siehe sql/install.sql) und räumen sich beim Löschen
--- der jeweiligen Aufträge automatisch mit auf. Fahrerstatistik/
--- Transaktionen bleiben davon unberührt.
+-- ein manueller Ressourcen-Neustart) alle IM SPIEL entstandenen, NICHT
+-- abgeschlossenen Aufträge (source = 'auto'/'disponent', status ungleich
+-- 'abgeschlossen') - auf ausdrücklichen Wunsch, damit nie "hängende"
+-- Aufträge von vor dem Neustart übrig bleiben (offen im Pool, mitten in der
+-- Fahrt, abgebrochen/abgelehnt, ...). Zwei Ausnahmen überleben bewusst:
+-- von der Website aus angelegte Aufträge (source = 'website', sonst gingen
+-- sie verloren, bevor sie im Spiel überhaupt gesehen/disponiert werden
+-- konnten) UND bereits abgeschlossene Aufträge (status = 'abgeschlossen'),
+-- damit ein erledigter Auftrag als Nachweis erhalten bleibt statt bei jedem
+-- Neustart zu verschwinden. Die Child-Tabellen (Historie, Zwischenstopps,
+-- Abbruch-Anfragen) sind per ON DELETE CASCADE an st_orders gebunden (siehe
+-- sql/install.sql) und räumen sich beim Löschen der jeweiligen Aufträge
+-- automatisch mit auf - bei den beiden Ausnahmen bleibt die Historie also
+-- ebenfalls vollständig erhalten. Fahrerstatistik/Transaktionen bleiben
+-- davon unberührt.
 CreateThread(function()
-    local remainingRow = MySQL.single.await("SELECT COUNT(*) AS c FROM st_orders WHERE source = 'website'")
+    local remainingRow = MySQL.single.await("SELECT COUNT(*) AS c FROM st_orders WHERE source = 'website' OR status = 'abgeschlossen'")
     local remaining = remainingRow and tonumber(remainingRow.c) or 0
 
-    MySQL.query.await("DELETE FROM st_orders WHERE source != 'website'")
+    MySQL.query.await("DELETE FROM st_orders WHERE source != 'website' AND status != 'abgeschlossen'")
 
     if remaining == 0 then
         MySQL.query.await('ALTER TABLE st_orders AUTO_INCREMENT = 1')
@@ -47,10 +52,10 @@ CreateThread(function()
         MySQL.query.await('ALTER TABLE st_order_stops AUTO_INCREMENT = 1')
     end
 
-    print(('^3[speditions-tablet]^7 Ingame-Aufträge beim Ressourcenstart zurückgesetzt (%d von der Website erstellte Aufträge bleiben erhalten).'):format(remaining))
+    print(('^3[speditions-tablet]^7 Ingame-Aufträge beim Ressourcenstart zurückgesetzt (%d Aufträge bleiben erhalten - von der Website erstellte und bereits abgeschlossene).'):format(remaining))
 
     if WebsiteBridge then
-        local survivingRows = MySQL.query.await("SELECT id FROM st_orders WHERE source = 'website'")
+        local survivingRows = MySQL.query.await("SELECT id FROM st_orders WHERE source = 'website' OR status = 'abgeschlossen'")
         local survivingIds = {}
         for _, row in ipairs(survivingRows) do survivingIds[#survivingIds + 1] = row.id end
         WebsiteBridge.PushOrdersReset(survivingIds)

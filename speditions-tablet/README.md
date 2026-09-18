@@ -386,19 +386,23 @@ bestehende Gefahrgut-Berechtigungsprüfung bei Fahrern.
 ### Auftrags-Reset bei jedem Neustart
 
 Bei jedem Ressourcenstart (Server-Neustart, `/refresh` + `ensure`, oder ein
-manueller Neustart der Ressource) werden **alle im Spiel entstandenen
-Aufträge** (automatisch generiert oder von einem Disponenten manuell
-angelegt, inkl. Verlauf und Abbruch-Anfragen) automatisch gelöscht - so
-startet jede Session mit einem sauberen Auftragspool. **Von der Website aus
-angelegte Aufträge (`source = 'website'`) überleben einen Neustart** und
-bleiben inkl. ihres aktuellen Status/Verlaufs erhalten, damit ein
-Website-Auftrag nicht verloren geht, bevor ihn im Spiel überhaupt jemand
-gesehen/disponiert hat. Fahrerstatistik und Transaktions-Ledger bleiben
-davon unberührt. Bei aktivem Website-Sync wird direkt danach ein
-`orders.reset`-Event an die Website gemeldet (siehe „Website-Sync" unten) -
-die entfernt daraufhin jeden dort gespiegelten `origin: "tablet"`-Auftrag,
-der den Neustart im Tablet nicht überlebt hat, statt für immer als
-Karteileiche in der Website-Disposition stehen zu bleiben.
+manueller Neustart der Ressource) werden **alle im Spiel entstandenen, noch
+nicht abgeschlossenen Aufträge** (automatisch generiert oder von einem
+Disponenten manuell angelegt - offen im Pool, mitten in der Fahrt,
+abgebrochen/abgelehnt, inkl. Verlauf und Abbruch-Anfragen) automatisch
+gelöscht - so startet jede Session ohne hängengebliebene Aufträge von vor
+dem Neustart. Zwei Ausnahmen überleben bewusst: **von der Website aus
+angelegte Aufträge (`source = 'website'`)**, damit ein Website-Auftrag nicht
+verloren geht, bevor ihn im Spiel überhaupt jemand gesehen/disponiert hat,
+und **bereits abgeschlossene Aufträge (`status = 'abgeschlossen'`)**, damit
+ein erledigter Auftrag als Nachweis erhalten bleibt statt bei jedem Neustart
+zu verschwinden - beide inkl. ihres vollständigen Verlaufs. Fahrerstatistik
+und Transaktions-Ledger bleiben davon ohnehin unberührt. Bei aktivem
+Website-Sync wird direkt danach ein `orders.reset`-Event an die Website
+gemeldet (siehe „Website-Sync" unten) - die entfernt daraufhin jeden dort
+gespiegelten `origin: "tablet"`-Auftrag, der den Neustart im Tablet nicht
+überlebt hat, statt für immer als Karteileiche in der Website-Disposition
+stehen zu bleiben.
 
 ### Fahrer bricht Auftrag ab (mit Genehmigung/Vertragsstrafe)
 
@@ -603,10 +607,10 @@ FiveM-Server - der Spielserver muss dafür keinen eingehenden Port öffnen:
   Frachtarten (`Locations.List()`/`Config.CargoTypes`), Grundlage für die
   Standort-Auswahl beim Anlegen neuer Aufträge auf der Website. Ebenfalls
   beim Ressourcenstart wird `orders.reset` gepusht (siehe "Auftrags-Reset
-  bei jedem Neustart" oben) - meldet, welche `st_orders.id` (nur die von der
-  Website selbst angelegten) den Neustart überlebt haben; die Website
-  entfernt daraufhin jeden dort gespiegelten `origin: "tablet"`-Auftrag,
-  der NICHT in dieser Liste steht.
+  bei jedem Neustart" oben) - meldet, welche `st_orders.id` den Neustart
+  überlebt haben (von der Website selbst angelegte UND bereits
+  abgeschlossene Aufträge); die Website entfernt daraufhin jeden dort
+  gespiegelten `origin: "tablet"`-Auftrag, der NICHT in dieser Liste steht.
   Zusätzlich für Stempeluhr/Fahrerkarte/Fahrtenbuch (siehe README der
   Website für die dortige Verarbeitung):
   - `timeclock.update` - bei jedem Ein-/Ausstempeln (`Payroll.ClockIn`/
