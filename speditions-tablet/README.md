@@ -394,7 +394,11 @@ angelegte Aufträge (`source = 'website'`) überleben einen Neustart** und
 bleiben inkl. ihres aktuellen Status/Verlaufs erhalten, damit ein
 Website-Auftrag nicht verloren geht, bevor ihn im Spiel überhaupt jemand
 gesehen/disponiert hat. Fahrerstatistik und Transaktions-Ledger bleiben
-davon unberührt.
+davon unberührt. Bei aktivem Website-Sync wird direkt danach ein
+`orders.reset`-Event an die Website gemeldet (siehe „Website-Sync" unten) -
+die entfernt daraufhin jeden dort gespiegelten `origin: "tablet"`-Auftrag,
+der den Neustart im Tablet nicht überlebt hat, statt für immer als
+Karteileiche in der Website-Disposition stehen zu bleiben.
 
 ### Fahrer bricht Auftrag ab (mit Genehmigung/Vertragsstrafe)
 
@@ -597,7 +601,12 @@ FiveM-Server - der Spielserver muss dafür keinen eingehenden Port öffnen:
   jeder Änderung im Reiter "Orte" (angelegt/bearbeitet/gelöscht) wird
   zusätzlich `locations.sync` gepusht - meldet die gültigen Standortnamen/
   Frachtarten (`Locations.List()`/`Config.CargoTypes`), Grundlage für die
-  Standort-Auswahl beim Anlegen neuer Aufträge auf der Website.
+  Standort-Auswahl beim Anlegen neuer Aufträge auf der Website. Ebenfalls
+  beim Ressourcenstart wird `orders.reset` gepusht (siehe "Auftrags-Reset
+  bei jedem Neustart" oben) - meldet, welche `st_orders.id` (nur die von der
+  Website selbst angelegten) den Neustart überlebt haben; die Website
+  entfernt daraufhin jeden dort gespiegelten `origin: "tablet"`-Auftrag,
+  der NICHT in dieser Liste steht.
   Zusätzlich für Stempeluhr/Fahrerkarte/Fahrtenbuch (siehe README der
   Website für die dortige Verarbeitung):
   - `timeclock.update` - bei jedem Ein-/Ausstempeln (`Payroll.ClockIn`/

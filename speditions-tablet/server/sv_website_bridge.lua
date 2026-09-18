@@ -202,6 +202,19 @@ function WebsiteBridge.PushFinanceTransaction(data)
     WebsiteBridge.PushEvent('finance.transaction', data)
 end
 
+--- Meldet, dass beim Ressourcenstart alle im Spiel entstandenen Aufträge
+--- zurückgesetzt wurden (siehe server/sv_orders.lua) - survivingTabletOrderIds
+--- sind die st_orders.id der von der Website selbst angelegten Aufträge, die
+--- diesen Reset überlebt haben. Die Website entfernt daraufhin jeden
+--- origin:"tablet"-Auftrag, dessen tabletOrderId NICHT in dieser Liste steht -
+--- ohne das blieben automatisch generierte/im Spiel abgebrochene Aufträge
+--- nach jedem Neustart für immer in der Website-Disposition stehen, obwohl
+--- sie im Tablet längst gelöscht sind.
+function WebsiteBridge.PushOrdersReset(survivingTabletOrderIds)
+    if not websiteConfigured() then return end
+    WebsiteBridge.PushEvent('orders.reset', { survivingTabletOrderIds = survivingTabletOrderIds })
+end
+
 --- Meldet die gültigen Standortnamen (aus st_locations, siehe
 --- server/sv_locations.lua) an die Website - Grundlage für die Auswahl bei
 --- "Neuer Auftrag" auf der Website (siehe Orders.CreateFromWebsite:

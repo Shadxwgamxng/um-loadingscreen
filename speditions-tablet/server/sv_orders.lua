@@ -48,6 +48,13 @@ CreateThread(function()
     end
 
     print(('^3[speditions-tablet]^7 Ingame-Aufträge beim Ressourcenstart zurückgesetzt (%d von der Website erstellte Aufträge bleiben erhalten).'):format(remaining))
+
+    if WebsiteBridge then
+        local survivingRows = MySQL.query.await("SELECT id FROM st_orders WHERE source = 'website'")
+        local survivingIds = {}
+        for _, row in ipairs(survivingRows) do survivingIds[#survivingIds + 1] = row.id end
+        WebsiteBridge.PushOrdersReset(survivingIds)
+    end
 end)
 
 --- Prüft, ob ein Fahrer eine bestimmte Fahrerberechtigung besitzt (z.B.
