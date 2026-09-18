@@ -17,7 +17,7 @@ end
 --- Parst ein 'YYYY-MM-DD HH:MM:SS'-Datetime (oxmysql liefert Strings) in einen
 --- Unix-Timestamp, um ohne zusätzlichen DB-Roundtrip Zeitdifferenzen zu bilden.
 local function parseDateTime(s)
-    if not s or s == '' then return nil end
+    if type(s) ~= 'string' or s == '' then return nil end
     local y, mo, d, h, mi, se = s:match('(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)')
     if not y then return nil end
     return os.time({ year = tonumber(y), month = tonumber(mo), day = tonumber(d), hour = tonumber(h), min = tonumber(mi), sec = tonumber(se) })
