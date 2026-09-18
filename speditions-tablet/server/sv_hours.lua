@@ -23,12 +23,30 @@ local function parseDateTime(s)
     return os.time({ year = tonumber(y), month = tonumber(mo), day = tonumber(d), hour = tonumber(h), min = tonumber(mi), sec = tonumber(se) })
 end
 
+--- warned_continuous/warned_daily sind ein 3-Zustands-Zähler (0=keine
+--- Warnung, 1=Warnung gesendet, 2=Überschreitung gemeldet), aber als
+--- TINYINT(1) gespeichert - oxmysql castet TINYINT(1)-Spalten beim Lesen
+--- automatisch zu einem echten Lua-Boolean statt einer Zahl (siehe
+--- Utils.ToBool). Dadurch griffen die `== 0`/`~= 2`-Vergleiche in Hours.Tick
+--- nach dem ersten Lesen nie wieder, UND das Zurückschreiben eines rohen
+--- Booleans über Hours.Save() führte zu einem korrupten Folge-Query
+--- ("Unknown column 'NaN' in field list"). Normalisiert deshalb.
+local function toWarnState(v)
+    if v == true then return 1 end
+    if v == false or v == nil then return 0 end
+    return tonumber(v) or 0
+end
+
 function Hours.EnsureRow(driverId)
     local row = MySQL.single.await('SELECT * FROM st_driver_hours WHERE driver_id = ?', { driverId })
     if not row then
         MySQL.insert.await('INSERT INTO st_driver_hours (driver_id, day_date) VALUES (?, ?)', { driverId, todayDate() })
         row = MySQL.single.await('SELECT * FROM st_driver_hours WHERE driver_id = ?', { driverId })
     end
+    row.continuous_driving_seconds = tonumber(row.continuous_driving_seconds) or 0
+    row.daily_driving_seconds = tonumber(row.daily_driving_seconds) or 0
+    row.warned_continuous = toWarnState(row.warned_continuous)
+    row.warned_daily = toWarnState(row.warned_daily)
     return row
 end
 

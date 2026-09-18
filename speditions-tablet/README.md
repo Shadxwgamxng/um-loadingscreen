@@ -544,6 +544,12 @@ Alle Stellschrauben befinden sich in `config.lua`:
   `st_trailers`, An-/Umkuppeln an Fahrzeuge.
 - `server/sv_drivers.lua` - Fahrerkarte, Fahrerakte, Statistik, Fahrerkarte einstecken/abziehen (Schicht).
 - `server/sv_hours.lua` - Lenk-/Ruhezeiten-Tracking, Warnungen, Erinnerungen.
+  `warned_continuous`/`warned_daily` sind ein 3-Zustands-Zähler (0/1/2) und
+  werden nach jedem DB-Read explizit normalisiert (`toWarnState`), weil
+  oxmysql `TINYINT(1)`-Spalten sonst zu Lua-Booleans castet - Neuinstallationen
+  legen die Spalten seit v1.10.3 direkt als `TINYINT UNSIGNED` an
+  (`sql/install.sql`), was den Cast von vornherein verhindert; bei
+  bestehenden Datenbanken reicht die Lua-seitige Normalisierung.
 - `server/sv_orders.lua` - Auftragsgenerierung & -lebenszyklus
   (disponiert → angenommen → anfahrt → beladen → entladen → abgeschlossen),
   Gefahrgut-Prüfung, Anhängertyp-Prüfung (`vehicle_missing_trailer`),
