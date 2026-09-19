@@ -549,7 +549,13 @@ Alle Stellschrauben befinden sich in `config.lua`:
   oxmysql `TINYINT(1)`-Spalten sonst zu Lua-Booleans castet - Neuinstallationen
   legen die Spalten seit v1.10.3 direkt als `TINYINT UNSIGNED` an
   (`sql/install.sql`), was den Cast von vornherein verhindert; bei
-  bestehenden Datenbanken reicht die Lua-seitige Normalisierung.
+  bestehenden Datenbanken reicht die Lua-seitige Normalisierung. Zusätzlich
+  (v1.10.5): `Hours.Save()` bindet `resting_since` (DATETIME, nullable) nie
+  als `nil`-Parameter - das hat die UPDATE-Abfrage auf manchen oxmysql-
+  Versionen mit "Unknown column 'NaN' in field list" korrumpiert (vermutlich
+  ein interner Datums-Cast-Bug in oxmysql bei fehlendem Wert). Fehlt der
+  Wert, schreibt die Query stattdessen `resting_since = NULL` direkt als
+  SQL-Literal.
 - `server/sv_orders.lua` - Auftragsgenerierung & -lebenszyklus
   (disponiert → angenommen → anfahrt → beladen → entladen → abgeschlossen),
   Gefahrgut-Prüfung, Anhängertyp-Prüfung (`vehicle_missing_trailer`),

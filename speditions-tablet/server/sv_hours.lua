@@ -75,13 +75,29 @@ function Hours.Normalize(row)
     return row
 end
 
+--- resting_since (DATETIME, nullable) wird bewusst NIE als gebundener `nil`-
+--- Parameter geschickt - das hat auf manchen oxmysql-Versionen die gesamte
+--- Abfrage mit "Unknown column 'NaN' in field list" korrumpiert (oxmysql
+--- versucht vermutlich intern, den fehlenden Wert für die Datums-Spalte in
+--- ein Datum umzuwandeln, was bei "kein Wert" zu NaN wird). Steht kein
+--- resting_since an, wird NULL stattdessen direkt als SQL-Literal
+--- geschrieben - dafür muss oxmysql dort nichts mehr umwandeln.
 function Hours.Save(row)
-    MySQL.update.await(
-        [[UPDATE st_driver_hours SET continuous_driving_seconds = ?, daily_driving_seconds = ?,
-          day_date = ?, resting_since = ?, warned_continuous = ?, warned_daily = ? WHERE driver_id = ?]],
-        { row.continuous_driving_seconds, row.daily_driving_seconds, row.day_date, row.resting_since,
-          row.warned_continuous, row.warned_daily, row.driver_id }
-    )
+    if row.resting_since then
+        MySQL.update.await(
+            [[UPDATE st_driver_hours SET continuous_driving_seconds = ?, daily_driving_seconds = ?,
+              day_date = ?, resting_since = ?, warned_continuous = ?, warned_daily = ? WHERE driver_id = ?]],
+            { row.continuous_driving_seconds, row.daily_driving_seconds, row.day_date, row.resting_since,
+              row.warned_continuous, row.warned_daily, row.driver_id }
+        )
+    else
+        MySQL.update.await(
+            [[UPDATE st_driver_hours SET continuous_driving_seconds = ?, daily_driving_seconds = ?,
+              day_date = ?, resting_since = NULL, warned_continuous = ?, warned_daily = ? WHERE driver_id = ?]],
+            { row.continuous_driving_seconds, row.daily_driving_seconds, row.day_date,
+              row.warned_continuous, row.warned_daily, row.driver_id }
+        )
+    end
 end
 
 --- Öffentlicher Status für die Fahrerkarte / Fahrerakte.
