@@ -46,7 +46,13 @@ end
 
 RPC.Register('console:list', function(src)
     Employees.RequirePermission(src, 'console_view')
-    return { entries = Console.List() }
+    -- Version direkt mitschicken (aus fxmanifest.lua) - damit im Tablet
+    -- selbst nachprüfbar ist, welcher Skript-Stand auf dem Server tatsächlich
+    -- läuft, ohne dass dafür Server-/Konsolenzugriff nötig ist (z.B. um nach
+    -- einem Update-Versuch zu bestätigen, dass der neue Code wirklich aktiv
+    -- ist, statt nur zu vermuten).
+    local version = GetResourceMetadata(GetCurrentResourceName(), 'version', 0)
+    return { entries = Console.List(), version = version }
 end)
 
 RPC.Register('console:clientError', function(src, payload)

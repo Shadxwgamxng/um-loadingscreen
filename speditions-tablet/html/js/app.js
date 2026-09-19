@@ -1353,6 +1353,11 @@ VIEWS['gf-console'] = async (root) => {
             Zeigt NICHT die Konsolen-Ausgabe anderer Ressourcen (z.B. oxmysql selbst) und überlebt keinen
             Ressourcen-Neustart.
         </p>
+        <p class="card-hint" style="margin:0 0 10px;">
+            Aktuell laufende Skript-Version auf diesem Server: <b>${escapeHtml(d.version || 'unbekannt')}</b>
+            (steht in <code>fxmanifest.lua</code> - stimmt das nicht mit der zuletzt zugesendeten Version überein,
+            wurde die Datei entweder nicht ersetzt oder die Ressource nicht neu gestartet).
+        </p>
         <button class="btn" id="console-refresh">Aktualisieren</button>
         <div class="section">${table(['Zeit', 'Typ', 'Kontext', 'Meldung'], rows)}</div>`;
 

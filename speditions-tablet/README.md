@@ -573,7 +573,11 @@ Alle Stellschrauben befinden sich in `config.lua`:
   (`console:clientError`). WICHTIG: kann NICHT die Konsolen-Ausgabe anderer
   Ressourcen (z.B. oxmysql selbst) mitlesen - FiveM isoliert jede Ressource
   in einer eigenen Lua-Umgebung, das ist technisch nicht möglich. Deckt nur
-  ab, was der eigene Code selbst als Fehler erkennt.
+  ab, was der eigene Code selbst als Fehler erkennt. Zeigt seit v1.10.8
+  zusätzlich die aktuell laufende Skript-Version
+  (`GetResourceMetadata(..., 'version', 0)` aus `fxmanifest.lua`) direkt in
+  der NUI an - damit ohne Server-/Konsolenzugriff nachprüfbar ist, ob ein
+  zugesendetes Update tatsächlich aktiv ist, statt es nur zu vermuten.
 - `server/sv_orders.lua` - Auftragsgenerierung & -lebenszyklus
   (disponiert → angenommen → anfahrt → beladen → entladen → abgeschlossen),
   Gefahrgut-Prüfung, Anhängertyp-Prüfung (`vehicle_missing_trailer`),
