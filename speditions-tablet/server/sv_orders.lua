@@ -555,8 +555,12 @@ function Orders.Complete(src, orderId)
 
     local punctual = 1
     if order.deadline then
+        -- (NOW() <= ?) ist bei MySQL vom Typ TINYINT(1) - oxmysql castet das
+        -- genau wie eine echte TINYINT(1)-Spalte zu einem Lua-Boolean statt
+        -- einer Zahl (siehe Utils.ToBool). `tonumber(true)` ist in Lua nil,
+        -- ein direkter `== 1`-Vergleich hätte "pünktlich" also nie erkannt.
         local deadlineRow = MySQL.single.await('SELECT (NOW() <= ?) AS ok FROM dual', { order.deadline })
-        punctual = (deadlineRow and tonumber(deadlineRow.ok) == 1) and 1 or 0
+        punctual = (deadlineRow and Utils.ToBool(deadlineRow.ok)) and 1 or 0
     end
 
     MySQL.update.await(

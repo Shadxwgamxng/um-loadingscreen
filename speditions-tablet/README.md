@@ -583,6 +583,13 @@ Alle Stellschrauben befinden sich in `config.lua`:
   Gefahrgut-Prüfung, Anhängertyp-Prüfung (`vehicle_missing_trailer`),
   Auto-Wegpunkte, Standort-/Frachtart-Zuordnung + GPS-Koordinaten für Lieferschein,
   Abbruch-Anfragen mit Disponenten-Genehmigung/Vertragsstrafe, Auftrags-Reset bei Ressourcenstart.
+  `Orders.Complete()` prüft Pünktlichkeit über `SELECT (NOW() <= ?) AS ok` -
+  dieses Ausdrucksergebnis ist bei MySQL vom Typ TINYINT(1) und wurde daher
+  (v1.10.9) auf `Utils.ToBool` statt einem `tonumber(...) == 1`-Vergleich
+  umgestellt (derselbe oxmysql-Boolean-Cast wie bei `warned_continuous`/
+  `warned_daily` in `sv_hours.lua`) - ohne den Fix wäre `punctual` durch den
+  Cast praktisch immer als 0 (verspätet) gespeichert worden, auch bei
+  pünktlicher Lieferung.
 - `server/sv_employees.lua` - Mitarbeiterverwaltung (Einstellen, Rolle/Status
   ändern, beliebige im Tablet angelegte Rollen zuweisbar).
 - `server/sv_notifications.lua` - Nachrichten Disponent/Fahrer.
