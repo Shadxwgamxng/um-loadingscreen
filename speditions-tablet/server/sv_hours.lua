@@ -75,29 +75,23 @@ function Hours.Normalize(row)
     return row
 end
 
---- resting_since (DATETIME, nullable) wird bewusst NIE als gebundener `nil`-
---- Parameter geschickt - das hat auf manchen oxmysql-Versionen die gesamte
---- Abfrage mit "Unknown column 'NaN' in field list" korrumpiert (oxmysql
---- versucht vermutlich intern, den fehlenden Wert für die Datums-Spalte in
---- ein Datum umzuwandeln, was bei "kein Wert" zu NaN wird). Steht kein
---- resting_since an, wird NULL stattdessen direkt als SQL-Literal
---- geschrieben - dafür muss oxmysql dort nichts mehr umwandeln.
+--- resting_since (DATETIME, nullable) wird NIE als gebundener `?`-Parameter
+--- geschickt - v1.10.5 vermied das nur für den NULL-Fall, aber der Fehler
+--- ("Unknown column 'NaN' in field list") trat auch mit einem echten Wert
+--- weiter auf, sobald resting_since überhaupt gebunden wurde (oxmysql
+--- scheint DATETIME-Parameter generell falsch zu casten, nicht nur bei
+--- fehlendem Wert). resting_since wird deshalb IMMER direkt als SQL-Literal
+--- in die Abfrage geschrieben, nie über `?` gebunden - sicher, weil der Wert
+--- ausschließlich aus unserem eigenen Utils.Now() (os.date-Format) stammt
+--- oder nil ist, nie aus einer Nutzereingabe.
 function Hours.Save(row)
-    if row.resting_since then
-        MySQL.update.await(
-            [[UPDATE st_driver_hours SET continuous_driving_seconds = ?, daily_driving_seconds = ?,
-              day_date = ?, resting_since = ?, warned_continuous = ?, warned_daily = ? WHERE driver_id = ?]],
-            { row.continuous_driving_seconds, row.daily_driving_seconds, row.day_date, row.resting_since,
-              row.warned_continuous, row.warned_daily, row.driver_id }
-        )
-    else
-        MySQL.update.await(
-            [[UPDATE st_driver_hours SET continuous_driving_seconds = ?, daily_driving_seconds = ?,
-              day_date = ?, resting_since = NULL, warned_continuous = ?, warned_daily = ? WHERE driver_id = ?]],
-            { row.continuous_driving_seconds, row.daily_driving_seconds, row.day_date,
-              row.warned_continuous, row.warned_daily, row.driver_id }
-        )
-    end
+    local restingClause = row.resting_since and ("'" .. tostring(row.resting_since) .. "'") or 'NULL'
+    MySQL.update.await(
+        ([[UPDATE st_driver_hours SET continuous_driving_seconds = ?, daily_driving_seconds = ?,
+          day_date = ?, resting_since = %s, warned_continuous = ?, warned_daily = ? WHERE driver_id = ?]]):format(restingClause),
+        { row.continuous_driving_seconds, row.daily_driving_seconds, row.day_date,
+          row.warned_continuous, row.warned_daily, row.driver_id }
+    )
 end
 
 --- Öffentlicher Status für die Fahrerkarte / Fahrerakte.

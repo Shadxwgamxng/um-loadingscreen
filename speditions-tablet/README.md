@@ -553,12 +553,17 @@ Alle Stellschrauben befinden sich in `config.lua`:
   legen die Spalten seit v1.10.3 direkt als `TINYINT UNSIGNED` an
   (`sql/install.sql`), was den Cast von vornherein verhindert; bei
   bestehenden Datenbanken reicht die Lua-seitige Normalisierung. Zusätzlich
-  (v1.10.5): `Hours.Save()` bindet `resting_since` (DATETIME, nullable) nie
-  als `nil`-Parameter - das hat die UPDATE-Abfrage auf manchen oxmysql-
-  Versionen mit "Unknown column 'NaN' in field list" korrumpiert (vermutlich
-  ein interner Datums-Cast-Bug in oxmysql bei fehlendem Wert). Fehlt der
-  Wert, schreibt die Query stattdessen `resting_since = NULL` direkt als
-  SQL-Literal.
+  (v1.10.7, verschärft gegenüber dem ursprünglichen v1.10.5-Versuch):
+  `Hours.Save()` bindet `resting_since` (DATETIME, nullable) NIE mehr als
+  `?`-Parameter, weder mit noch ohne Wert - das hat die UPDATE-Abfrage auf
+  manchen oxmysql-Versionen mit "Unknown column 'NaN' in field list"
+  korrumpiert (oxmysql scheint DATETIME-Parameter über `?` generell falsch
+  zu casten, nicht nur bei fehlendem Wert - v1.10.5 deckte nur den
+  NULL-Fall ab und reichte nicht). `resting_since` wird jetzt in jedem Fall
+  direkt als SQL-Literal in die Query geschrieben (`NULL` oder der
+  quotierte Wert) - sicher, weil er ausschließlich aus `Utils.Now()`
+  (server-generiertes `os.date`-Format) oder `nil` stammt, nie aus einer
+  Nutzereingabe.
 - `server/sv_console.lua` - Reiter "Konsole" (Berechtigung `console_view`,
   standardmäßig nur Geschäftsführung): Ringpuffer im Arbeitsspeicher (max.
   300 Einträge, überlebt keinen Ressourcen-Neustart) mit allen RPC-Fehlern
