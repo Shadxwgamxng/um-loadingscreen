@@ -321,6 +321,7 @@ const NAV_ITEMS = [
     { id: 'gf-payroll', label: 'Gehälter', icon: '💵', perm: 'wages_manage' },
     { id: 'gf-orders', label: 'Aufträge', icon: '📦', perm: 'stats_view' },
     { id: 'gf-log', label: 'Protokoll', icon: '📜', perm: 'activity_log_view' },
+    { id: 'gf-console', label: 'Konsole', icon: '🖥️', perm: 'console_view' },
 ];
 
 function visibleNavItems(permissions) {
@@ -1328,6 +1329,34 @@ VIEWS['gf-log'] = async (root) => {
         <h1 class="view-title">Aktivitätsprotokoll</h1>
         <p class="view-subtitle">Alle protokollierten Aktionen der Geschäftsführung und des Systems.</p>
         <div class="section">${table(['Datum', 'Mitarbeiter', 'Aktion', 'Details'], rows)}</div>`;
+};
+
+const CONSOLE_KIND_META = {
+    rpc_error: { label: 'RPC-Fehler', dot: 'red' },
+    db_error: { label: 'Datenbank-Fehler', dot: 'red' },
+    client_error: { label: 'Client-Fehler', dot: 'yellow' },
+};
+
+VIEWS['gf-console'] = async (root) => {
+    const d = await call('console:list');
+    const rows = [...d.entries].reverse().map((e) => `<tr>
+        <td>${formatDate(e.at, true)}</td>
+        <td>${badge(CONSOLE_KIND_META[e.kind] || { label: e.kind, dot: 'gray' })}</td>
+        <td>${escapeHtml(e.context || '-')}</td>
+        <td>${escapeHtml(e.message)}</td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Konsole</h1>
+        <p class="view-subtitle">
+            Fehler, die im Tablet selbst auftreten (RPC-/Datenbankfehler, gemeldete Client-Fehler) - neueste zuerst.
+            Zeigt NICHT die Konsolen-Ausgabe anderer Ressourcen (z.B. oxmysql selbst) und überlebt keinen
+            Ressourcen-Neustart.
+        </p>
+        <button class="btn" id="console-refresh">Aktualisieren</button>
+        <div class="section">${table(['Zeit', 'Typ', 'Kontext', 'Meldung'], rows)}</div>`;
+
+    document.getElementById('console-refresh').addEventListener('click', () => showView('gf-console'));
 };
 
 // =========================================================

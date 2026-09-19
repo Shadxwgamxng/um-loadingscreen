@@ -50,6 +50,10 @@ RegisterNetEvent('speditions-tablet:server:rpc', function(action, payload, reqId
         -- seitigen Retry-Loop von selbst löst, sobald angemeldet wird.
         if shortCode ~= 'not_logged_in' then
             print(('^1[speditions-tablet]^7 RPC-Fehler in Action "%s" (source %s): %s'):format(action, src, errMsg))
+            -- Console kommt aus server/sv_console.lua (Reiter "Konsole",
+            -- Geschäftsführung) - die if-Prüfung ist nur eine Vorsichtsmaßnahme,
+            -- falls dieser Handler je vor dessen Laden feuern sollte.
+            if Console then Console.Log('rpc_error', errMsg, action) end
         end
         TriggerClientEvent('speditions-tablet:client:rpcResponse', src, reqId, { ok = false, error = shortCode })
     end

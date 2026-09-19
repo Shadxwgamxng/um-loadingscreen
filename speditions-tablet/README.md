@@ -162,6 +162,7 @@ serverseitig durchgesetzt in `server/sv_roles.lua`):
 | `wages_manage` | Gehälter/Stundenlöhne verwalten & auszahlen |
 | `activity_log_view` | Aktivitätsprotokoll einsehen |
 | `stats_view` | Übersicht/Statistik-Dashboard einsehen |
+| `console_view` | Fehler-Konsole einsehen (Reiter "Konsole": RPC-/Datenbankfehler, siehe `server/sv_console.lua`) |
 
 Die drei mitgelieferten Basisrollen (LKW-Fahrer, Disponent, Geschäftsführung,
 Rollenschlüssel fix - u.a. für die automatische Fahrerakten-Anlage relevant)
@@ -177,9 +178,11 @@ die Geschäftsführung kann auch ihre Berechtigungen im Tablet anpassen):
 
 **Bestandsinstallationen:** `Config.DefaultRolePermissions` wirkt nur bei der
 allerersten Anlage einer Rolle - existiert die Rolle "Geschäftsführung" in
-deiner Datenbank schon, bekommt sie `driver_actions` NICHT automatisch
-nachgetragen. Öffne dafür einmalig den Reiter "Rollen", wähle
-Geschäftsführung und hake "Fahrerfunktionen" mit an.
+deiner Datenbank schon, bekommt sie weder `driver_actions` noch (seit
+v1.10.6) `console_view` automatisch nachgetragen. Öffne dafür einmalig den
+Reiter "Rollen", wähle Geschäftsführung und hake die fehlende(n)
+Berechtigung(en) mit an - sonst taucht z.B. der neue Reiter "Konsole" trotz
+aktualisiertem Code nicht auf.
 
 Welche Reiter im Tablet sichtbar sind, richtet sich ausschließlich nach den
 Berechtigungen der eigenen Rolle (`html/js/app.js`, `NAV_ITEMS`) - eine
@@ -556,6 +559,16 @@ Alle Stellschrauben befinden sich in `config.lua`:
   ein interner Datums-Cast-Bug in oxmysql bei fehlendem Wert). Fehlt der
   Wert, schreibt die Query stattdessen `resting_since = NULL` direkt als
   SQL-Literal.
+- `server/sv_console.lua` - Reiter "Konsole" (Berechtigung `console_view`,
+  standardmäßig nur Geschäftsführung): Ringpuffer im Arbeitsspeicher (max.
+  300 Einträge, überlebt keinen Ressourcen-Neustart) mit allen RPC-Fehlern
+  (außer dem erwarteten `not_logged_in`, siehe `server/sv_rpc.lua`),
+  tatsächlich als Lua-Fehler geworfenen DB-Fehlern (`MySQL.*.await` wird
+  dafür zentral gewrappt) und client-seitig gemeldeten Fehlern
+  (`console:clientError`). WICHTIG: kann NICHT die Konsolen-Ausgabe anderer
+  Ressourcen (z.B. oxmysql selbst) mitlesen - FiveM isoliert jede Ressource
+  in einer eigenen Lua-Umgebung, das ist technisch nicht möglich. Deckt nur
+  ab, was der eigene Code selbst als Fehler erkennt.
 - `server/sv_orders.lua` - Auftragsgenerierung & -lebenszyklus
   (disponiert → angenommen → anfahrt → beladen → entladen → abgeschlossen),
   Gefahrgut-Prüfung, Anhängertyp-Prüfung (`vehicle_missing_trailer`),

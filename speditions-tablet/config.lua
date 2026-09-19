@@ -106,6 +106,7 @@ Config.Permissions = {
     { key = 'wages_manage',      label = 'Gehälter/Stundenlöhne verwalten & auszahlen', group = 'Finanzen' },
     { key = 'activity_log_view', label = 'Aktivitätsprotokoll einsehen', group = 'Sonstiges' },
     { key = 'stats_view',        label = 'Übersicht/Statistik-Dashboard einsehen', group = 'Sonstiges' },
+    { key = 'console_view',      label = 'Fehler-Konsole einsehen (RPC-/Datenbankfehler)', group = 'Sonstiges' },
 }
 
 -- Erstbefüllung der drei mitgelieferten Basisrollen (nur beim allerersten
@@ -118,7 +119,7 @@ Config.DefaultRolePermissions = {
     -- Nachrichten empfangen) - zusätzlich zu den GF-eigenen Funktionen.
     geschaeftsfuehrung = {
         'driver_actions', 'dispatch', 'fleet_manage', 'locations_manage', 'employees_manage', 'roles_manage',
-        'finance_view', 'finance_payout', 'wages_manage', 'activity_log_view', 'stats_view',
+        'finance_view', 'finance_payout', 'wages_manage', 'activity_log_view', 'stats_view', 'console_view',
     },
 }
 
