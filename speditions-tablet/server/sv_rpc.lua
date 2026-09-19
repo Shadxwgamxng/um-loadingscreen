@@ -40,8 +40,17 @@ RegisterNetEvent('speditions-tablet:server:rpc', function(action, payload, reqId
         local errMsg = tostring(resultOrErr)
         -- Nur den letzten Teil der Fehlermeldung (nach dem letzten ':') an den Client geben,
         -- interne Details/Stacktraces bleiben serverseitig in der Konsole.
-        print(('^1[speditions-tablet]^7 RPC-Fehler in Action "%s" (source %s): %s'):format(action, src, errMsg))
         local shortCode = errMsg:match(':%d+:%s*(.+)$') or errMsg
+        -- not_logged_in ist ein völlig normaler, erwarteter Zustand - der
+        -- Client ruft einige RPCs automatisch beim Verbinden/Ressourcenstart
+        -- auf (z.B. refreshLocations() in client/cl_orders.lua), bevor sich
+        -- der Spieler im Tablet angemeldet hat. Bei jedem Ressourcenstart
+        -- produzierte das für JEDEN gerade online Spieler eine rote
+        -- Fehlermeldung in der Konsole, obwohl sich das über den client-
+        -- seitigen Retry-Loop von selbst löst, sobald angemeldet wird.
+        if shortCode ~= 'not_logged_in' then
+            print(('^1[speditions-tablet]^7 RPC-Fehler in Action "%s" (source %s): %s'):format(action, src, errMsg))
+        end
         TriggerClientEvent('speditions-tablet:client:rpcResponse', src, reqId, { ok = false, error = shortCode })
     end
 end)
