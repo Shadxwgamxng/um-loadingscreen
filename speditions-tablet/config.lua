@@ -58,7 +58,7 @@ Config.NotificationSound = {
 -- Geschäftsführung im Tablet an, oder ein Server-Admin über die Konsole:
 --   tablet_grant [name] [passwort] [fahrer|disponent|geschaeftsfuehrung] [Anzeigename...]
 Config.InitialAccounts = {
-    { username = 'admin', password = 'ChangeMe123!', role = 'geschaeftsfuehrung', name = 'Administrator' },
+    { username = 'admin', password = 'LECKARSCH123!', role = 'geschaeftsfuehrung', name = 'Administrator' },
 }
 
 -- Ace-Permission, die zusätzlich zur Server-Konsole berechtigt, per Command
@@ -299,13 +299,13 @@ Config.SeedLocations = {
 -- Wertspanne ($ pro km), aus der zufällig der Auftragswert berechnet wird
 -- (Distanz wird automatisch aus den echten Koordinaten der Be-/Entladepunkte
 -- berechnet, keine manuelle Streckenpflege mehr nötig).
-Config.OrderValuePerKm = { min = 220, max = 380 }
+Config.OrderValuePerKm = { min = 125, max = 200 }
 
 -- Vertragsstrafe (Unternehmensguthaben), wenn ein Fahrer einen Auftrag OHNE
 -- Freigabe eines Disponenten selbst abbricht (nur möglich, wenn gerade kein
 -- Disponent/Geschäftsführung online ist - sonst muss der Abbruch erst
 -- genehmigt werden, siehe Orders.RequestCancelByDriver).
-Config.OrderCancelPenalty = 500
+Config.OrderCancelPenalty = 250
 
 -- Wie lange das Be-/Entladen per Tasteninteraktion (E) am Markierungskreis
 -- dauert (Sekunden).
@@ -318,10 +318,10 @@ Config.LocationMarkerRadius = 60.0
 Config.LocationInteractRadius = 2.5
 
 -- Durchschnittsgeschwindigkeit (km/h) zur Berechnung der Lieferfrist (Pünktlichkeit)
-Config.AverageSpeedKmh = 65
+Config.AverageSpeedKmh = 50
 
 -- Zusätzlicher Puffer in Minuten auf die berechnete Fahrzeit
-Config.DeadlineBufferMinutes = 8
+Config.DeadlineBufferMinutes = 15
 
 -- Automatische Auftragsgenerierung - der Takt hängt von der Anzahl aktuell
 -- online UND am Tablet angemeldeten Mitarbeiter mit Fahrerberechtigung
@@ -352,13 +352,13 @@ Config.DrivingRules = {
 
     -- Wie lange die Pause mindestens dauern muss, um die ununterbrochene
     -- Lenkzeit zurückzusetzen.
-    requiredBreakMinutes = 45,
+    requiredBreakMinutes = 20,
 
     -- Maximale Lenkzeit pro Tag.
-    maxDailyDrivingMinutes = 540, -- 9 Stunden
+    maxDailyDrivingMinutes = 660, -- 9 Stunden
 
     -- Wie viele Minuten vor Erreichen eines Limits eine Warnung erfolgen soll.
-    warnBeforeMinutes = 15,
+    warnBeforeMinutes = 30,
 
     -- Intervall (ms), in dem der Client dem Server aktive Fahrzeit meldet.
     heartbeatIntervalMs = 30 * 1000,
