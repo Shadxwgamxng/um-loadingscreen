@@ -47,6 +47,16 @@ function Hours.EnsureRow(driverId)
     row.daily_driving_seconds = tonumber(row.daily_driving_seconds) or 0
     row.warned_continuous = toWarnState(row.warned_continuous)
     row.warned_daily = toWarnState(row.warned_daily)
+    -- Tatsächliche Ursache des NaN-Bugs gefunden: oxmysql liefert für eine
+    -- leere (NULL) resting_since-Spalte auf diesem Server nicht Lua-`nil`
+    -- zurück, sondern eine echte Lua-Zahl mit dem Wert NaN (0/0) - JEDE Zahl
+    -- (auch NaN) ist in Lua "truthy", also griff `if row.resting_since then`
+    -- trotzdem, tostring(NaN) ergibt buchstäblich "nan", das dann als
+    -- ungültiger SQL-Datums-Literal endete. Alles außer einem echten,
+    -- nicht-leeren String wird hier hart auf nil normalisiert.
+    if type(row.resting_since) ~= 'string' or row.resting_since == '' then
+        row.resting_since = nil
+    end
     return row
 end
 

@@ -563,7 +563,16 @@ Alle Stellschrauben befinden sich in `config.lua`:
   direkt als SQL-Literal in die Query geschrieben (`NULL` oder der
   quotierte Wert) - sicher, weil er ausschließlich aus `Utils.Now()`
   (server-generiertes `os.date`-Format) oder `nil` stammt, nie aus einer
-  Nutzereingabe.
+  Nutzereingabe. Tatsächliche Ursache gefunden (v1.10.10): oxmysql lieferte
+  für eine leere `resting_since`-Spalte auf dem Zielserver nicht Lua-`nil`
+  zurück, sondern eine echte Lua-Zahl mit dem Wert NaN (0/0) - jede Zahl
+  (auch NaN) ist in Lua truthy, also griff `if row.resting_since then`
+  trotzdem, und `tostring(NaN)` ergab buchstäblich den String `"nan"`,
+  sichtbar am MySQL-Fehler "Incorrect datetime value: 'nan'" (v1.10.7-9
+  hatten das Symptom nur verschoben, nicht behoben). `Hours.EnsureRow()`
+  normalisiert `resting_since` deshalb jetzt zusätzlich hart auf
+  "echter, nicht-leerer String, sonst nil" - alles andere (Zahlen
+  inklusive NaN, `false`, leere Strings) wird zu `nil`.
 - `server/sv_console.lua` - Reiter "Konsole" (Berechtigung `console_view`,
   standardmäßig nur Geschäftsführung): Ringpuffer im Arbeitsspeicher (max.
   300 Einträge, überlebt keinen Ressourcen-Neustart) mit allen RPC-Fehlern
