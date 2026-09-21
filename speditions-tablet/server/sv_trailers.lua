@@ -20,6 +20,18 @@ local function isValidTrailerType(typeKey)
     return false
 end
 
+--- Lesbares Label zu einem Anhängertyp-Schlüssel (z.B. 'tankanhaenger' ->
+--- 'Tankanhänger') - für Fehlermeldungen, die dem Fahrer/Disponenten sagen
+--- sollen, WELCHER Anhänger konkret gebraucht wird, statt nur den rohen
+--- Schlüssel/Fehlercode zu zeigen. Fällt auf den Schlüssel selbst zurück,
+--- falls er (z.B. durch eine inkonsistente Config) nicht im Katalog steht.
+function Trailers.LabelFor(typeKey)
+    for _, t in ipairs(Config.TrailerTypes) do
+        if t.key == typeKey then return t.label end
+    end
+    return typeKey
+end
+
 function Trailers.GetById(trailerId)
     return MySQL.single.await('SELECT * FROM st_trailers WHERE id = ? LIMIT 1', { trailerId })
 end

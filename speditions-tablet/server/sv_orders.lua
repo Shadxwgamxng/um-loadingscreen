@@ -325,7 +325,9 @@ function Orders.Dispatch(src, orderId, driverId, vehicleId)
         if not vehicle then error('vehicle_not_found') end
         if Utils.ToBool(vehicle.archived) then error('vehicle_archived') end
         if Config.VehicleBlockedForDispatch[vehicle.status] then error('vehicle_unavailable') end
-        if not vehicleHasTrailer(finalVehicleId, order.requires_trailer_type) then error('vehicle_missing_trailer') end
+        if not vehicleHasTrailer(finalVehicleId, order.requires_trailer_type) then
+            error('vehicle_missing_trailer:' .. Trailers.LabelFor(order.requires_trailer_type))
+        end
     end
 
     MySQL.update.await(
@@ -360,7 +362,9 @@ function Orders.DispatchFromWebsite(orderId, vehiclePlate)
     if not vehicle then error('vehicle_not_found') end
     if Utils.ToBool(vehicle.archived) then error('vehicle_archived') end
     if Config.VehicleBlockedForDispatch[vehicle.status] then error('vehicle_unavailable') end
-    if not vehicleHasTrailer(vehicle.id, order.requires_trailer_type) then error('vehicle_missing_trailer') end
+    if not vehicleHasTrailer(vehicle.id, order.requires_trailer_type) then
+        error('vehicle_missing_trailer:' .. Trailers.LabelFor(order.requires_trailer_type))
+    end
 
     local driver = MySQL.single.await(
         'SELECT d.*, e.name, e.status AS emp_status FROM st_drivers d JOIN st_employees e ON e.id = d.employee_id WHERE d.assigned_vehicle_id = ?',
@@ -415,7 +419,9 @@ function Orders.SelfAssign(src, orderId)
         if not vehicle then error('vehicle_not_found') end
         if Utils.ToBool(vehicle.archived) then error('vehicle_archived') end
         if Config.VehicleBlockedForDispatch[vehicle.status] then error('vehicle_unavailable') end
-        if not vehicleHasTrailer(vehicleId, order.requires_trailer_type) then error('vehicle_missing_trailer') end
+        if not vehicleHasTrailer(vehicleId, order.requires_trailer_type) then
+            error('vehicle_missing_trailer:' .. Trailers.LabelFor(order.requires_trailer_type))
+        end
     end
 
     MySQL.update.await(
@@ -446,7 +452,7 @@ function Orders.Reassign(src, orderId, newDriverId)
         error('driver_missing_permission')
     end
     if driver.assigned_vehicle_id and not vehicleHasTrailer(driver.assigned_vehicle_id, order.requires_trailer_type) then
-        error('vehicle_missing_trailer')
+        error('vehicle_missing_trailer:' .. Trailers.LabelFor(order.requires_trailer_type))
     end
 
     MySQL.update.await(

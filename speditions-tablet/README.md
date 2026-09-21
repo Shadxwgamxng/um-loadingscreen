@@ -315,7 +315,12 @@ Kipper, Flüssigfracht wie Öl/Kraftstoff → Tankanhänger, alles andere →
 normaler Curtainsider). Disponieren/Selbstzuweisen/Neuzuweisen wird
 **serverseitig verweigert**, wenn am zugewiesenen Fahrzeug kein Anhänger vom
 geforderten Typ hängt (`vehicle_missing_trailer`) - exakt wie die
-bestehende Gefahrgut-Berechtigungsprüfung bei Fahrern.
+bestehende Gefahrgut-Berechtigungsprüfung bei Fahrern. Seit v1.10.11 hängt
+der Fehlercode das benötigte Anhänger-Label direkt an
+(`vehicle_missing_trailer:<Label>`, z.B. `vehicle_missing_trailer:Tankanhänger`)
+- sowohl `html/js/app.js` als auch die Website (`translateOrderCommandError`
+in `spedition-webseite/src/lib/use-tablet-command.ts`) zeigen daraus eine
+konkrete Meldung an, statt nur des rohen Fehlercodes.
 
 - **Bodenmarker statt NPC**: An einem Standort, der gerade zu einem aktiven
   Auftrag gehört (Beladepunkt eines "in Anfahrt"-Auftrags, oder Zielort
@@ -604,6 +609,11 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `server/sv_notifications.lua` - Nachrichten Disponent/Fahrer.
 - `server/sv_website_bridge.lua` - Optionaler Website-Sync (siehe eigener
   Abschnitt unten), komplett inaktiv solange `Config.Website.enabled = false`.
+  Erfolgreiche Syncs werden seit v1.10.11 nur noch mit `Config.Debug = true`
+  geloggt (`Utils.DebugPrint`) statt immer - vorher hat jedes einzelne
+  Sync-Ereignis (bei jeder Statusänderung, alle 60s Lenkzeit-Meldungen, ...)
+  einen grünen Log-Eintrag erzeugt und die Konsole im Dauerbetrieb geflutet.
+  Fehlschläge werden weiterhin immer gedruckt.
 - `client/cl_main.lua` - NUI-Steuerung, RPC-Relay (`ServerCall` auch für
   andere Client-Skripte nutzbar) sowie native In-Game-Hinweise/Wegpunkte sind hier verdrahtet.
 - `client/cl_hours.lua` - Erkennt per Kennzeichen-Abgleich, ob der Fahrer

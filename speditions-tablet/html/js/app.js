@@ -99,6 +99,13 @@ const ERROR_MESSAGES = {
 };
 
 function translateError(code) {
+    // Server hängt bei vehicle_missing_trailer das benötigte Anhänger-Label
+    // per ":" an den Fehlercode an (siehe server/sv_orders.lua), damit hier
+    // steht, WELCHER Anhänger gebraucht wird, statt nur des rohen Codes.
+    if (typeof code === 'string' && code.startsWith('vehicle_missing_trailer:')) {
+        const needed = code.slice('vehicle_missing_trailer:'.length);
+        return `Am Fahrzeug hängt kein passender Anhänger - benötigt wird: ${needed}.`;
+    }
     return ERROR_MESSAGES[code] || code || 'Unbekannter Fehler';
 }
 

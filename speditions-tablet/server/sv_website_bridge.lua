@@ -55,15 +55,17 @@ end
 
 --- Meldet ein Ereignis an die Website (siehe README "Website-Sync" für die
 --- Event-Typen). Aufrufer prüfen selbst NICHT, ob Website-Sync aktiv ist -
---- das übernimmt apiRequest (websiteConfigured()). Loggt (anders als die
---- reine Befehls-Abfrage unten) auch den ERFOLGSFALL mit dem Event-Typ -
---- ohne das war die Serverkonsole bei jeder Aktion (Einstempeln, Auftrag
---- abgeschlossen, ...) komplett still, selbst wenn der Sync geklappt hat,
---- was das gezielte Testen unnötig erschwert hat.
+--- das übernimmt apiRequest (websiteConfigured()). Der Erfolgsfall wird nur
+--- noch mit Config.Debug = true geloggt (Utils.DebugPrint) - bei jedem
+--- erfolgreichen Sync unbedingt zu drucken war beim ursprünglichen Aufbau
+--- hilfreich (Serverkonsole war sonst komplett still), im Dauerbetrieb aber
+--- reiner Lärm, weil Sync-Ereignisse ständig feuern (jede Statusänderung,
+--- Lenkzeit-Meldungen alle 60s, ...). Fehlschläge (siehe apiRequest oben)
+--- werden weiterhin unbedingt gedruckt.
 function WebsiteBridge.PushEvent(eventType, data)
     apiRequest('POST', '/api/tablet/webhook', { type = eventType, data = data }, function(ok)
         if ok then
-            print(('^2[speditions-tablet]^7 Website-Sync: Ereignis "%s" erfolgreich übertragen.'):format(eventType))
+            Utils.DebugPrint(('Website-Sync: Ereignis "%s" erfolgreich übertragen.'):format(eventType))
         end
     end)
 end
