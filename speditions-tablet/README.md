@@ -609,11 +609,13 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `server/sv_notifications.lua` - Nachrichten Disponent/Fahrer.
 - `server/sv_website_bridge.lua` - Optionaler Website-Sync (siehe eigener
   Abschnitt unten), komplett inaktiv solange `Config.Website.enabled = false`.
-  Erfolgreiche Syncs werden seit v1.10.11 nur noch mit `Config.Debug = true`
-  geloggt (`Utils.DebugPrint`) statt immer - vorher hat jedes einzelne
-  Sync-Ereignis (bei jeder Statusänderung, alle 60s Lenkzeit-Meldungen, ...)
-  einen grünen Log-Eintrag erzeugt und die Konsole im Dauerbetrieb geflutet.
-  Fehlschläge werden weiterhin immer gedruckt.
+  Sowohl Erfolg als auch Fehlschlag werden seit v1.10.12 nur noch mit
+  `Config.Debug = true` geloggt (`Utils.DebugPrint`), nicht mehr unbedingt -
+  vorher hat jedes einzelne Sync-Ereignis (bei jeder Statusänderung, alle 60s
+  Lenkzeit-Meldungen, ...) sowie jeder einzelne Fehlschlag (Website kurz nicht
+  erreichbar, Timeout) einen Log-Eintrag erzeugt und die Konsole im
+  Dauerbetrieb geflutet. Website-Sync ist ohnehin "best effort" (ein Ausfall
+  blockiert nie das Spiel) - zum Debuggen `Config.Debug = true` setzen.
 - `client/cl_main.lua` - NUI-Steuerung, RPC-Relay (`ServerCall` auch für
   andere Client-Skripte nutzbar) sowie native In-Game-Hinweise/Wegpunkte sind hier verdrahtet.
 - `client/cl_hours.lua` - Erkennt per Kennzeichen-Abgleich, ob der Fahrer

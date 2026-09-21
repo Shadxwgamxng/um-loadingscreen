@@ -45,7 +45,13 @@ local function apiRequest(method, path, bodyTable, cb)
 
         if not ok then
             local reason = (decoded and decoded.error) or (responseText ~= '' and responseText) or 'keine Antwort (Server nicht erreichbar/Timeout?)'
-            print(('^1[speditions-tablet]^7 Website-Sync: %s %s fehlgeschlagen (HTTP %s): %s'):format(method, path, tostring(statusCode), tostring(reason)))
+            -- Auch der Fehlschlag-Fall läuft nur noch mit Config.Debug = true
+            -- über die Server-Konsole - Website-Sync ist von Natur aus
+            -- "best effort" (ein Ausfall darf das Spiel nie blockieren, siehe
+            -- Kommentar oben an apiRequest), einzelne Fehlschläge (Website
+            -- kurz nicht erreichbar, Timeout) sind deshalb kein Grund für
+            -- unbedingten Lärm in der Konsole.
+            Utils.DebugPrint(('Website-Sync: %s %s fehlgeschlagen (HTTP %s): %s'):format(method, path, tostring(statusCode), tostring(reason)))
         end
 
         if not cb then return end
