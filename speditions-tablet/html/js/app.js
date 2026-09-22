@@ -1342,6 +1342,7 @@ const CONSOLE_KIND_META = {
     rpc_error: { label: 'RPC-Fehler', dot: 'red' },
     db_error: { label: 'Datenbank-Fehler', dot: 'red' },
     client_error: { label: 'Client-Fehler', dot: 'yellow' },
+    info: { label: 'Info', dot: 'blue' },
 };
 
 VIEWS['gf-console'] = async (root) => {
@@ -1356,7 +1357,8 @@ VIEWS['gf-console'] = async (root) => {
     root.innerHTML = `
         <h1 class="view-title">Konsole</h1>
         <p class="view-subtitle">
-            Fehler, die im Tablet selbst auftreten (RPC-/Datenbankfehler, gemeldete Client-Fehler) - neueste zuerst.
+            Fehler, die im Tablet selbst auftreten (RPC-/Datenbankfehler, gemeldete Client-Fehler), sowie
+            Info-Meldungen wie die Zusammenfassung des Auftrags-Resets bei jedem Ressourcenstart - neueste zuerst.
             Zeigt NICHT die Konsolen-Ausgabe anderer Ressourcen (z.B. oxmysql selbst) und überlebt keinen
             Ressourcen-Neustart.
         </p>

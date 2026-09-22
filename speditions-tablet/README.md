@@ -579,6 +579,11 @@ Alle Stellschrauben befinden sich in `config.lua`:
   "echter, nicht-leerer String, sonst nil" - alles andere (Zahlen
   inklusive NaN, `false`, leere Strings) wird zu `nil`.
 - `server/sv_console.lua` - Reiter "Konsole" (Berechtigung `console_view`,
+  seit v1.10.13 zeigt sie zusätzlich (`kind = 'info'`) die Zusammenfassung
+  des Auftrags-Resets bei jedem Ressourcenstart ("X Aufträge bleiben
+  erhalten...", siehe `server/sv_orders.lua`) - vorher nur in der
+  Server-Konsole sichtbar, damit ohne Server-Zugriff nachprüfbar ist, ob
+  abgeschlossene Aufträge tatsächlich als "erhalten" erkannt wurden.
   standardmäßig nur Geschäftsführung): Ringpuffer im Arbeitsspeicher (max.
   300 Einträge, überlebt keinen Ressourcen-Neustart) mit allen RPC-Fehlern
   (außer dem erwarteten `not_logged_in`, siehe `server/sv_rpc.lua`),

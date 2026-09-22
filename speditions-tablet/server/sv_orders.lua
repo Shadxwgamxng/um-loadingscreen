@@ -52,7 +52,13 @@ CreateThread(function()
         MySQL.query.await('ALTER TABLE st_order_stops AUTO_INCREMENT = 1')
     end
 
-    print(('^3[speditions-tablet]^7 Ingame-Aufträge beim Ressourcenstart zurückgesetzt (%d Aufträge bleiben erhalten - von der Website erstellte und bereits abgeschlossene).'):format(remaining))
+    local resetSummary = ('Ingame-Aufträge beim Ressourcenstart zurückgesetzt (%d Aufträge bleiben erhalten - von der Website erstellte und bereits abgeschlossene).'):format(remaining)
+    print(('^3[speditions-tablet]^7 %s'):format(resetSummary))
+    -- Bisher nur in der Server-Konsole sichtbar - ohne Server-/Konsolenzugriff
+    -- ließ sich nie nachprüfen, ob/wie viele Aufträge der Reset tatsächlich
+    -- als "erhalten" erkannt hat. Landet deshalb zusätzlich im Reiter
+    -- "Konsole" (server/sv_console.lua).
+    if Console then Console.Log('info', resetSummary, 'Auftrags-Reset') end
 
     if WebsiteBridge then
         local survivingRows = MySQL.query.await("SELECT id FROM st_orders WHERE source = 'website' OR status = 'abgeschlossen'")
