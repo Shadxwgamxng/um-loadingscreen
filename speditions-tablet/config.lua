@@ -99,6 +99,7 @@ Config.Permissions = {
     { key = 'dispatch',          label = 'Disposition (Fahrerübersicht, Auftragspool disponieren, Fahrer kontaktieren)', group = 'Disposition' },
     { key = 'fleet_manage',      label = 'Fuhrparkverwaltung (Fahrzeuge anlegen/bearbeiten/löschen/zuweisen)', group = 'Fuhrpark' },
     { key = 'locations_manage',  label = 'Orte verwalten (Be-/Entladepunkte anlegen/bearbeiten/löschen)', group = 'Fuhrpark' },
+    { key = 'cargo_types_manage', label = 'Frachtarten verwalten (anlegen/bearbeiten/löschen)', group = 'Fuhrpark' },
     { key = 'employees_manage',  label = 'Mitarbeiterverwaltung (einstellen, Rolle/Status ändern, Passwörter zurücksetzen)', group = 'Personal' },
     { key = 'roles_manage',      label = 'Rollen & Berechtigungen verwalten', group = 'Personal' },
     { key = 'finance_view',      label = 'Finanzen einsehen (Umsatz, Transaktionen, Aus-/Einzahlungshistorie)', group = 'Finanzen' },
@@ -118,7 +119,7 @@ Config.DefaultRolePermissions = {
     -- LKW-Fahrer auch kann (Fahrerkarte, Aufträge fahren, eigene Statistik,
     -- Nachrichten empfangen) - zusätzlich zu den GF-eigenen Funktionen.
     geschaeftsfuehrung = {
-        'driver_actions', 'dispatch', 'fleet_manage', 'locations_manage', 'employees_manage', 'roles_manage',
+        'driver_actions', 'dispatch', 'fleet_manage', 'locations_manage', 'cargo_types_manage', 'employees_manage', 'roles_manage',
         'finance_view', 'finance_payout', 'wages_manage', 'activity_log_view', 'stats_view', 'console_view',
     },
 }
@@ -162,48 +163,32 @@ Config.VehicleBlockedForDispatch = {
 -- =========================================================
 -- AUFTRÄGE / STRECKEN
 -- =========================================================
-Config.CargoTypes = {
-    'Baustoffe', 'Lebensmittel', 'Elektronik', 'Möbel',
-    'Fahrzeugteile', 'Chemikalien', 'Holz', 'Maschinenteile',
-    'Farben', 'Öle', 'Kraftstoff', 'Schmuck', 'Kleidung', 'Schrott',
-}
-
--- Frachtarten, die die Fahrerberechtigung "gefahrgut" voraussetzen. Ein
--- Auftrag mit einer dieser Frachtarten kann serverseitig NICHT an einen
--- Fahrer ohne diese Berechtigung disponiert/neu zugewiesen werden.
-Config.HazardousCargo = {
-    'Chemikalien',
-}
-
--- Menge/Einheit je Frachtart für den Lieferschein (zufällig innerhalb der
--- Spanne je generiertem Auftrag).
-Config.CargoUnits = {
-    Holz            = { unit = 'Festmeter', min = 5,   max = 40   },
-    Lebensmittel    = { unit = 'kg',        min = 200, max = 2000 },
-    Farben          = { unit = 'Liter',     min = 100, max = 1500 },
-    Fahrzeugteile   = { unit = 'Stück',     min = 5,   max = 80   },
-    Chemikalien     = { unit = 'Liter',     min = 100, max = 1000 },
-    Baustoffe       = { unit = 'Tonnen',    min = 2,   max = 25   },
-    Maschinenteile  = { unit = 'Stück',     min = 1,   max = 20   },
-    ['Öle']         = { unit = 'Liter',     min = 100, max = 2000 },
-    ['Möbel']       = { unit = 'Stück',     min = 1,   max = 30   },
-    Elektronik      = { unit = 'Stück',     min = 1,   max = 50   },
-    Kraftstoff      = { unit = 'Liter',     min = 2000, max = 15000 },
-    Schmuck         = { unit = 'Stück',     min = 5,   max = 50   },
-    Kleidung        = { unit = 'Stück',     min = 100, max = 800  },
-    Schrott         = { unit = 'kg',        min = 500, max = 5000 },
-}
-
--- Ordnet jeder Frachtart zu, welcher Anhängertyp für den Transport benötigt
--- wird (siehe Reiter "Anhänger", server/sv_trailers.lua) - Frachtarten ohne
--- Eintrag hier benötigen den Standard-Anhänger 'curtainsider'.
-Config.CargoTrailerType = {
-    Chemikalien = 'curtainsider_gefahrgut',
-    Lebensmittel = 'kuehlanhaenger',
-    ['Öle'] = 'tankanhaenger',
-    Kraftstoff = 'tankanhaenger',
-    Baustoffe = 'kipper',
-    Schrott = 'kipper',
+-- Frachtarten werden NICHT mehr live aus der Config gelesen, sondern in der
+-- Datenbank (st_cargo_types) gepflegt - die Geschäftsführung kann sie im
+-- Tablet-Reiter "Frachtarten" selbst anlegen/bearbeiten/löschen (Name,
+-- Einheit + Mengenspanne fürs Lieferschein, ob Gefahrgut-Berechtigung nötig
+-- ist, welcher Anhängertyp gebraucht wird), siehe server/sv_cargo_types.lua.
+-- `Config.SeedCargoTypes` wirkt genau wie `Config.SeedLocations` nur EINMALIG
+-- als Erstbefüllung beim allerersten Ressourcenstart (per Namen,
+-- `ON DUPLICATE KEY` - bereits vorhandene Frachtarten werden nicht
+-- überschrieben) - danach ist ausschließlich die Datenbank die Quelle der
+-- Wahrheit, Änderungen hier haben dann keine Wirkung mehr. `trailerType` ohne
+-- Eintrag/leer fällt auf den Standard-Anhänger 'curtainsider' zurück.
+Config.SeedCargoTypes = {
+    { name = 'Baustoffe',      unit = 'Tonnen',    min = 2,    max = 25,    hazardous = false, trailerType = 'kipper' },
+    { name = 'Lebensmittel',   unit = 'kg',        min = 200,  max = 2000,  hazardous = false, trailerType = 'kuehlanhaenger' },
+    { name = 'Elektronik',     unit = 'Stück',     min = 1,    max = 50,    hazardous = false, trailerType = 'curtainsider' },
+    { name = 'Möbel',          unit = 'Stück',     min = 1,    max = 30,    hazardous = false, trailerType = 'curtainsider' },
+    { name = 'Fahrzeugteile',  unit = 'Stück',     min = 5,    max = 80,    hazardous = false, trailerType = 'curtainsider' },
+    { name = 'Chemikalien',    unit = 'Liter',     min = 100,  max = 1000,  hazardous = true,  trailerType = 'curtainsider_gefahrgut' },
+    { name = 'Holz',           unit = 'Festmeter', min = 5,    max = 40,    hazardous = false, trailerType = 'curtainsider' },
+    { name = 'Maschinenteile', unit = 'Stück',     min = 1,    max = 20,    hazardous = false, trailerType = 'curtainsider' },
+    { name = 'Farben',         unit = 'Liter',     min = 100,  max = 1500,  hazardous = false, trailerType = 'curtainsider' },
+    { name = 'Öle',            unit = 'Liter',     min = 100,  max = 2000,  hazardous = false, trailerType = 'tankanhaenger' },
+    { name = 'Kraftstoff',     unit = 'Liter',     min = 2000, max = 15000, hazardous = false, trailerType = 'tankanhaenger' },
+    { name = 'Schmuck',        unit = 'Stück',     min = 5,    max = 50,    hazardous = false, trailerType = 'curtainsider' },
+    { name = 'Kleidung',       unit = 'Stück',     min = 100,  max = 800,   hazardous = false, trailerType = 'curtainsider' },
+    { name = 'Schrott',        unit = 'kg',        min = 500,  max = 5000,  hazardous = false, trailerType = 'kipper' },
 }
 
 -- Katalog der verfügbaren Anhängertypen (Reiter "Anhänger") - `key` steht in

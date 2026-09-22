@@ -323,6 +323,7 @@ const NAV_ITEMS = [
     { id: 'gf-fleet', label: 'Fuhrpark', icon: '🚛', perm: 'fleet_manage' },
     { id: 'gf-trailers', label: 'Anhänger', icon: '🚋', perm: 'fleet_manage' },
     { id: 'gf-locations', label: 'Orte', icon: '📍', perm: 'locations_manage' },
+    { id: 'gf-cargo-types', label: 'Frachtarten', icon: '📦', perm: 'cargo_types_manage' },
     { id: 'gf-finance', label: 'Finanzen', icon: '💰', perm: 'finance_view' },
     { id: 'gf-payouts', label: 'Ein-/Auszahlungen', icon: '🏦', perm: 'finance_payout' },
     { id: 'gf-payroll', label: 'Gehälter', icon: '💵', perm: 'wages_manage' },
@@ -572,6 +573,7 @@ function handlePush(event, data) {
         'fleet:changed': () => refreshIfViewing(['gf-fleet', 'dispatch-drivers']),
         'finance:balanceChanged': () => refreshIfViewing(['gf-finance', 'gf-dashboard']),
         'roles:changed': () => refreshAfterRolesChanged(),
+        'cargotypes:changed': () => refreshIfViewing(['gf-cargo-types', 'gf-locations']),
     };
     if (map[event]) map[event]();
 }
@@ -1163,6 +1165,31 @@ VIEWS['gf-locations'] = async (root) => {
             <button class="btn btn-primary" onclick="Actions.openLocationCreateModal()">+ Ort hinzufügen</button>
         </div>
         <div class="section">${table(['Name', 'Quelle (Abholung)', 'Ziel (Anlieferung)', ''], rows)}</div>`;
+};
+
+VIEWS['gf-cargo-types'] = async (root) => {
+    const [d, trailerData] = await Promise.all([call('cargotypes:list'), call('gf:trailers:list')]);
+    const trailerLabel = (key) => (trailerData.trailerTypes.find((t) => t.key === key) || {}).label || key;
+
+    const rows = d.cargoTypes.map((c) => `<tr>
+        <td>${escapeHtml(c.name)}</td>
+        <td>${escapeHtml(c.unit)}</td>
+        <td>${c.min} - ${c.max}</td>
+        <td>${c.hazardous ? badge({ label: 'Gefahrgut', dot: 'red' }) : '-'}</td>
+        <td>${escapeHtml(trailerLabel(c.trailerType))}</td>
+        <td class="btn-row">
+            <button class="btn btn-sm" onclick="Actions.openCargoTypeEditModal(${c.id})">Bearbeiten</button>
+            <button class="btn btn-sm btn-danger" onclick="Actions.confirmDeleteCargoType(${c.id})">Löschen</button>
+        </td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Frachtarten</h1>
+        <p class="view-subtitle">${d.cargoTypes.length} Frachtarten</p>
+        <div class="btn-row" style="margin-bottom:14px;">
+            <button class="btn btn-primary" onclick="Actions.openCargoTypeCreateModal()">+ Frachtart hinzufügen</button>
+        </div>
+        <div class="section">${table(['Name', 'Einheit', 'Menge', 'Gefahrgut', 'Anhängertyp', ''], rows)}</div>`;
 };
 
 VIEWS['gf-finance'] = async (root) => {
@@ -2144,6 +2171,89 @@ Actions.reallyDeleteLocation = async (locationId) => {
     closeModal();
     toast('Ort gelöscht', '', 'success');
     showView('gf-locations');
+};
+
+// ---------------------------------------------------------
+// Frachtarten
+// ---------------------------------------------------------
+
+function cargoTypeFormFields(c, trailerTypes) {
+    c = c || {};
+    return `
+        <label>Name</label><input id="ct-name" type="text" value="${escapeHtml(c.name || '')}" />
+        <label>Einheit</label><input id="ct-unit" type="text" placeholder="z.B. Stück, kg, Liter" value="${escapeHtml(c.unit || '')}" />
+        <div class="form-row">
+            <div>
+                <label>Menge min.</label>
+                <input id="ct-min" type="number" min="1" step="1" value="${c.min != null ? c.min : ''}" />
+            </div>
+            <div>
+                <label>Menge max.</label>
+                <input id="ct-max" type="number" min="1" step="1" value="${c.max != null ? c.max : ''}" />
+            </div>
+        </div>
+        <label>Benötigter Anhängertyp</label>
+        <select id="ct-trailer-type">${trailerTypeOptions(trailerTypes, c.trailerType)}</select>
+        <label style="display:flex;align-items:center;gap:6px;">
+            <input id="ct-hazardous" type="checkbox" style="width:auto;" ${c.hazardous ? 'checked' : ''} />
+            Gefahrgut (Fahrer benötigt Gefahrgut-Berechtigung)
+        </label>
+    `;
+}
+
+Actions.openCargoTypeCreateModal = async () => {
+    const d = await call('gf:trailers:list');
+    openModal('Frachtart erstellen', '', cargoTypeFormFields(null, d.trailerTypes), `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmCreateCargoType()">Frachtart erstellen</button>
+    `);
+};
+Actions.confirmCreateCargoType = async () => {
+    await call('gf:cargotypes:create', {
+        name: modalInputValue('ct-name'),
+        unit: modalInputValue('ct-unit'),
+        min: Number(modalInputValue('ct-min')),
+        max: Number(modalInputValue('ct-max')),
+        hazardous: document.getElementById('ct-hazardous').checked,
+        trailerType: modalInputValue('ct-trailer-type'),
+    });
+    closeModal();
+    toast('Frachtart erstellt', '', 'success');
+    showView('gf-cargo-types');
+};
+
+Actions.openCargoTypeEditModal = async (cargoTypeId) => {
+    const [d, trailerData] = await Promise.all([call('cargotypes:list'), call('gf:trailers:list')]);
+    const c = d.cargoTypes.find((x) => x.id === cargoTypeId);
+    if (!c) return;
+    openModal('Frachtart bearbeiten', escapeHtml(c.name), cargoTypeFormFields(c, trailerData.trailerTypes), `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmEditCargoType(${cargoTypeId})">Speichern</button>
+    `);
+};
+Actions.confirmEditCargoType = async (cargoTypeId) => {
+    await call('gf:cargotypes:update', {
+        cargoTypeId,
+        name: modalInputValue('ct-name'),
+        unit: modalInputValue('ct-unit'),
+        min: Number(modalInputValue('ct-min')),
+        max: Number(modalInputValue('ct-max')),
+        hazardous: document.getElementById('ct-hazardous').checked,
+        trailerType: modalInputValue('ct-trailer-type'),
+    });
+    closeModal();
+    toast('Frachtart aktualisiert', '', 'success');
+    showView('gf-cargo-types');
+};
+
+Actions.confirmDeleteCargoType = (cargoTypeId) => {
+    openConfirmModal('Frachtart löschen?', 'Diese Frachtart wirklich löschen? Bereits laufende Aufträge mit dieser Frachtart bleiben unberührt.', 'Löschen', `Actions.reallyDeleteCargoType(${cargoTypeId})`);
+};
+Actions.reallyDeleteCargoType = async (cargoTypeId) => {
+    await call('gf:cargotypes:delete', { cargoTypeId });
+    closeModal();
+    toast('Frachtart gelöscht', '', 'success');
+    showView('gf-cargo-types');
 };
 
 Actions.openVehicleFile = async (vehicleId) => {

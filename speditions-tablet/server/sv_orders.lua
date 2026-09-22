@@ -81,7 +81,7 @@ local function driverHasPermission(driverId, permissionKey)
 end
 
 --- Prüft, ob am übergebenen Fahrzeug ein Anhänger vom geforderten Typ
---- angekuppelt ist (siehe Config.CargoTrailerType, server/sv_trailers.lua).
+--- angekuppelt ist (siehe st_cargo_types.trailer_type, server/sv_trailers.lua).
 --- requiredType = nil bedeutet "kein bestimmter Anhänger nötig".
 local function vehicleHasTrailer(vehicleId, requiredType)
     if not requiredType then return true end
@@ -172,12 +172,12 @@ function Orders.GenerateOne()
 
     local distanceKm = Utils.Round2(locationDistanceKm(from, to))
     local value = Utils.Round2(distanceKm * (Config.OrderValuePerKm.min + math.random() * (Config.OrderValuePerKm.max - Config.OrderValuePerKm.min)))
-    local requiresPermission = Utils.InTable(Config.HazardousCargo, cargo) and 'gefahrgut' or nil
-    local requiresTrailerType = Config.CargoTrailerType[cargo] or 'curtainsider'
+    local cargoTypeCfg = CargoTypes.GetByName(cargo)
+    local requiresPermission = cargoTypeCfg and cargoTypeCfg.hazardous and 'gefahrgut' or nil
+    local requiresTrailerType = (cargoTypeCfg and cargoTypeCfg.trailerType) or 'curtainsider'
 
-    local unitCfg = Config.CargoUnits[cargo]
-    local cargoAmount = unitCfg and math.random(unitCfg.min, unitCfg.max) or nil
-    local cargoUnit = unitCfg and unitCfg.unit or nil
+    local cargoAmount = cargoTypeCfg and math.random(cargoTypeCfg.min, cargoTypeCfg.max) or nil
+    local cargoUnit = cargoTypeCfg and cargoTypeCfg.unit or nil
 
     local orderId = MySQL.insert.await(
         [[INSERT INTO st_orders (cargo, start_location, end_location, distance_km, value, status, source, requires_permission, requires_trailer_type, cargo_amount, cargo_unit)
@@ -694,6 +694,8 @@ end
 --- (WebsiteBridge.PushLocations) und bietet sie dort als Auswahl an.
 function Orders.CreateFromWebsite(cargo, startLocationName, endLocationName, cargoAmount, cargoUnit)
     if not cargo or cargo == '' then error('missing_cargo') end
+    local cargoTypeCfg = CargoTypes.GetByName(cargo)
+    if not cargoTypeCfg then error('unknown_cargo_type') end
     local from = Utils.GetLocationByName(startLocationName)
     if not from then error('unknown_start_location') end
     local to = Utils.GetLocationByName(endLocationName)
@@ -702,12 +704,11 @@ function Orders.CreateFromWebsite(cargo, startLocationName, endLocationName, car
 
     local distanceKm = Utils.Round2(locationDistanceKm(from, to))
     local value = Utils.Round2(distanceKm * (Config.OrderValuePerKm.min + math.random() * (Config.OrderValuePerKm.max - Config.OrderValuePerKm.min)))
-    local requiresPermission = Utils.InTable(Config.HazardousCargo, cargo) and 'gefahrgut' or nil
-    local requiresTrailerType = Config.CargoTrailerType[cargo] or 'curtainsider'
+    local requiresPermission = cargoTypeCfg.hazardous and 'gefahrgut' or nil
+    local requiresTrailerType = cargoTypeCfg.trailerType or 'curtainsider'
 
-    local unitCfg = Config.CargoUnits[cargo]
-    cargoAmount = tonumber(cargoAmount) or (unitCfg and math.random(unitCfg.min, unitCfg.max)) or nil
-    cargoUnit = cargoUnit or (unitCfg and unitCfg.unit) or nil
+    cargoAmount = tonumber(cargoAmount) or math.random(cargoTypeCfg.min, cargoTypeCfg.max)
+    cargoUnit = cargoUnit or cargoTypeCfg.unit
 
     local orderId = MySQL.insert.await(
         [[INSERT INTO st_orders (cargo, start_location, end_location, distance_km, value, status, source, requires_permission, requires_trailer_type, cargo_amount, cargo_unit)

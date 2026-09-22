@@ -4,7 +4,8 @@
 -- Anhänger (Curtainsider, Curtainsider mit Gefahrgutzulassung, Kipper,
 -- Kühlanhänger, Tankanhänger) werden Fahrzeugen zugewiesen/angekuppelt und
 -- bestimmen, welche Aufträge damit disponiert werden können (siehe
--- Config.CargoTrailerType, server/sv_orders.lua). Erstellen/Bearbeiten/
+-- st_cargo_types.trailer_type, server/sv_cargo_types.lua, server/sv_orders.lua).
+-- Erstellen/Bearbeiten/
 -- Löschen/Ankuppeln ist wie beim Fuhrpark ausschließlich der
 -- Geschäftsführung vorbehalten (serverseitig erzwungen, 'fleet_manage').
 -- =========================================================

@@ -112,6 +112,26 @@ CREATE TABLE IF NOT EXISTS `st_locations` (
     UNIQUE KEY `uq_location_name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Frachtarten (Reiter "Frachtarten") - ersetzt die frühere feste
+-- Config.CargoTypes/CargoUnits/HazardousCargo/CargoTrailerType-Aufteilung,
+-- damit die Geschäftsführung Frachtarten im Spiel selbst anlegen/bearbeiten
+-- kann. `hazardous` bewusst TINYINT UNSIGNED statt TINYINT(1) - oxmysql
+-- castet TINYINT(1)-Spalten zu echten Lua-Booleans, was numerische
+-- Vergleiche (== 1) zuverlässig bricht (siehe README, Abschnitt Lenkzeit-Bug).
+CREATE TABLE IF NOT EXISTS `st_cargo_types` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `name` VARCHAR(100) NOT NULL,
+    `unit` VARCHAR(50) NOT NULL,
+    `min_amount` INT UNSIGNED NOT NULL DEFAULT 1,
+    `max_amount` INT UNSIGNED NOT NULL DEFAULT 1,
+    `hazardous` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    `trailer_type` ENUM('curtainsider','curtainsider_gefahrgut','kipper','kuehlanhaenger','tankanhaenger') NOT NULL DEFAULT 'curtainsider',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_cargo_type_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS `st_vehicles` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `name` VARCHAR(100) NOT NULL,

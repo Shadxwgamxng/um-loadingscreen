@@ -294,6 +294,62 @@ Start-/Zielpunkt eines offenen Auftrags referenziert ist, bleibt der Auftrag
 bestehen - nur Wegpunkt/Bodenmarker lassen sich für ihn dann nicht mehr
 auflösen (kein Fehler, der Auftrag lässt sich weiterhin normal abschließen).
 
+### Frachtarten (Reiter "Frachtarten")
+
+Frachtarten liegen ebenfalls nicht mehr fest in `config.lua`, sondern in der
+Datenbank (`st_cargo_types`) und werden von der Geschäftsführung
+(Berechtigung `cargo_types_manage`) direkt im Tablet über den Reiter
+**"Frachtarten"** gepflegt: anlegen, bearbeiten, löschen. Je Frachtart wird
+festgelegt:
+
+- **Name** - wie die Fracht in Auftragspool/Lieferschein/Ortsverwaltung heißt.
+- **Einheit** und **Menge min./max.** - bestimmt die zufällige Stückzahl/
+  Menge, die beim Generieren eines Auftrags auf dem Lieferschein steht
+  (z.B. "1.200 Liter").
+- **Gefahrgut** - ist das Häkchen gesetzt, erzeugt die Frachtart Aufträge mit
+  `requires_permission = 'gefahrgut'` (siehe Gefahrgut-Zugriffsbeschränkung
+  unten).
+- **Benötigter Anhängertyp** - legt fest, welcher Anhängertyp (siehe Reiter
+  "Anhänger" unten) am Fahrzeug angekuppelt sein muss, damit ein Auftrag
+  dieser Frachtart disponiert/selbst angenommen werden kann.
+
+`Config.SeedCargoTypes` in `config.lua` enthält die mitgelieferten 14
+Standard-Frachtarten und dient **nur** der einmaligen Erstbefüllung beim
+allerersten Ressourcenstart - danach ist ausschließlich die Datenbank die
+Quelle der Wahrheit; Änderungen an `Config.SeedCargoTypes` nach der
+Erstbefüllung haben keine Wirkung mehr, Frachtarten müssen dann über den
+Reiter "Frachtarten" gepflegt werden.
+
+**Bestandsinstallationen (Server, die schon vor diesem Update liefen):** Die
+neue Tabelle `st_cargo_types` wird nur bei einer komplett frischen
+Installation automatisch aus `sql/install.sql` angelegt. Läuft euer Server
+schon länger, einmalig folgendes SQL gegen eure Datenbank ausführen, bevor
+ihr die neue Ressourcenversion startet:
+```sql
+CREATE TABLE IF NOT EXISTS `st_cargo_types` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `name` VARCHAR(100) NOT NULL,
+    `unit` VARCHAR(50) NOT NULL,
+    `min_amount` INT UNSIGNED NOT NULL DEFAULT 1,
+    `max_amount` INT UNSIGNED NOT NULL DEFAULT 1,
+    `hazardous` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    `trailer_type` ENUM('curtainsider','curtainsider_gefahrgut','kipper','kuehlanhaenger','tankanhaenger') NOT NULL DEFAULT 'curtainsider',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_cargo_type_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+Danach die Ressource neu starten - `st_cargo_types` wird beim ersten Start
+automatisch aus `Config.SeedCargoTypes` mit den bisherigen 14 Frachtarten
+befüllt (exakt dieselben Werte, die vorher in `Config.CargoTypes`/
+`CargoUnits`/`HazardousCargo`/`CargoTrailerType` standen), danach steht euch
+der Reiter "Frachtarten" zur Pflege zur Verfügung.
+
+Wird eine Frachtart gelöscht, die noch von einem offenen Auftrag referenziert
+wird, bleibt der Auftrag bestehen - für neue, automatisch generierte
+Aufträge steht die gelöschte Frachtart danach einfach nicht mehr zur Auswahl.
+
 ### Anhänger (Reiter "Anhänger")
 
 Fünf Anhängertypen (`Config.TrailerTypes`): Curtainsider, Curtainsider mit
@@ -308,8 +364,8 @@ einen freien Anhänger ankuppeln (siehe "Fahrerkarte einstecken vor
 Auftragsannahme" unten) - die GF-Verwaltung hier bleibt parallel als
 manuelle Vorab-/Korrekturmöglichkeit bestehen.
 
-Jede Frachtart verlangt anhand von `Config.CargoTrailerType` einen
-bestimmten Anhängertyp (Gefahrgut → Curtainsider mit Gefahrgutzulassung,
+Jede Frachtart verlangt (je nach im Reiter "Frachtarten" hinterlegtem
+Anhängertyp) einen bestimmten Anhängertyp (Gefahrgut → Curtainsider mit Gefahrgutzulassung,
 Lebensmittel/Kühlware → Kühlanhänger, Schüttgut wie Baustoffe/Schrott →
 Kipper, Flüssigfracht wie Öl/Kraftstoff → Tankanhänger, alles andere →
 normaler Curtainsider). Disponieren/Selbstzuweisen/Neuzuweisen wird
@@ -371,21 +427,22 @@ konkrete Meldung an, statt nur des rohen Fehlercodes.
   Letzteres läuft weiterhin wie gehabt über `client/cl_hours.lua`.
 - **Lieferschein im Tablet**: Solange ein Auftrag angenommen, in Anfahrt,
   beladen oder in Entladung ist, zeigt das Tablet unter "Meine Aufträge"
-  einen ausführlichen Lieferschein: Ware, Menge/Einheit
-  (`Config.CargoUnits`), Gefahrgut-Kennzeichnung, Entfernung, Abhol-/Zielort
+  einen ausführlichen Lieferschein: Ware, Menge/Einheit (Reiter
+  "Frachtarten"), Gefahrgut-Kennzeichnung, Entfernung, Abhol-/Zielort
   samt GPS-Koordinaten, zugewiesenes Fahrzeug, Ausstellungsdatum,
   disponierender Mitarbeiter und Lieferfrist.
 - **Bekannte Einschränkungen**: Die Zeit- und Nähe-Prüfung für das Be-/
   Entladen läuft ausschließlich clientseitig (kein serverseitiger Schutz vor
   Manipulation der lokalen Wartezeit) - für ein PvE-Logistikfeature wie
   dieses als ausreichend eingeschätzt, bei Bedarf aber erweiterbar. Für jede
-  der 14 Frachtarten aus `Config.CargoTypes` ist unter den mitgelieferten 59
-  Standardstandorten mindestens eine Quelle **und** ein Ziel hinterlegt -
-  löschst du im Reiter "Orte" den einzigen Quell- oder Zielort einer
-  Frachtart, wird diese Frachtart bis zum Anlegen eines Ersatzorts nicht
-  mehr für automatisch generierte Aufträge ausgewählt.
-- **Gefahrgut-Zugriffsbeschränkung**: Frachtarten in `Config.HazardousCargo`
-  erzeugen Aufträge mit `requires_permission = 'gefahrgut'`. Das Disponieren
+  der (standardmäßig 14) Frachtarten aus dem Reiter "Frachtarten" ist unter
+  den mitgelieferten 59 Standardstandorten mindestens eine Quelle **und**
+  ein Ziel hinterlegt - löschst du im Reiter "Orte" den einzigen Quell- oder
+  Zielort einer Frachtart, wird diese Frachtart bis zum Anlegen eines
+  Ersatzorts nicht mehr für automatisch generierte Aufträge ausgewählt.
+- **Gefahrgut-Zugriffsbeschränkung**: Frachtarten, deren "Gefahrgut"-Häkchen
+  im Reiter "Frachtarten" gesetzt ist, erzeugen Aufträge mit
+  `requires_permission = 'gefahrgut'`. Das Disponieren
   und Neuzuweisen an Fahrer ohne die Fahrerberechtigung "Gefahrgut" wird
   **serverseitig verweigert** (`driver_missing_permission`); die
   Disponenten-Oberfläche blendet ungeeignete Fahrer in der Zuweisungsauswahl
@@ -438,6 +495,7 @@ st_drivers              Fahrer-Zusatzdaten (Status, Notizen, Fahrzeugzuweisung, 
 st_driver_permissions   Führerscheinklassen / Sonderberechtigungen
 st_driver_statistics    Aggregierte Fahrerstatistik (aus st_orders berechnet)
 st_locations            Be-/Entladepunkte (Reiter "Orte"), Erstbefüllung aus Config.SeedLocations
+st_cargo_types          Frachtarten (Reiter "Frachtarten"), Erstbefüllung aus Config.SeedCargoTypes
 st_vehicles             Fuhrpark
 st_vehicle_assignments  Historie der Fahrzeug-Fahrer-Zuweisungen
 st_vehicle_history      Fahrzeugereignisse (erstellt, Wartung, Status, Aufträge)
@@ -496,17 +554,18 @@ Alle Stellschrauben befinden sich in `config.lua`:
   Bodenmarker, Be-/Entladen und Wegpunkte; `Config.OrderValuePerKm`,
   `Config.LoadUnloadSeconds`, `Config.LocationMarkerRadius`,
   `Config.LocationInteractRadius` - Wertspanne pro km sowie Timing/Radien
-  für den Be-/Entladevorgang; `Config.CargoUnits` - Mengeneinheit je
-  Frachtart für den Lieferschein
-- `Config.TrailerTypes` - Katalog der fünf Anhängertypen (Reiter "Anhänger");
-  `Config.CargoTrailerType` - welche Frachtart welchen Anhängertyp verlangt
+  für den Be-/Entladevorgang
+- `Config.SeedCargoTypes` - Liste der Frachtarten (Name, Einheit,
+  Mengenspanne, Gefahrgut-Flag, benötigter Anhängertyp) für die **einmalige
+  Erstbefüllung** von `st_cargo_types`; danach ausschließlich über den
+  Reiter "Frachtarten" pflegbar (siehe oben)
+- `Config.TrailerTypes` - Katalog der fünf Anhängertypen (Reiter "Anhänger")
 - `Config.OrderGeneration` - maximale Poolgröße sowie der Takt neuer
   Aufträge nach Anzahl online + am Tablet angemeldeter Fahrer
   (`intervalMsByDriverCount`, Standard: 1-2 Fahrer alle 12-15 Min., ab 3
   Fahrern alle 10-12 Min.; 0 Fahrer online = keine Generierung)
 - `Config.OrderCancelPenalty` - Vertragsstrafe (Standard 500$), wenn ein Fahrer einen Auftrag ohne Disponenten-Freigabe selbst abbricht
-- `Config.VehicleClasses`, `Config.CargoTypes`, `Config.HazardousCargo`,
-  `Config.DriverPermissions`
+- `Config.VehicleClasses`, `Config.DriverPermissions`
 - `Config.AverageSpeedKmh`, `Config.DeadlineBufferMinutes` - Grundlage der
   Pünktlichkeitsberechnung
 - `Config.DrivingRules` - Lenk-/Ruhezeiten-Grenzwerte und Heartbeat-Intervall
@@ -671,7 +730,7 @@ FiveM-Server - der Spielserver muss dafür keinen eingehenden Port öffnen:
   werden. Einmalig beim Ressourcenstart UND bei
   jeder Änderung im Reiter "Orte" (angelegt/bearbeitet/gelöscht) wird
   zusätzlich `locations.sync` gepusht - meldet die gültigen Standortnamen/
-  Frachtarten (`Locations.List()`/`Config.CargoTypes`), Grundlage für die
+  Frachtarten (`Locations.List()`/`CargoTypes.Names()`), Grundlage für die
   Standort-Auswahl beim Anlegen neuer Aufträge auf der Website. Ebenfalls
   beim Ressourcenstart wird `orders.reset` gepusht (siehe "Auftrags-Reset
   bei jedem Neustart" oben) - meldet, welche `st_orders.id` den Neustart

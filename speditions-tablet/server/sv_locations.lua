@@ -88,7 +88,7 @@ end
 local function sanitizeCargoList(list)
     if type(list) ~= 'table' then return {} end
     local valid = {}
-    for _, c in ipairs(Config.CargoTypes) do valid[c] = true end
+    for _, name in ipairs(CargoTypes.Names()) do valid[name] = true end
     local out, seen = {}, {}
     for _, key in ipairs(list) do
         if type(key) == 'string' and valid[key] and not seen[key] then

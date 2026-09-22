@@ -5,7 +5,7 @@ lua54 'yes'
 name 'speditions-tablet'
 author 'shadxwgamxng'
 description 'Standalone FiveM Speditions-Tablet - Fahrer-, Disponenten- und Fuhrparkmanagement'
-version '1.10.13'
+version '1.10.14'
 
 dependency 'oxmysql'
 
@@ -36,6 +36,7 @@ server_scripts {
     'server/sv_logs.lua',
     'server/sv_finance.lua',
     'server/sv_payroll.lua',
+    'server/sv_cargo_types.lua',
     'server/sv_locations.lua',
     'server/sv_vehicles.lua',
     'server/sv_trailers.lua',

@@ -236,7 +236,7 @@ function WebsiteBridge.PushLocations()
     for _, loc in ipairs(Locations.List()) do
         locations[#locations + 1] = { name = loc.name, sourceCargo = loc.sourceCargo, destCargo = loc.destCargo }
     end
-    WebsiteBridge.PushEvent('locations.sync', { locations = locations, cargoTypes = Config.CargoTypes })
+    WebsiteBridge.PushEvent('locations.sync', { locations = locations, cargoTypes = CargoTypes.Names() })
 end
 
 CreateThread(function()
