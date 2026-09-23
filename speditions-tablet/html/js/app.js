@@ -573,7 +573,7 @@ function handlePush(event, data) {
         'fleet:changed': () => refreshIfViewing(['gf-fleet', 'dispatch-drivers']),
         'finance:balanceChanged': () => refreshIfViewing(['gf-finance', 'gf-dashboard']),
         'roles:changed': () => refreshAfterRolesChanged(),
-        'cargotypes:changed': () => refreshIfViewing(['gf-cargo-types', 'gf-locations']),
+        'cargotypes:changed': () => refreshAfterCargoTypesChanged(),
     };
     if (map[event]) map[event]();
 }
@@ -593,6 +593,18 @@ async function refreshAfterRolesChanged() {
         buildSidebar(data.permissions);
     }
     refreshIfViewing(['gf-roles', 'gf-employees', 'gf-payroll']);
+}
+
+// Wird ausgeloest, sobald sich Frachtarten aendern (angelegt/bearbeitet/
+// geloescht) - haelt State.config.cargoTypes (Namensliste, u.a. fuer die
+// Quelle-/Ziel-Checkboxen im Orte-Formular) aktuell, ohne dass sich jeder
+// erst neu einloggen muss.
+async function refreshAfterCargoTypesChanged() {
+    const res = await rpc('cargotypes:list');
+    if (res && res.ok && res.result && State.config) {
+        State.config.cargoTypes = res.result.cargoTypes.map((c) => c.name);
+    }
+    refreshIfViewing(['gf-cargo-types', 'gf-locations']);
 }
 
 // =========================================================
