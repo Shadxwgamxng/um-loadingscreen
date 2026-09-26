@@ -5,7 +5,7 @@ lua54 'yes'
 name 'speditions-tablet'
 author 'shadxwgamxng'
 description 'Standalone FiveM Speditions-Tablet - Fahrer-, Disponenten- und Fuhrparkmanagement'
-version '1.10.16'
+version '1.10.17'
 
 dependency 'oxmysql'
 

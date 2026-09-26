@@ -388,7 +388,11 @@ konkrete Meldung an, statt nur des rohen Fehlercodes.
   (`Config.LocationMarkerRadius`, Standard 60m) einen blauen Kreis auf dem
   Boden als Interaktionsstelle. Bewusst **kein NPC** (die
   Pedestrian-KI/Interaktion war zu unzuverlässig) - der Marker ist rein
-  visuell, keine Entity, kein Kollisionsverhalten.
+  visuell, keine Entity, kein Kollisionsverhalten. Der Client-Thread, der
+  das prüft, baut sich pro Tick eine kleine Nachschlagetabelle aus den
+  eigenen Aufträgen (statt bei jedem einzelnen Ort erneut die komplette
+  Auftragsliste zu durchsuchen) - macht sich vor allem bemerkbar, sobald im
+  Reiter "Orte" sehr viele Orte angelegt wurden.
 - **Auftragsstatus-Flow**: `disponiert` (bzw. Selbstzuweisung) → `angenommen`
   (Annehmen-Button im Tablet, siehe unten die Fahrerkarten-Pflicht) → sofort
   automatisch `anfahrt` (Anfahrt zum Beladepunkt) → per Taste E am

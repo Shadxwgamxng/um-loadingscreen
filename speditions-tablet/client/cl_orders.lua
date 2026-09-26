@@ -66,19 +66,22 @@ RegisterNetEvent('speditions-tablet:client:push', function(event, _data)
     end
 end)
 
---- Liefert den relevanten Auftrag (falls vorhanden) für einen Standort: ein
---- Auftrag "in Anfahrt", dessen Beladepunkt hier ist ("pickup"), oder ein
---- "beladen" (= beladen, zum Zielort unterwegs) befindlicher Auftrag,
---- dessen Zielort hier ist ("dropoff").
-local function findRelevantOrder(locationName)
+--- Baut einmal pro Marker-Tick eine Standortname -> {Auftrag, Phase}-Tabelle
+--- aus myOrders. Der Marker-Loop unten prüft das pro Ressourcen-Tick gegen
+--- JEDEN Ort (bei GF-weise frei erweiterbarer Ortsliste potenziell viele) -
+--- eine vorab gebaute Lookup-Tabelle macht das zu einem O(1)-Zugriff pro Ort
+--- statt bei jedem Ort erneut die komplette (kurze, aber trotzdem bei jedem
+--- der ggf. vielen Orte wiederholte) Auftragsliste zu durchsuchen.
+local function buildRelevantOrderIndex()
+    local index = {}
     for _, o in ipairs(myOrders) do
-        if o.status == 'anfahrt' and o.start_location == locationName then
-            return o, 'pickup'
-        elseif o.status == 'beladen' and o.end_location == locationName then
-            return o, 'dropoff'
+        if o.status == 'anfahrt' then
+            index[o.start_location] = { o, 'pickup' }
+        elseif o.status == 'beladen' then
+            index[o.end_location] = { o, 'dropoff' }
         end
     end
-    return nil
+    return index
 end
 
 local function drawProgressBar(label, pct, secondsLeft)
@@ -197,10 +200,12 @@ CreateThread(function()
 
         if myHasDriverActions and not busy and #myOrders > 0 then
             local playerCoords = GetEntityCoords(PlayerPedId())
+            local relevantOrders = buildRelevantOrderIndex()
 
             for _, loc in ipairs(locations) do
-                local order, phase = findRelevantOrder(loc.name)
-                if order then
+                local relevant = relevantOrders[loc.name]
+                if relevant then
+                    local order, phase = relevant[1], relevant[2]
                     local markerCoords = vector3(loc.coords.x, loc.coords.y, loc.coords.z)
                     local dist = #(playerCoords - markerCoords)
 
