@@ -78,6 +78,10 @@ oder aktualisiert Passwort/Rolle, falls der Login-Name bereits existiert.
   (`Config.TabletProp`, Standard-Modell `prop_cs_tablet`) - rein optisch,
   ohne Bewegungseinschränkung. Modell/Position/Rotation sind über
   `Config.TabletProp` in `config.lua` anpassbar.
+- Die Oberfläche verwendet bewusst **keine Emojis** - Reiter-Icons,
+  Warnhinweise (z.B. Gefahrgut) und Statusanzeigen (z.B. Fahrerberechtigungen)
+  kommen ausschließlich über Text und Farbe (Pills, farbige Punkte) statt über
+  Symbolzeichen, für ein einheitlicheres, seriöseres Erscheinungsbild.
 
 ### Tablet nur per Item öffnen
 

@@ -305,31 +305,31 @@ function openConfirmModal(title, message, confirmLabel, actionCall) {
 // von der Geschäftsführung frei angelegte Rollen mit den passenden
 // Berechtigungen automatisch mit den richtigen Reitern auf.
 const NAV_ITEMS = [
-    { id: 'driver-card', label: 'Fahrerkarte', icon: '🪪', perm: 'driver_actions' },
-    { id: 'driver-orders', label: 'Aufträge', icon: '📦', perm: 'driver_actions' },
-    { id: 'driver-history', label: 'Historie', icon: '🕓', perm: 'driver_actions' },
-    { id: 'driver-earnings', label: 'Einnahmen', icon: '💰', perm: 'driver_actions' },
-    { id: 'driver-vehicle', label: 'Mein Fahrzeug', icon: '🚛', perm: 'driver_actions' },
-    { id: 'driver-messages', label: 'Nachrichten', icon: '✉️', perm: 'driver_actions' },
-    { id: 'dispatch-drivers', label: 'Fahrerübersicht', icon: '👥', perm: 'dispatch' },
-    { id: 'dispatch-pool', label: 'Auftragspool', icon: '📋', perm: 'dispatch' },
-    { id: 'dispatch-active', label: 'Aktive Aufträge', icon: '🚚', perm: 'dispatch' },
-    { id: 'dispatch-completed', label: 'Abgeschlossen', icon: '✅', perm: 'dispatch' },
-    { id: 'dispatch-revenue', label: 'Unternehmensumsatz', icon: '📈', perm: 'dispatch' },
-    { id: 'gf-dashboard', label: 'Dashboard', icon: '📊', perm: 'stats_view' },
-    { id: 'gf-employees', label: 'Mitarbeiter', icon: '🧑‍💼', perm: 'employees_manage' },
-    { id: 'gf-roles', label: 'Rollen', icon: '🛡️', perm: 'roles_manage' },
-    { id: 'gf-drivers', label: 'Fahrerakten', icon: '🪪', perm: 'employees_manage' },
-    { id: 'gf-fleet', label: 'Fuhrpark', icon: '🚛', perm: 'fleet_manage' },
-    { id: 'gf-trailers', label: 'Anhänger', icon: '🚋', perm: 'fleet_manage' },
-    { id: 'gf-locations', label: 'Orte', icon: '📍', perm: 'locations_manage' },
-    { id: 'gf-cargo-types', label: 'Frachtarten', icon: '📦', perm: 'cargo_types_manage' },
-    { id: 'gf-finance', label: 'Finanzen', icon: '💰', perm: 'finance_view' },
-    { id: 'gf-payouts', label: 'Ein-/Auszahlungen', icon: '🏦', perm: 'finance_payout' },
-    { id: 'gf-payroll', label: 'Gehälter', icon: '💵', perm: 'wages_manage' },
-    { id: 'gf-orders', label: 'Aufträge', icon: '📦', perm: 'stats_view' },
-    { id: 'gf-log', label: 'Protokoll', icon: '📜', perm: 'activity_log_view' },
-    { id: 'gf-console', label: 'Konsole', icon: '🖥️', perm: 'console_view' },
+    { id: 'driver-card', label: 'Fahrerkarte', perm: 'driver_actions' },
+    { id: 'driver-orders', label: 'Aufträge', perm: 'driver_actions' },
+    { id: 'driver-history', label: 'Historie', perm: 'driver_actions' },
+    { id: 'driver-earnings', label: 'Einnahmen', perm: 'driver_actions' },
+    { id: 'driver-vehicle', label: 'Mein Fahrzeug', perm: 'driver_actions' },
+    { id: 'driver-messages', label: 'Nachrichten', perm: 'driver_actions' },
+    { id: 'dispatch-drivers', label: 'Fahrerübersicht', perm: 'dispatch' },
+    { id: 'dispatch-pool', label: 'Auftragspool', perm: 'dispatch' },
+    { id: 'dispatch-active', label: 'Aktive Aufträge', perm: 'dispatch' },
+    { id: 'dispatch-completed', label: 'Abgeschlossen', perm: 'dispatch' },
+    { id: 'dispatch-revenue', label: 'Unternehmensumsatz', perm: 'dispatch' },
+    { id: 'gf-dashboard', label: 'Dashboard', perm: 'stats_view' },
+    { id: 'gf-employees', label: 'Mitarbeiter', perm: 'employees_manage' },
+    { id: 'gf-roles', label: 'Rollen', perm: 'roles_manage' },
+    { id: 'gf-drivers', label: 'Fahrerakten', perm: 'employees_manage' },
+    { id: 'gf-fleet', label: 'Fuhrpark', perm: 'fleet_manage' },
+    { id: 'gf-trailers', label: 'Anhänger', perm: 'fleet_manage' },
+    { id: 'gf-locations', label: 'Orte', perm: 'locations_manage' },
+    { id: 'gf-cargo-types', label: 'Frachtarten', perm: 'cargo_types_manage' },
+    { id: 'gf-finance', label: 'Finanzen', perm: 'finance_view' },
+    { id: 'gf-payouts', label: 'Ein-/Auszahlungen', perm: 'finance_payout' },
+    { id: 'gf-payroll', label: 'Gehälter', perm: 'wages_manage' },
+    { id: 'gf-orders', label: 'Aufträge', perm: 'stats_view' },
+    { id: 'gf-log', label: 'Protokoll', perm: 'activity_log_view' },
+    { id: 'gf-console', label: 'Konsole', perm: 'console_view' },
 ];
 
 function visibleNavItems(permissions) {
@@ -344,7 +344,7 @@ function buildSidebar(permissions) {
         const el = document.createElement('div');
         el.className = 'nav-item';
         el.dataset.view = item.id;
-        el.innerHTML = `<span>${item.icon}</span><span>${escapeHtml(item.label)}</span>`;
+        el.innerHTML = `<span>${escapeHtml(item.label)}</span>`;
         el.addEventListener('click', () => showView(item.id));
         sidebar.appendChild(el);
     });
@@ -623,7 +623,7 @@ VIEWS['driver-card'] = async (root) => {
 
     const permsHtml = d.permissions.map((p) => `
         <div class="perm-item ${p.granted ? 'granted' : 'denied'}">
-            <span class="mark">${p.granted ? '✓' : '✕'}</span>${escapeHtml(p.label)}
+            <span class="mark"></span>${escapeHtml(p.label)}
         </div>`).join('');
 
     root.innerHTML = `
@@ -662,7 +662,7 @@ VIEWS['driver-card'] = async (root) => {
                 <h4>Fahrerkarte</h4>
                 <div class="stat-row">
                     <span>Status</span>
-                    <span>${d.driver.onShift ? `🪪 Eingesteckt (seit ${formatDate(d.driver.shiftStartedAt, true)})` : '🪪 Nicht eingesteckt'}</span>
+                    <span>${d.driver.onShift ? `Eingesteckt (seit ${formatDate(d.driver.shiftStartedAt, true)})` : 'Nicht eingesteckt'}</span>
                 </div>
                 <p class="card-hint">Vor der Annahme eines Auftrags musst du hier deine Fahrt starten, damit deine Lenk-/Ruhezeiten erfasst werden.</p>
                 ${d.driver.onShift
@@ -692,7 +692,7 @@ VIEWS['driver-card'] = async (root) => {
 VIEWS['driver-orders'] = async (root) => {
     const [d, pool] = await Promise.all([call('driver:myOrders'), call('driver:openOrders')]);
 
-    const cargoHint = { anfahrt: '📍 Zum Beladepunkt fahren, dort per E abholen', beladen: '📍 Zum Zielort fahren, dort per E abliefern', entladen: '⏳ Wird entladen...' };
+    const cargoHint = { anfahrt: 'Zum Beladepunkt fahren, dort per E abholen', beladen: 'Zum Zielort fahren, dort per E abliefern', entladen: 'Wird entladen...' };
 
     const coordsText = (c) => (c ? `GPS: ${c.x}, ${c.y}` : '');
     const CANCELLABLE_STATUSES = ['angenommen', 'anfahrt', 'beladen', 'entladen'];
@@ -715,13 +715,13 @@ VIEWS['driver-orders'] = async (root) => {
                 <td colspan="7">
                     <div class="lieferschein">
                         <div class="lieferschein-head">
-                            <div class="lieferschein-title">📄 Lieferschein #${o.id}</div>
+                            <div class="lieferschein-title">Lieferschein #${o.id}</div>
                             <div class="lieferschein-meta">Ausgestellt ${formatDate(o.created_at, true)}${o.dispatcher_name ? ` · Disponiert von ${escapeHtml(o.dispatcher_name)}` : ''}</div>
                         </div>
                         <div class="lieferschein-grid">
                             <div><span>Ware</span><strong>${escapeHtml(o.cargo)}</strong></div>
                             <div><span>Menge</span><strong>${o.cargo_amount ? `${Number(o.cargo_amount).toLocaleString('de-DE')} ${escapeHtml(o.cargo_unit || '')}` : '-'}</strong></div>
-                            <div><span>Gefahrgut</span><strong>${o.requires_permission ? '⚠ Ja' : 'Nein'}</strong></div>
+                            <div><span>Gefahrgut</span><strong>${o.requires_permission ? 'Ja' : 'Nein'}</strong></div>
                             <div><span>Entfernung</span><strong>${Number(o.distance_km).toLocaleString('de-DE')} km</strong></div>
                             <div><span>Abholort</span><strong>${escapeHtml(o.start_location)}</strong><small>${coordsText(o.start_coords)}</small></div>
                             <div><span>Zielort</span><strong>${escapeHtml(o.end_location)}</strong><small>${coordsText(o.end_coords)}</small></div>
@@ -744,7 +744,7 @@ VIEWS['driver-orders'] = async (root) => {
 
     const poolRows = pool.orders.map((o) => `<tr>
         <td>#${o.id}</td>
-        <td>${escapeHtml(o.cargo)}${o.requires_permission ? ' <span class="pill">⚠ Gefahrgut</span>' : ''}</td>
+        <td>${escapeHtml(o.cargo)}${o.requires_permission ? ' <span class="pill pill-warning">Gefahrgut</span>' : ''}</td>
         <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
         <td>${Number(o.distance_km).toLocaleString('de-DE')} km</td>
         <td>${formatMoney(o.value)}</td>
@@ -756,7 +756,7 @@ VIEWS['driver-orders'] = async (root) => {
     root.innerHTML = `
         <h1 class="view-title">Meine Aufträge</h1>
         <p class="view-subtitle">Zugewiesene und aktive Aufträge.</p>
-        ${!pool.onShift ? `<p class="view-subtitle" style="color:var(--yellow);">⚠ Du musst zuerst deine Fahrerkarte einstecken (Reiter Fahrerkarte, Fahrt starten), bevor du einen Auftrag annehmen kannst.</p>` : ''}
+        ${!pool.onShift ? `<p class="view-subtitle" style="color:var(--yellow);">Du musst zuerst deine Fahrerkarte einstecken (Reiter Fahrerkarte, Fahrt starten), bevor du einen Auftrag annehmen kannst.</p>` : ''}
         <div class="section">${table(['#', 'Fracht', 'Strecke', 'Distanz', 'Fahrzeug', 'Status', 'Aktion'], rows)}</div>
 
         <h1 class="view-title" style="margin-top:24px;">Offener Auftragspool</h1>
@@ -773,7 +773,7 @@ VIEWS['driver-history'] = async (root) => {
         <td>${escapeHtml(o.cargo)}</td>
         <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
         <td>${badge(ORDER_STATUS_META[o.status])}</td>
-        <td>${o.status === 'abgeschlossen' ? (o.punctual ? '✅ Pünktlich' : '⚠️ Verspätet') : '-'}</td>
+        <td>${o.status === 'abgeschlossen' ? (o.punctual ? 'Pünktlich' : 'Verspätet') : '-'}</td>
         <td>${o.status === 'abgeschlossen' ? formatMoney(o.value) : '-'}</td>
         <td>${formatDate(o.completed_at || o.created_at, true)}</td>
     </tr>`);
@@ -868,7 +868,7 @@ VIEWS['dispatch-pool'] = async (root) => {
 
     const rows = pool.orders.map((o) => `<tr>
         <td>#${o.id}</td>
-        <td>${escapeHtml(o.cargo)}${o.requires_permission ? ' <span class="pill">⚠ Gefahrgut</span>' : ''}</td>
+        <td>${escapeHtml(o.cargo)}${o.requires_permission ? ' <span class="pill pill-warning">Gefahrgut</span>' : ''}</td>
         <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
         <td>${Number(o.distance_km).toLocaleString('de-DE')} km</td>
         <td>${formatMoney(o.value)}</td>
@@ -887,8 +887,8 @@ VIEWS['dispatch-active'] = async (root) => {
 
     const rows = active.orders.map((o) => {
         const cancelActions = o.pending_cancel_request_id ? `
-            <button class="btn btn-sm btn-primary" onclick="Actions.resolveCancelRequest(${o.pending_cancel_request_id}, true)">✅ Abbruch genehmigen</button>
-            <button class="btn btn-sm" onclick="Actions.resolveCancelRequest(${o.pending_cancel_request_id}, false)">❌ Ablehnen</button>` : '';
+            <button class="btn btn-sm btn-primary" onclick="Actions.resolveCancelRequest(${o.pending_cancel_request_id}, true)">Abbruch genehmigen</button>
+            <button class="btn btn-sm" onclick="Actions.resolveCancelRequest(${o.pending_cancel_request_id}, false)">Ablehnen</button>` : '';
         return `<tr>
             <td>#${o.id}</td>
             <td>${escapeHtml(o.cargo)}</td>
@@ -1626,7 +1626,7 @@ Actions.openDispatchModal = (orderId, requiresPermission) => {
     const hasPerm = (d) => !requiresPermission || (d.permissions || '').split(',').includes(requiresPermission);
     const drivers = (window.__availableDrivers || []).filter((d) => d.current_status === 'verfuegbar' && hasPerm(d));
     const options = drivers.map((d) => `<option value="${d.driver_id}">${escapeHtml(d.name)}${d.vehicle_name ? ` - ${escapeHtml(d.vehicle_name)} (${escapeHtml(d.vehicle_plate)})` : ' - kein Fahrzeug'}</option>`).join('');
-    const hint = requiresPermission ? `<p class="card-hint" style="margin:0 0 10px;">⚠ Dieser Auftrag erfordert die Berechtigung "${escapeHtml(requiresPermission)}" - nur berechtigte, verfügbare Fahrer werden angezeigt.</p>` : '';
+    const hint = requiresPermission ? `<p class="card-hint" style="margin:0 0 10px;">Dieser Auftrag erfordert die Berechtigung "${escapeHtml(requiresPermission)}" - nur berechtigte, verfügbare Fahrer werden angezeigt.</p>` : '';
     openModal('Auftrag disponieren', `Auftrag #${orderId}`, `
         ${hint}
         <label>Fahrer</label>
@@ -2105,7 +2105,7 @@ function locationFormFields(l) {
     return `
         <label>Name</label><input id="loc-name" type="text" value="${escapeHtml(l.name || '')}" />
         <div class="btn-row" style="margin:4px 0;">
-            <button type="button" class="btn btn-sm" onclick="Actions.useCurrentPositionForLocation()">📍 Aktuelle Position übernehmen</button>
+            <button type="button" class="btn btn-sm" onclick="Actions.useCurrentPositionForLocation()">Aktuelle Position übernehmen</button>
             <span id="loc-pos-hint" class="card-hint">${l.coords ? `x=${l.coords.x.toFixed(1)}, y=${l.coords.y.toFixed(1)}, z=${l.coords.z.toFixed(1)}` : 'Noch keine Position gesetzt.'}</span>
         </div>
         <input id="loc-x" type="hidden" value="${l.coords ? l.coords.x : ''}" />

@@ -382,8 +382,8 @@ html, body {
 .perm-list { display: flex; flex-direction: column; gap: 6px; }
 .perm-item { font-size: 13px; display: flex; align-items: center; gap: 8px; color: var(--text-2); }
 .perm-item.granted { color: var(--text-0); }
-.perm-item .mark { color: var(--green); width: 14px; }
-.perm-item.denied .mark { color: var(--gray); }
+.perm-item .mark { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+.perm-item.denied .mark { background: var(--gray); }
 
 /* ---------- Tables ---------- */
 
@@ -447,6 +447,12 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
     border: 1px solid var(--border);
     color: var(--text-1);
     white-space: nowrap;
+}
+/* Gefahrgut-Kennzeichnung u.ä. - Farbe statt Symbol als Warnhinweis (siehe
+   README, Abschnitt "Emoji-freie Oberfläche"). */
+.pill-warning {
+    border-color: var(--yellow);
+    color: var(--yellow);
 }
 
 .meter-row { margin: 10px 0; }
