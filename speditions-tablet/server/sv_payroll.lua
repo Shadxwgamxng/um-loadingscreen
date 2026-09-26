@@ -1,0 +1,268 @@
+-- =========================================================
+-- Gehälter: Stempeluhr, Stundenlöhne je Rolle, Gehaltsauszahlung
+--
+-- Jeder Mitarbeiter stempelt sich selbst ein/aus. Die Geschäftsführung legt
+-- den Stundenlohn je Rolle fest (in st_wage_rates, mit Config.DefaultHourlyWage
+-- als einmaliger Erstbefüllung) und zahlt das automatisch aus offenen
+-- Stempeluhr-Sekunden * Stundenlohn berechnete Gehalt aus - der Client kann
+-- den Betrag NICHT selbst vorgeben.
+-- =========================================================
+
+Payroll = {}
+
+CreateThread(function()
+    for role, rate in pairs(Config.DefaultHourlyWage or {}) do
+        local existing = MySQL.single.await('SELECT role FROM st_wage_rates WHERE role = ?', { role })
+        if not existing then
+            MySQL.insert.await('INSERT INTO st_wage_rates (role, hourly_rate) VALUES (?, ?)', { role, rate })
+        end
+    end
+end)
+
+function Payroll.GetWageRates()
+    local rows = MySQL.query.await('SELECT role, hourly_rate FROM st_wage_rates')
+    local rates = {}
+    for _, row in ipairs(rows) do
+        rates[row.role] = tonumber(row.hourly_rate)
+    end
+    return rates
+end
+
+function Payroll.GetWageRate(role)
+    local row = MySQL.single.await('SELECT hourly_rate FROM st_wage_rates WHERE role = ?', { role })
+    return row and tonumber(row.hourly_rate) or 0
+end
+
+function Payroll.SetWageRate(src, role, hourlyRate)
+    local emp = Employees.RequirePermission(src, 'wages_manage')
+
+    if not Roles.Exists(role) then error('invalid_role') end
+    hourlyRate = Utils.SanitizeNumber(hourlyRate, 0, 100000)
+    if not hourlyRate then error('invalid_amount') end
+
+    local existing = MySQL.single.await('SELECT role FROM st_wage_rates WHERE role = ?', { role })
+    if existing then
+        MySQL.update.await('UPDATE st_wage_rates SET hourly_rate = ? WHERE role = ?', { hourlyRate, role })
+    else
+        MySQL.insert.await('INSERT INTO st_wage_rates (role, hourly_rate) VALUES (?, ?)', { role, hourlyRate })
+    end
+
+    Logs.Write(emp.id, 'wage_rate_changed', ('%s hat den Stundenlohn für "%s" auf %s gesetzt.'):format(emp.name, Roles.GetLabel(role), hourlyRate))
+    return { ok = true }
+end
+
+-- ---------------------------------------------------------
+-- Stempeluhr
+-- ---------------------------------------------------------
+
+function Payroll.GetActiveSession(employeeId)
+    return MySQL.single.await('SELECT * FROM st_timeclock_sessions WHERE employee_id = ? AND clock_out_at IS NULL LIMIT 1', { employeeId })
+end
+
+--- Offene (noch nicht ausgezahlte) Sekunden eines Mitarbeiters - abgeschlossene
+--- Sessions plus die laufende Session bis jetzt (falls gerade eingestempelt).
+function Payroll.GetUnpaidSeconds(employeeId)
+    local row = MySQL.single.await([[
+        SELECT COALESCE(SUM(TIMESTAMPDIFF(SECOND, clock_in_at, IFNULL(clock_out_at, NOW()))), 0) AS total
+        FROM st_timeclock_sessions
+        WHERE employee_id = ? AND paid_at IS NULL
+    ]], { employeeId })
+    return row and tonumber(row.total) or 0
+end
+
+function Payroll.ClockIn(src)
+    local emp = Employees.RequireRole(src)
+    if Payroll.GetActiveSession(emp.id) then error('already_clocked_in') end
+
+    local now = Utils.Now()
+    MySQL.insert.await('INSERT INTO st_timeclock_sessions (employee_id, clock_in_at) VALUES (?, ?)', { emp.id, now })
+    Logs.Write(emp.id, 'clock_in', ('%s hat sich eingestempelt.'):format(emp.name))
+    if WebsiteBridge then WebsiteBridge.PushTimeclockUpdate(emp.id, true, now) end
+    return { ok = true }
+end
+
+--- Schließt eine offene Stempeluhr-Sitzung (falls vorhanden) und meldet das
+--- an Logs/Website - gemeinsamer Kern für das manuelle Ausstempeln
+--- (Payroll.ClockOut) und das automatische Ausstempeln bei
+--- Verbindungsabbruch (Payroll.ForceClockOut). Gibt false zurück, wenn
+--- ohnehin keine Sitzung offen war.
+local function closeActiveSession(employeeId, logAction, logMessage)
+    local active = Payroll.GetActiveSession(employeeId)
+    if not active then return false end
+
+    local now = Utils.Now()
+    MySQL.update.await('UPDATE st_timeclock_sessions SET clock_out_at = ? WHERE id = ?', { now, active.id })
+    Logs.Write(employeeId, logAction, logMessage)
+    if WebsiteBridge then WebsiteBridge.PushTimeclockUpdate(employeeId, false, now) end
+    return true
+end
+
+function Payroll.ClockOut(src)
+    local emp = Employees.RequireRole(src)
+    local didClockOut = closeActiveSession(emp.id, 'clock_out', ('%s hat sich ausgestempelt.'):format(emp.name))
+    if not didClockOut then error('not_clocked_in') end
+    return { ok = true }
+end
+
+--- Stempelt einen Mitarbeiter automatisch aus, z.B. wenn die Verbindung zum
+--- Server abbricht (siehe playerDropped in server/sv_bootstrap.lua) - ohne
+--- das würde eine offene Stempeluhr-Sitzung einfach weiterlaufen, obwohl der
+--- Mitarbeiter gar nicht mehr am Server ist, und beim nächsten Gehaltslauf
+--- mitbezahlt werden ("Gehalt farmen" im Offline-Zustand). Kein Fehler,
+--- falls ohnehin nicht eingestempelt war.
+function Payroll.ForceClockOut(employeeId, employeeName)
+    return closeActiveSession(
+        employeeId, 'clock_out_auto',
+        ('%s wurde beim Verlassen des Servers automatisch ausgestempelt.'):format(employeeName)
+    )
+end
+
+function Payroll.GetMyStatus(src)
+    local emp = Employees.RequireRole(src)
+    local active = Payroll.GetActiveSession(emp.id)
+    local unpaidSeconds = Payroll.GetUnpaidSeconds(emp.id)
+    local rate = Payroll.GetWageRate(emp.role)
+    return {
+        clockedIn = active ~= nil,
+        clockInAt = active and active.clock_in_at or nil,
+        unpaidSeconds = unpaidSeconds,
+        hourlyRate = rate,
+        estimatedAmount = Utils.Round2((unpaidSeconds / 3600) * rate),
+    }
+end
+
+-- ---------------------------------------------------------
+-- Gehaltsübersicht + Auszahlung (nur Geschäftsführung)
+-- ---------------------------------------------------------
+
+function Payroll.GetOverview()
+    local employees = MySQL.query.await(
+        "SELECT id, name, role FROM st_employees WHERE status = 'aktiv' ORDER BY FIELD(role, 'geschaeftsfuehrung', 'disponent', 'fahrer'), name ASC"
+    )
+    local rates = Payroll.GetWageRates()
+
+    local list = {}
+    for _, e in ipairs(employees) do
+        local seconds = Payroll.GetUnpaidSeconds(e.id)
+        local rate = rates[e.role] or 0
+        list[#list + 1] = {
+            id = e.id,
+            name = e.name,
+            role = e.role,
+            unpaidSeconds = seconds,
+            hourlyRate = rate,
+            amount = Utils.Round2((seconds / 3600) * rate),
+            clockedIn = Payroll.GetActiveSession(e.id) ~= nil,
+            online = Utils.FindSrcByEmployeeId(e.id) ~= nil,
+        }
+    end
+    return list
+end
+
+--- Zahlt einem Mitarbeiter das aktuell errechnete Gehalt aus (offene
+--- Stempeluhr-Sekunden * Stundenlohn seiner Rolle). Betrag wird
+--- ausschließlich serverseitig berechnet.
+function Payroll.PayEmployee(src, employeeId)
+    local emp = Employees.RequirePermission(src, 'wages_manage')
+
+    employeeId = Utils.SanitizeNumber(employeeId, 1)
+    if not employeeId then error('invalid_payload') end
+
+    local target = MySQL.single.await('SELECT * FROM st_employees WHERE id = ?', { employeeId })
+    if not target then error('employee_not_found') end
+
+    -- Das Gehalt bekommt der MITARBEITER als echtes Bargeld - ist er gerade
+    -- nicht online und am Tablet eingeloggt, wird die Auszahlung komplett
+    -- verweigert (statt trotzdem zu verbuchen und das Bargeld einfach
+    -- verfallen zu lassen). Erst hier ermittelt, damit noch gar nichts
+    -- gebucht wird, falls das fehlschlägt.
+    local targetSrc = Utils.FindSrcByEmployeeId(employeeId)
+    if not targetSrc then error('employee_not_online') end
+
+    local seconds = Payroll.GetUnpaidSeconds(employeeId)
+    local rate = Payroll.GetWageRate(target.role)
+    local hours = Utils.Round2(seconds / 3600)
+    local amount = Utils.Round2(hours * rate)
+    if amount <= 0 then error('nothing_to_pay') end
+
+    local balance = Finance.GetBalance()
+    if amount > balance then error('insufficient_balance') end
+
+    -- Läuft die Stempeluhr gerade, wird die aktuelle Session jetzt
+    -- geschlossen, ALLE noch unbezahlten Sessions als bezahlt markiert und
+    -- - falls der Mitarbeiter noch eingestempelt war - nahtlos eine neue
+    -- Session begonnen, damit die Zeiterfassung einfach weiterläuft.
+    local active = Payroll.GetActiveSession(employeeId)
+    if active then
+        local now = Utils.Now()
+        MySQL.update.await('UPDATE st_timeclock_sessions SET clock_out_at = ? WHERE id = ?', { now, active.id })
+        if WebsiteBridge then WebsiteBridge.PushTimeclockUpdate(employeeId, false, now) end
+    end
+    MySQL.update.await('UPDATE st_timeclock_sessions SET paid_at = NOW() WHERE employee_id = ? AND paid_at IS NULL', { employeeId })
+    if active then
+        local restarted = Utils.Now()
+        MySQL.insert.await('INSERT INTO st_timeclock_sessions (employee_id, clock_in_at) VALUES (?, ?)', { employeeId, restarted })
+        if WebsiteBridge then WebsiteBridge.PushTimeclockUpdate(employeeId, true, restarted) end
+    end
+
+    local txId = Finance.AddTransaction('gehalt', -amount, {
+        description = ('Gehalt: %s (%.2f Std. x %s)'):format(target.name, hours, rate),
+        createdBy = emp.id,
+    })
+
+    -- targetSrc wurde bereits ganz oben ermittelt und geprüft (das Gehalt
+    -- bekommt der MITARBEITER als Bargeld, nicht die ausführende
+    -- Geschäftsführung) - Bridge.AddCash kann trotzdem noch fehlschlagen
+    -- (z.B. Framework-Anbindung down), das wird separat geloggt.
+    local cashGiven = Bridge.AddCash(targetSrc, amount)
+
+    MySQL.insert.await(
+        'INSERT INTO st_payroll_payouts (employee_id, hours, hourly_rate, amount, executed_by, transaction_id, cash_given) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        { employeeId, hours, rate, amount, emp.id, txId, cashGiven }
+    )
+
+    Logs.Write(emp.id, 'payroll_paid', ('%s hat %s das Gehalt ausgezahlt (%.2f Std. x %s = %s).%s'):format(
+        emp.name, target.name, hours, rate, amount,
+        cashGiven and ' Bargeld ausgehändigt.' or ' Bargeld-Anbindung fehlgeschlagen.'
+    ))
+
+    Utils.NotifyClient(targetSrc, ('Dir wurde ein Gehalt von %s ausgezahlt.'):format(amount), 'success')
+
+    return { amount = amount, hours = hours, cashGiven = cashGiven, newBalance = Finance.GetBalance() }
+end
+
+-- =========================================================
+-- RPC-Handler
+-- =========================================================
+
+RPC.Register('me:payrollStatus', function(src)
+    return Payroll.GetMyStatus(src)
+end)
+
+RPC.Register('me:clockIn', function(src)
+    return Payroll.ClockIn(src)
+end)
+
+RPC.Register('me:clockOut', function(src)
+    return Payroll.ClockOut(src)
+end)
+
+RPC.Register('gf:payroll:rates', function(src)
+    Employees.RequirePermission(src, 'wages_manage')
+    local roleLabels = {}
+    for _, role in ipairs(Roles.List()) do roleLabels[role.key] = role.label end
+    return { rates = Payroll.GetWageRates(), roleLabels = roleLabels }
+end)
+
+RPC.Register('gf:payroll:setRate', function(src, payload)
+    return Payroll.SetWageRate(src, payload.role, payload.hourlyRate)
+end)
+
+RPC.Register('gf:payroll:overview', function(src)
+    Employees.RequirePermission(src, 'wages_manage')
+    return { employees = Payroll.GetOverview() }
+end)
+
+RPC.Register('gf:payroll:pay', function(src, payload)
+    return Payroll.PayEmployee(src, payload.employeeId)
+end)

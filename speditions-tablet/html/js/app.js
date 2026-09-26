@@ -1,0 +1,2336 @@
+/* =========================================================
+   Speditions-Tablet - NUI Frontend
+   ========================================================= */
+
+const State = {
+    employee: null,
+    role: null,
+    config: null,
+    currentView: null,
+};
+
+// ---------------------------------------------------------
+// RPC-Layer
+// ---------------------------------------------------------
+
+function getResourceName() {
+    return (typeof GetParentResourceName === 'function') ? GetParentResourceName() : 'speditions-tablet';
+}
+
+function rpc(action, payload) {
+    return fetch(`https://${getResourceName()}/rpc`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+        body: JSON.stringify({ action, payload: payload || {} }),
+    }).then((r) => r.json()).catch(() => ({ ok: false, error: 'connection_error' }));
+}
+
+function nuiPost(name, payload) {
+    return fetch(`https://${getResourceName()}/${name}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+        body: JSON.stringify(payload || {}),
+    }).catch(() => {});
+}
+
+// call() zeigt bei einem Fehler bewusst schon einen Toast und wirft danach,
+// damit der aufrufende Code nicht weiterläuft - das erzeugt aber eine
+// "Uncaught (in promise)"-Meldung in der Konsole, obwohl der Fehler dem
+// Nutzer bereits angezeigt wurde. Da unterdrücken wir hier gezielt.
+window.addEventListener('unhandledrejection', (event) => {
+    event.preventDefault();
+});
+
+const ERROR_MESSAGES = {
+    not_logged_in: 'Du bist nicht angemeldet.',
+    invalid_credentials: 'Name oder Passwort falsch.',
+    employee_already_exists: 'Dieser Name ist bereits vergeben.',
+    employee_not_found: 'Mitarbeiter nicht gefunden.',
+    already_clocked_in: 'Du bist bereits eingestempelt.',
+    not_clocked_in: 'Du bist nicht eingestempelt.',
+    nothing_to_pay: 'Für diesen Mitarbeiter steht aktuell kein Gehalt aus.',
+    employee_not_online: 'Dieser Mitarbeiter ist gerade nicht online/am Tablet eingeloggt - Gehalt kann nur als echtes Bargeld an den anwesenden Charakter ausgezahlt werden.',
+    dispatcher_available: 'Ein Disponent ist gerade online - Aufträge werden von ihm zugewiesen.',
+    driver_not_online: 'Dieser Fahrer ist gerade nicht online.',
+    insufficient_player_cash: 'Du hast nicht genug Bargeld dabei, um diesen Betrag einzuzahlen.',
+    employee_inactive: 'Dieses Mitarbeiterkonto ist deaktiviert.',
+    forbidden_role: 'Keine Berechtigung für diese Aktion.',
+    missing_permission: 'Keine Berechtigung für diese Aktion.',
+    insufficient_balance: 'Nicht genügend Guthaben für diese Auszahlung.',
+    invalid_amount: 'Ungültiger Betrag.',
+    missing_reason: 'Bitte einen Grund angeben.',
+    missing_fields: 'Bitte alle Pflichtfelder ausfüllen.',
+    plate_taken: 'Dieses Kennzeichen ist bereits vergeben.',
+    vehicle_not_found: 'Fahrzeug nicht gefunden.',
+    vehicle_unavailable: 'Dieses Fahrzeug ist gerade nicht verfügbar - evtl. hat es sich in der Zwischenzeit ein anderer Fahrer genommen. Bitte Auswahl neu öffnen.',
+    vehicle_archived: 'Fahrzeug ist archiviert.',
+    trailer_not_found: 'Anhänger nicht gefunden.',
+    trailer_unavailable: 'Dieser Anhänger ist gerade nicht verfügbar - evtl. hat ihn sich in der Zwischenzeit ein anderer Fahrer genommen. Bitte Auswahl neu öffnen.',
+    missing_trailer_or_workshop: 'Bitte entweder einen Anhänger auswählen oder Werkstattfahrt (kein Anhänger) wählen.',
+    driver_not_found: 'Fahrer nicht gefunden.',
+    order_not_found: 'Auftrag nicht gefunden.',
+    order_not_open: 'Auftrag ist nicht mehr offen.',
+    order_not_pending: 'Auftrag befindet sich nicht im richtigen Status.',
+    order_not_in_transit: 'Auftrag ist nicht unterwegs.',
+    order_not_reassignable: 'Auftrag kann nicht neu zugewiesen werden.',
+    order_not_cancellable: 'Auftrag kann in diesem Status nicht abgebrochen werden.',
+    cancel_already_requested: 'Für diesen Auftrag läuft bereits eine Abbruch-Anfrage.',
+    cancel_request_not_found: 'Abbruch-Anfrage nicht gefunden.',
+    cancel_request_already_resolved: 'Diese Abbruch-Anfrage wurde bereits bearbeitet.',
+    shift_not_started: 'Du musst zuerst deine Fahrerkarte einstecken (Reiter Fahrerkarte, Fahrt starten), bevor du einen Auftrag annehmen kannst.',
+    shift_update_failed: 'Fahrerkarte konnte nicht gespeichert werden - fehlen evtl. die Spalten on_shift/shift_started_at in st_drivers (sql/install.sql aktuell?)?',
+    no_cargo_route_available: 'Aktuell gibt es keine passende Fracht-/Standortkombination für einen neuen Auftrag.',
+    order_already_closed: 'Auftrag ist bereits abgeschlossen.',
+    not_your_order: 'Das ist nicht dein Auftrag.',
+    driver_missing_permission: 'Dieser Fahrer besitzt nicht die für den Auftrag erforderliche Berechtigung (z.B. Gefahrgut).',
+    last_management_account: 'Es muss mindestens eine aktive Geschäftsführung geben.',
+    invalid_status_transition: 'Ungültiger Statuswechsel.',
+    invalid_status: 'Ungültiger Status.',
+    invalid_role: 'Ungültige Rolle.',
+    invalid_permission: 'Ungültige Berechtigung.',
+    role_not_found: 'Rolle nicht gefunden.',
+    role_is_builtin: 'Die drei mitgelieferten Basisrollen können nicht gelöscht werden.',
+    role_in_use: 'Dieser Rolle sind noch Mitarbeiter zugeordnet - erst umverteilen, dann löschen.',
+    missing_permissions: 'Bitte mindestens eine Berechtigung auswählen.',
+    last_roles_manage_role: 'Diese Rolle ist die letzte mit der Berechtigung "Rollen & Berechtigungen verwalten", der noch Mitarbeiter zugeordnet sind - das würde die Geschäftsführung aussperren.',
+    unknown_action: 'Unbekannte Aktion.',
+    connection_error: 'Keine Verbindung zum Server.',
+    server_error: 'Serverfehler. Bitte später erneut versuchen.',
+};
+
+function translateError(code) {
+    // Server hängt bei vehicle_missing_trailer das benötigte Anhänger-Label
+    // per ":" an den Fehlercode an (siehe server/sv_orders.lua), damit hier
+    // steht, WELCHER Anhänger gebraucht wird, statt nur des rohen Codes.
+    if (typeof code === 'string' && code.startsWith('vehicle_missing_trailer:')) {
+        const needed = code.slice('vehicle_missing_trailer:'.length);
+        return `Am Fahrzeug hängt kein passender Anhänger - benötigt wird: ${needed}.`;
+    }
+    return ERROR_MESSAGES[code] || code || 'Unbekannter Fehler';
+}
+
+async function call(action, payload) {
+    const res = await rpc(action, payload);
+    if (!res || !res.ok) {
+        toast('Fehler', translateError(res && res.error), 'error');
+        throw new Error((res && res.error) || 'error');
+    }
+    return res.result;
+}
+
+// ---------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------
+
+function escapeHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function formatMoney(n) {
+    const val = Math.round(Number(n) || 0);
+    return '$' + val.toLocaleString('de-DE');
+}
+
+function formatDate(s, withTime) {
+    if (!s) return '-';
+    // DATETIME-Spalten kommen je nach oxmysql-Version/Treiber entweder als
+    // "YYYY-MM-DD HH:MM:SS"-String ODER als roher Unix-Zeitstempel (ms) an -
+    // beide Fälle abdecken, statt nur den String-Fall.
+    const isRawTimestamp = typeof s === 'number' || /^\d+$/.test(String(s));
+    const d = isRawTimestamp ? new Date(Number(s)) : new Date(String(s).replace(' ', 'T'));
+    if (isNaN(d.getTime())) return String(s);
+    const date = d.toLocaleDateString('de-DE');
+    if (!withTime) return date;
+    const time = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    return `${date} ${time}`;
+}
+
+const VEHICLE_STATUS_META = {
+    verfuegbar: { label: 'Verfügbar', dot: 'green' },
+    im_einsatz: { label: 'Im Einsatz', dot: 'blue' },
+    wartung: { label: 'Wartung', dot: 'yellow' },
+    defekt: { label: 'Defekt', dot: 'red' },
+    ausser_betrieb: { label: 'Außer Betrieb', dot: 'gray' },
+};
+
+const DRIVER_STATUS_META = {
+    offline: { label: 'Offline', dot: 'gray' },
+    verfuegbar: { label: 'Verfügbar', dot: 'green' },
+    im_einsatz: { label: 'Im Einsatz', dot: 'blue' },
+    pause: { label: 'Pause', dot: 'yellow' },
+};
+
+const ORDER_STATUS_META = {
+    offen: { label: 'Offen', dot: 'gray' },
+    disponiert: { label: 'Disponiert', dot: 'yellow' },
+    angenommen: { label: 'Angenommen', dot: 'blue' },
+    anfahrt: { label: 'Anfahrt zum Beladepunkt', dot: 'blue' },
+    beladen: { label: 'Beladen, unterwegs zum Ziel', dot: 'blue' },
+    entladen: { label: 'Wird entladen', dot: 'blue' },
+    unterwegs: { label: 'Unterwegs', dot: 'blue' },
+    abgeschlossen: { label: 'Abgeschlossen', dot: 'green' },
+    abgebrochen: { label: 'Abgebrochen', dot: 'red' },
+    abgelehnt: { label: 'Abgelehnt', dot: 'red' },
+};
+
+const EMPLOYMENT_STATUS_META = {
+    aktiv: { label: 'Aktiv', dot: 'green' },
+    inaktiv: { label: 'Inaktiv', dot: 'gray' },
+};
+
+// Die 9 festen Rollen der Speditions-Website (src/lib/roles.ts dort) - nur
+// für die Website-Sync-Rollenzuordnung im Reiter "Rollen" (Config.Website).
+const WEBSITE_ROLE_LABELS = {
+    geschaeftsfuehrung: 'Geschäftsführer',
+    prokurist: 'Prokurist',
+    betriebsleiter: 'Betriebsleiter',
+    chefdisponent: 'Chefdisponent',
+    disponent: 'Disponent',
+    lager: 'Lager',
+    fuhrpark: 'Fuhrpark & Werkstatt',
+    buchhaltung: 'Buchhaltung',
+    fahrer: 'Fahrer',
+};
+
+function badge(meta) {
+    if (!meta) return '-';
+    return `<span class="pill"><span class="dot dot-${meta.dot}"></span>${meta.label}</span>`;
+}
+
+function hoursMeter(label, minutes, maxMinutes, extraHint) {
+    const pct = Math.min(100, Math.round((minutes / maxMinutes) * 100));
+    const cls = pct >= 100 ? 'over' : pct >= 80 ? 'warn' : '';
+    return `<div class="meter-row">
+        <div class="meter-label"><span>${label}</span><b>${minutes} / ${maxMinutes} min</b></div>
+        <div class="meter-track"><span class="meter-fill ${cls}" style="width:${pct}%;"></span></div>
+        ${extraHint ? `<div class="card-hint" style="margin-top:4px;">${extraHint}</div>` : ''}
+    </div>`;
+}
+
+function renderHoursBlock(hours) {
+    if (!hours) return '<div class="card-hint">Keine Daten.</div>';
+    const restHint = hours.resting ? `Pause läuft seit ${formatDate(hours.restingSince, true)} (mind. ${hours.requiredBreakMinutes} Min. nötig, um die Lenkzeit zurückzusetzen)` : '';
+    return `${hoursMeter('Ununterbrochene Lenkzeit', hours.continuousMinutes, hours.maxContinuousMinutes, restHint)}${hoursMeter('Lenkzeit heute', hours.dailyMinutes, hours.maxDailyMinutes)}`;
+}
+
+function table(headers, rowsHtml) {
+    const body = rowsHtml.length
+        ? rowsHtml.join('')
+        : `<tr class="empty-row"><td colspan="${headers.length}">Keine Einträge vorhanden.</td></tr>`;
+    return `<div class="scroll-x"><table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+// Checkbox-Liste aller Berechtigungen (gruppiert nach Config.Permissions'
+// `group`-Feld) für die Rollen-Anlegen-/Bearbeiten-Modals.
+function permissionCheckboxesHtml(catalog, selectedKeys) {
+    const groups = {};
+    catalog.forEach((p) => {
+        const g = p.group || 'Sonstiges';
+        (groups[g] = groups[g] || []).push(p);
+    });
+    return Object.keys(groups).map((g) => `
+        <div style="margin-top:10px;">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2);margin-bottom:4px;">${escapeHtml(g)}</div>
+            ${groups[g].map((p) => `
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-0);margin:6px 0;">
+                    <input type="checkbox" class="role-perm-checkbox" value="${p.key}" style="width:auto;" ${selectedKeys.includes(p.key) ? 'checked' : ''} />
+                    ${escapeHtml(p.label)}
+                </label>`).join('')}
+        </div>`).join('');
+}
+
+// ---------------------------------------------------------
+// Toasts
+// ---------------------------------------------------------
+
+function toast(title, msg, type) {
+    const stack = document.getElementById('toast-stack');
+    const el = document.createElement('div');
+    el.className = `toast ${type || ''}`;
+    el.innerHTML = `<div class="toast-title">${escapeHtml(title)}</div><div class="toast-msg">${escapeHtml(msg || '')}</div>`;
+    stack.appendChild(el);
+    setTimeout(() => el.remove(), 5000);
+}
+
+// ---------------------------------------------------------
+// Modal
+// ---------------------------------------------------------
+
+function openModal(title, subtitle, bodyHtml, actionsHtml) {
+    const root = document.getElementById('modal-root');
+    root.innerHTML = `<div class="modal-box">
+        <div class="modal-title">${title}</div>
+        ${subtitle ? `<div class="modal-subtitle">${subtitle}</div>` : ''}
+        <div class="modal-body">${bodyHtml}</div>
+        <div class="modal-actions">${actionsHtml}</div>
+    </div>`;
+    root.classList.remove('hidden');
+}
+
+function closeModal() {
+    const root = document.getElementById('modal-root');
+    root.classList.add('hidden');
+    root.innerHTML = '';
+}
+
+document.getElementById('modal-root').addEventListener('click', (e) => {
+    if (e.target.id === 'modal-root') closeModal();
+});
+
+function modalInputValue(id) {
+    const el = document.getElementById(id);
+    return el ? el.value : '';
+}
+
+// Ersetzt das native window.confirm() - in der FiveM-NUI (CEF) friert ein
+// synchroner JS-Dialog (confirm/alert/prompt) das GESAMTE Spiel ein, weil
+// der Renderprozess auf eine Antwort wartet, die das Spiel nie zustellen
+// kann (kein natives Handling für JS-Dialoge). actionCall ist ein fertiger
+// JS-Aufruf als String (z.B. "Actions.reallyDeleteTrailer(5)"), analog zu
+// den bereits vorhandenen onclick-Handlern mit Template-Literals.
+function openConfirmModal(title, message, confirmLabel, actionCall) {
+    openModal(title, '', `<p style="font-size:13px;color:var(--text-1);">${escapeHtml(message)}</p>`, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-danger" onclick="${actionCall}">${escapeHtml(confirmLabel)}</button>
+    `);
+}
+
+// ---------------------------------------------------------
+// Navigation
+// ---------------------------------------------------------
+
+// Welche Reiter sichtbar sind, hängt NICHT mehr von der Rolle selbst ab,
+// sondern von deren Berechtigungen (server/sv_roles.lua) - so tauchen auch
+// von der Geschäftsführung frei angelegte Rollen mit den passenden
+// Berechtigungen automatisch mit den richtigen Reitern auf.
+const NAV_ITEMS = [
+    { id: 'driver-card', label: 'Fahrerkarte', perm: 'driver_actions' },
+    { id: 'driver-orders', label: 'Aufträge', perm: 'driver_actions' },
+    { id: 'driver-history', label: 'Historie', perm: 'driver_actions' },
+    { id: 'driver-earnings', label: 'Einnahmen', perm: 'driver_actions' },
+    { id: 'driver-vehicle', label: 'Mein Fahrzeug', perm: 'driver_actions' },
+    { id: 'driver-messages', label: 'Nachrichten', perm: 'driver_actions' },
+    { id: 'dispatch-drivers', label: 'Fahrerübersicht', perm: 'dispatch' },
+    { id: 'dispatch-pool', label: 'Auftragspool', perm: 'dispatch' },
+    { id: 'dispatch-active', label: 'Aktive Aufträge', perm: 'dispatch' },
+    { id: 'dispatch-completed', label: 'Abgeschlossen', perm: 'dispatch' },
+    { id: 'dispatch-revenue', label: 'Unternehmensumsatz', perm: 'dispatch' },
+    { id: 'gf-dashboard', label: 'Dashboard', perm: 'stats_view' },
+    { id: 'gf-employees', label: 'Mitarbeiter', perm: 'employees_manage' },
+    { id: 'gf-roles', label: 'Rollen', perm: 'roles_manage' },
+    { id: 'gf-drivers', label: 'Fahrerakten', perm: 'employees_manage' },
+    { id: 'gf-fleet', label: 'Fuhrpark', perm: 'fleet_manage' },
+    { id: 'gf-trailers', label: 'Anhänger', perm: 'fleet_manage' },
+    { id: 'gf-locations', label: 'Orte', perm: 'locations_manage' },
+    { id: 'gf-cargo-types', label: 'Frachtarten', perm: 'cargo_types_manage' },
+    { id: 'gf-finance', label: 'Finanzen', perm: 'finance_view' },
+    { id: 'gf-payouts', label: 'Ein-/Auszahlungen', perm: 'finance_payout' },
+    { id: 'gf-payroll', label: 'Gehälter', perm: 'wages_manage' },
+    { id: 'gf-orders', label: 'Aufträge', perm: 'stats_view' },
+    { id: 'gf-log', label: 'Protokoll', perm: 'activity_log_view' },
+    { id: 'gf-console', label: 'Konsole', perm: 'console_view' },
+];
+
+function visibleNavItems(permissions) {
+    const perms = permissions || [];
+    return NAV_ITEMS.filter((item) => perms.includes(item.perm));
+}
+
+function buildSidebar(permissions) {
+    const sidebar = document.getElementById('sidebar');
+    sidebar.innerHTML = '';
+    visibleNavItems(permissions).forEach((item) => {
+        const el = document.createElement('div');
+        el.className = 'nav-item';
+        el.dataset.view = item.id;
+        el.innerHTML = `<span>${escapeHtml(item.label)}</span>`;
+        el.addEventListener('click', () => showView(item.id));
+        sidebar.appendChild(el);
+    });
+}
+
+// Manche Ansichten können periodisch pollen, solange sie aktiv sind -
+// dieses Intervall wird beim Verlassen der Ansicht automatisch gestoppt.
+let activeViewInterval = null;
+
+async function showView(id) {
+    if (activeViewInterval) { clearInterval(activeViewInterval); activeViewInterval = null; }
+    State.currentView = id;
+    document.querySelectorAll('.nav-item').forEach((el) => el.classList.toggle('active', el.dataset.view === id));
+    const content = document.getElementById('content');
+    content.innerHTML = '<div class="card-hint">Lädt...</div>';
+    try {
+        const renderer = VIEWS[id];
+        if (renderer) await renderer(content);
+    } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[speditions-tablet] Fehler beim Laden der Ansicht', id, e);
+    }
+}
+
+function refreshIfViewing(ids) {
+    if (ids.includes(State.currentView)) showView(State.currentView);
+}
+
+// ---------------------------------------------------------
+// Boot / Open / Close
+// ---------------------------------------------------------
+
+window.addEventListener('message', (event) => {
+    const data = event.data;
+    if (!data || !data.type) return;
+    if (data.type === 'open') handleOpen(data.companyName);
+    else if (data.type === 'close') handleClose();
+    else if (data.type === 'push') handlePush(data.event, data.data);
+});
+
+document.addEventListener('keydown', (e) => {
+    if (!document.getElementById('lock-screen').classList.contains('hidden')) { unlockTablet(); return; }
+    if (e.key === 'Escape') requestClose();
+});
+
+document.getElementById('lock-screen').addEventListener('click', () => unlockTablet());
+document.getElementById('login-submit').addEventListener('click', () => Actions.login());
+document.getElementById('login-username').addEventListener('keydown', (e) => { if (e.key === 'Enter') Actions.login(); });
+document.getElementById('login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') Actions.login(); });
+document.getElementById('employee-chip').addEventListener('click', () => Actions.openAccountModal());
+
+function requestClose() {
+    nuiPost('close', {});
+}
+
+async function closeTabletWithVehicleCheck() {
+    if (State.config && Array.isArray(State.config.permissions) && State.config.permissions.includes('driver_actions')) {
+        const res = await rpc('driver:vehicle');
+        if (res && res.ok && res.result && res.result.vehicle) {
+            openVehicleConditionModal(res.result.vehicle);
+            return;
+        }
+    }
+    requestClose();
+}
+
+document.getElementById('close-btn').addEventListener('click', () => closeTabletWithVehicleCheck());
+
+function hideAllScreens() {
+    document.getElementById('lock-screen').classList.add('hidden');
+    document.getElementById('boot-screen').classList.add('hidden');
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('main-ui').classList.add('hidden');
+}
+
+function showLoginScreen() {
+    hideAllScreens();
+    document.getElementById('login-username').value = '';
+    document.getElementById('login-password').value = '';
+    document.getElementById('login-error').classList.add('hidden');
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('login-username').focus();
+}
+
+function handleOpen(companyName) {
+    State.companyName = companyName || 'Speditions-Tablet';
+    document.getElementById('lock-company-name').textContent = State.companyName;
+    document.getElementById('app').classList.remove('hidden');
+    hideAllScreens();
+    document.getElementById('lock-screen').classList.remove('hidden');
+    startClock();
+}
+
+let unlocking = false;
+async function unlockTablet() {
+    if (unlocking) return;
+    unlocking = true;
+
+    hideAllScreens();
+    document.getElementById('boot-screen').classList.remove('hidden');
+    document.getElementById('boot-logo').textContent = (State.companyName || 'SPEDITIONS-TABLET').toUpperCase();
+
+    const res = await rpc('session:whoami');
+    unlocking = false;
+
+    if (res && res.ok && res.result && res.result.loggedIn) {
+        const data = res.result;
+        State.employee = data.employee;
+        State.role = data.employee.role;
+        State.config = data;
+        boot(data);
+    } else {
+        showLoginScreen();
+    }
+}
+
+function openVehicleConditionModal(vehicle) {
+    openModal('Fahrzeugzustand melden', `${escapeHtml(vehicle.name)} (${escapeHtml(vehicle.plate)}) - Pflichtangabe vor dem Schließen des Tablets`, `
+        <label>Tankstand (%)</label>
+        <input id="condition-fuel" type="number" min="0" max="100" value="${vehicle.fuel}" />
+        <label>Mängel / Besonderheiten</label>
+        <textarea id="condition-notes"></textarea>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:12px;">
+            <input type="checkbox" id="condition-workshop" style="width:auto;" />
+            <span style="font-size:12.5px;color:var(--text-1);">Werkstatt erforderlich (Fahrzeug wird auf "Wartung" gesetzt)</span>
+        </label>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.submitVehicleConditionAndClose()">Melden &amp; schließen</button>
+    `);
+}
+
+function handleClose() {
+    document.getElementById('app').classList.add('hidden');
+    closeModal();
+    if (clockInterval) { clearInterval(clockInterval); clockInterval = null; }
+    if (timeclockInterval) { clearInterval(timeclockInterval); timeclockInterval = null; }
+}
+
+let clockInterval = null;
+function startClock() {
+    if (clockInterval) clearInterval(clockInterval);
+    const update = () => {
+        const now = new Date();
+        const time = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        const clockEl = document.getElementById('clock');
+        if (clockEl) clockEl.textContent = time;
+        const lockTimeEl = document.getElementById('lock-time');
+        if (lockTimeEl) lockTimeEl.textContent = time;
+        const lockDateEl = document.getElementById('lock-date');
+        if (lockDateEl) lockDateEl.textContent = now.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long' });
+    };
+    update();
+    clockInterval = setInterval(update, 15000);
+}
+
+function boot(data) {
+    document.getElementById('boot-screen').classList.add('hidden');
+    document.getElementById('main-ui').classList.remove('hidden');
+    document.getElementById('employee-name').textContent = data.employee.name;
+    document.getElementById('employee-role').textContent = data.roleLabels[data.employee.role] || data.employee.role;
+    document.getElementById('topbar-brand').textContent = State.companyName;
+    buildSidebar(data.permissions);
+    const first = visibleNavItems(data.permissions)[0];
+    if (first) showView(first.id);
+    startTimeclockWidget();
+}
+
+// ---------------------------------------------------------
+// Stempeluhr (Topbar-Widget, für jede Rolle sichtbar)
+// ---------------------------------------------------------
+
+let timeclockInterval = null;
+let timeclockState = null;
+
+function formatHm(totalSeconds) {
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    return `${h}:${String(m).padStart(2, '0')} Std.`;
+}
+
+async function refreshTimeclock() {
+    const res = await rpc('me:payrollStatus');
+    if (!res || !res.ok) return;
+    timeclockState = res.result;
+
+    const dot = document.getElementById('timeclock-dot');
+    const label = document.getElementById('timeclock-label');
+    if (!dot || !label) return;
+
+    dot.classList.toggle('on', timeclockState.clockedIn);
+    if (timeclockState.clockedIn) {
+        label.textContent = 'Eingestempelt';
+    } else {
+        label.textContent = timeclockState.unpaidSeconds > 0
+            ? `Ausgestempelt (${formatHm(timeclockState.unpaidSeconds)} offen)`
+            : 'Einstempeln';
+    }
+}
+
+function startTimeclockWidget() {
+    if (timeclockInterval) clearInterval(timeclockInterval);
+    refreshTimeclock();
+    timeclockInterval = setInterval(refreshTimeclock, 30000);
+}
+
+document.getElementById('timeclock-btn').addEventListener('click', async () => {
+    if (timeclockState && timeclockState.clockedIn) {
+        await call('me:clockOut');
+        toast('Ausgestempelt', '', 'success');
+    } else {
+        await call('me:clockIn');
+        toast('Eingestempelt', '', 'success');
+    }
+    refreshTimeclock();
+});
+
+function handlePush(event, data) {
+    const map = {
+        'notifications:new': () => { toast(data.title, data.message, 'info'); refreshIfViewing(['driver-messages', 'driver-orders']); },
+        'orders:newOpenOrder': () => { toast('Neuer Auftrag', 'Ein neuer Auftrag ist im Pool verfügbar.', 'info'); refreshIfViewing(['dispatch-pool']); },
+        'orders:activeChanged': () => refreshIfViewing(['dispatch-active', 'dispatch-pool', 'driver-orders']),
+        'orders:cancelRequested': () => { toast('Abbruch-Anfrage', 'Ein Fahrer möchte einen Auftrag abbrechen.', 'warning'); refreshIfViewing(['dispatch-active']); },
+        'orders:completed': () => { toast('Auftrag abgeschlossen', 'Ein Auftrag wurde erfolgreich abgeschlossen.', 'success'); refreshIfViewing(['dispatch-active', 'dispatch-completed', 'gf-dashboard']); },
+        'dispatch:driversChanged': () => refreshIfViewing(['dispatch-drivers']),
+        'fleet:changed': () => refreshIfViewing(['gf-fleet', 'dispatch-drivers']),
+        'finance:balanceChanged': () => refreshIfViewing(['gf-finance', 'gf-dashboard']),
+        'roles:changed': () => refreshAfterRolesChanged(),
+        'cargotypes:changed': () => refreshAfterCargoTypesChanged(),
+    };
+    if (map[event]) map[event]();
+}
+
+// Wird ausgeloest, sobald sich irgendeine Rolle aendert (Berechtigungen,
+// Label, neue/geloeschte Rolle) - laedt die eigene Sitzung neu (falls sich
+// die eigenen Berechtigungen geaendert haben, z.B. neue Reiter), und
+// aktualisiert offene Rollen-/Mitarbeiter-/Gehalts-Ansichten.
+async function refreshAfterRolesChanged() {
+    const res = await rpc('session:whoami');
+    if (res && res.ok && res.result && res.result.loggedIn) {
+        const data = res.result;
+        State.employee = data.employee;
+        State.role = data.employee.role;
+        State.config = data;
+        document.getElementById('employee-role').textContent = data.roleLabels[data.employee.role] || data.employee.role;
+        buildSidebar(data.permissions);
+    }
+    refreshIfViewing(['gf-roles', 'gf-employees', 'gf-payroll']);
+}
+
+// Wird ausgeloest, sobald sich Frachtarten aendern (angelegt/bearbeitet/
+// geloescht) - haelt State.config.cargoTypes (Namensliste, u.a. fuer die
+// Quelle-/Ziel-Checkboxen im Orte-Formular) aktuell, ohne dass sich jeder
+// erst neu einloggen muss.
+async function refreshAfterCargoTypesChanged() {
+    const res = await rpc('cargotypes:list');
+    if (res && res.ok && res.result && State.config) {
+        State.config.cargoTypes = res.result.cargoTypes.map((c) => c.name);
+    }
+    refreshIfViewing(['gf-cargo-types', 'gf-locations']);
+}
+
+// =========================================================
+// VIEW RENDERERS
+// =========================================================
+
+const VIEWS = {};
+
+// ---------- FAHRER ----------
+
+VIEWS['driver-card'] = async (root) => {
+    const d = await call('driver:card');
+    const emp = d.employee;
+    const stats = d.statistics;
+    const vehicle = d.vehicle;
+
+    const permsHtml = d.permissions.map((p) => `
+        <div class="perm-item ${p.granted ? 'granted' : 'denied'}">
+            <span class="mark"></span>${escapeHtml(p.label)}
+        </div>`).join('');
+
+    root.innerHTML = `
+        <h1 class="view-title">Fahrerkarte</h1>
+        <p class="view-subtitle">Deine digitale Personalakte als Fahrer.</p>
+        <div class="driver-card">
+            <div class="driver-card-head">FAHRERKARTE</div>
+            <div class="driver-card-body">
+                <div class="driver-card-name">${escapeHtml(emp.name)}</div>
+                <div class="driver-card-id">Mitarbeiter-ID: #${emp.id}</div>
+                <div class="driver-card-status">
+                    ${badge(DRIVER_STATUS_META[d.driver.currentStatus])}
+                    <span style="color:var(--text-2)">Fahrer seit ${formatDate(emp.hiredAt)}</span>
+                </div>
+                <div style="margin-top:14px;">
+                    <label style="margin-top:0;">Status ändern</label>
+                    <select id="driver-status-select">
+                        ${Object.keys(DRIVER_STATUS_META).map((k) => `<option value="${k}" ${k === d.driver.currentStatus ? 'selected' : ''}>${DRIVER_STATUS_META[k].label}</option>`).join('')}
+                    </select>
+                    <button class="btn btn-primary btn-sm" style="margin-top:10px;" onclick="Actions.setDriverStatus()">Übernehmen</button>
+                </div>
+            </div>
+            <div class="driver-card-section">
+                <h4>Statistik</h4>
+                <div class="stat-row"><span>Aufträge</span><span>${stats.total_orders}</span></div>
+                <div class="stat-row"><span>Kilometer</span><span>${Number(stats.total_km).toLocaleString('de-DE')} km</span></div>
+                <div class="stat-row"><span>Lieferungen</span><span>${stats.successful_deliveries}</span></div>
+                <div class="stat-row"><span>Pünktlich</span><span>${stats.punctuality_rate} %</span></div>
+                <div class="stat-row"><span>Abgebrochen/Abgelehnt</span><span>${stats.cancelled_orders}</span></div>
+            </div>
+            <div class="driver-card-section">
+                <h4>Fahrerberechtigungen</h4>
+                <div class="perm-list">${permsHtml}</div>
+            </div>
+            <div class="driver-card-section">
+                <h4>Fahrerkarte</h4>
+                <div class="stat-row">
+                    <span>Status</span>
+                    <span>${d.driver.onShift ? `Eingesteckt (seit ${formatDate(d.driver.shiftStartedAt, true)})` : 'Nicht eingesteckt'}</span>
+                </div>
+                <p class="card-hint">Vor der Annahme eines Auftrags musst du hier deine Fahrt starten, damit deine Lenk-/Ruhezeiten erfasst werden.</p>
+                ${d.driver.onShift
+                    ? `<button class="btn btn-sm btn-danger" onclick="Actions.endShift()">Fahrerkarte abziehen (Fahrt beenden)</button>`
+                    : `<button class="btn btn-sm btn-primary" onclick="Actions.openStartShiftModal()">Fahrerkarte einstecken (Fahrt starten)</button>`}
+            </div>
+            <div class="driver-card-section">
+                <h4>Lenk- &amp; Ruhezeiten</h4>
+                ${renderHoursBlock(d.hours)}
+            </div>
+            <div class="driver-card-section">
+                <h4>Aktueller LKW</h4>
+                ${vehicle ? `
+                    <div class="stat-row"><span>${escapeHtml(vehicle.name)}</span><span>${escapeHtml(vehicle.model)}</span></div>
+                    <div class="stat-row"><span>Kennzeichen</span><span>${escapeHtml(vehicle.plate)}</span></div>
+                    <div class="stat-row"><span>Kilometerstand</span><span>${Number(vehicle.mileage).toLocaleString('de-DE')} km</span></div>
+                ` : `<div class="card-hint">Kein Fahrzeug zugewiesen.</div>`}
+            </div>
+            ${d.driver.notes ? `
+            <div class="driver-card-section">
+                <h4>Verwarnungen / Notizen</h4>
+                <div style="font-size:13px;color:var(--text-1);">${escapeHtml(d.driver.notes)}</div>
+            </div>` : ''}
+        </div>`;
+};
+
+VIEWS['driver-orders'] = async (root) => {
+    const [d, pool] = await Promise.all([call('driver:myOrders'), call('driver:openOrders')]);
+
+    const cargoHint = { anfahrt: 'Zum Beladepunkt fahren, dort per E abholen', beladen: 'Zum Zielort fahren, dort per E abliefern', entladen: 'Wird entladen...' };
+
+    const coordsText = (c) => (c ? `GPS: ${c.x}, ${c.y}` : '');
+    const CANCELLABLE_STATUSES = ['angenommen', 'anfahrt', 'beladen', 'entladen'];
+
+    const rows = d.orders.map((o) => {
+        let actions = '';
+        if (o.status === 'disponiert') {
+            actions = `<button class="btn btn-sm btn-primary" onclick="Actions.acceptOrder(${o.id})">Annehmen</button>
+                        <button class="btn btn-sm btn-danger" onclick="Actions.declineOrder(${o.id})">Ablehnen</button>`;
+        } else if (cargoHint[o.status]) {
+            actions = `<span class="view-subtitle" style="margin:0;">${cargoHint[o.status]}</span>`;
+        }
+        if (CANCELLABLE_STATUSES.includes(o.status)) {
+            actions += o.pending_cancel_request_id
+                ? `<span class="pill" style="margin-left:6px;">⏳ Abbruch angefragt</span>`
+                : `<button class="btn btn-sm btn-danger" style="margin-left:6px;" onclick="Actions.requestCancelOrder(${o.id})">Abbrechen</button>`;
+        }
+        const lieferschein = ['angenommen', 'anfahrt', 'beladen', 'entladen'].includes(o.status) ? `
+            <tr class="lieferschein-row">
+                <td colspan="7">
+                    <div class="lieferschein">
+                        <div class="lieferschein-head">
+                            <div class="lieferschein-title">Lieferschein #${o.id}</div>
+                            <div class="lieferschein-meta">Ausgestellt ${formatDate(o.created_at, true)}${o.dispatcher_name ? ` · Disponiert von ${escapeHtml(o.dispatcher_name)}` : ''}</div>
+                        </div>
+                        <div class="lieferschein-grid">
+                            <div><span>Ware</span><strong>${escapeHtml(o.cargo)}</strong></div>
+                            <div><span>Menge</span><strong>${o.cargo_amount ? `${Number(o.cargo_amount).toLocaleString('de-DE')} ${escapeHtml(o.cargo_unit || '')}` : '-'}</strong></div>
+                            <div><span>Gefahrgut</span><strong>${o.requires_permission ? 'Ja' : 'Nein'}</strong></div>
+                            <div><span>Entfernung</span><strong>${Number(o.distance_km).toLocaleString('de-DE')} km</strong></div>
+                            <div><span>Abholort</span><strong>${escapeHtml(o.start_location)}</strong><small>${coordsText(o.start_coords)}</small></div>
+                            <div><span>Zielort</span><strong>${escapeHtml(o.end_location)}</strong><small>${coordsText(o.end_coords)}</small></div>
+                            <div><span>Fahrzeug</span><strong>${o.vehicle_name ? `${escapeHtml(o.vehicle_name)} (${escapeHtml(o.vehicle_plate)})` : '-'}</strong></div>
+                            <div><span>Frist</span><strong>${o.deadline ? formatDate(o.deadline, true) : '-'}</strong></div>
+                        </div>
+                    </div>
+                </td>
+            </tr>` : '';
+        return `<tr>
+            <td>#${o.id}</td>
+            <td>${escapeHtml(o.cargo)}</td>
+            <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
+            <td>${Number(o.distance_km).toLocaleString('de-DE')} km</td>
+            <td>${o.vehicle_name ? `${escapeHtml(o.vehicle_name)} (${escapeHtml(o.vehicle_plate)})` : '-'}</td>
+            <td>${badge(ORDER_STATUS_META[o.status])}</td>
+            <td class="btn-row">${actions}</td>
+        </tr>${lieferschein}`;
+    });
+
+    const poolRows = pool.orders.map((o) => `<tr>
+        <td>#${o.id}</td>
+        <td>${escapeHtml(o.cargo)}${o.requires_permission ? ' <span class="pill pill-warning">Gefahrgut</span>' : ''}</td>
+        <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
+        <td>${Number(o.distance_km).toLocaleString('de-DE')} km</td>
+        <td>${formatMoney(o.value)}</td>
+        <td class="btn-row">
+            <button class="btn btn-sm btn-primary" ${pool.dispatcherAvailable ? 'disabled' : ''} onclick="Actions.selfAssignOrder(${o.id})">Übernehmen</button>
+        </td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Meine Aufträge</h1>
+        <p class="view-subtitle">Zugewiesene und aktive Aufträge.</p>
+        ${!pool.onShift ? `<p class="view-subtitle" style="color:var(--yellow);">Du musst zuerst deine Fahrerkarte einstecken (Reiter Fahrerkarte, Fahrt starten), bevor du einen Auftrag annehmen kannst.</p>` : ''}
+        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Distanz', 'Fahrzeug', 'Status', 'Aktion'], rows)}</div>
+
+        <h1 class="view-title" style="margin-top:24px;">Offener Auftragspool</h1>
+        <p class="view-subtitle">${pool.dispatcherAvailable
+            ? 'Ein Disponent ist gerade online - Aufträge werden von ihm zugewiesen.'
+            : 'Aktuell ist kein Disponent verfügbar - du kannst dir einen offenen Auftrag selbst übernehmen.'}</p>
+        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Distanz', 'Wert', ''], poolRows)}</div>`;
+};
+
+VIEWS['driver-history'] = async (root) => {
+    const d = await call('driver:history');
+    const rows = d.history.map((o) => `<tr>
+        <td>#${o.id}</td>
+        <td>${escapeHtml(o.cargo)}</td>
+        <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
+        <td>${badge(ORDER_STATUS_META[o.status])}</td>
+        <td>${o.status === 'abgeschlossen' ? (o.punctual ? 'Pünktlich' : 'Verspätet') : '-'}</td>
+        <td>${o.status === 'abgeschlossen' ? formatMoney(o.value) : '-'}</td>
+        <td>${formatDate(o.completed_at || o.created_at, true)}</td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Auftragshistorie</h1>
+        <p class="view-subtitle">Deine abgeschlossenen, abgebrochenen und abgelehnten Aufträge.</p>
+        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Status', 'Pünktlichkeit', 'Wert', 'Datum'], rows)}</div>`;
+};
+
+VIEWS['driver-earnings'] = async (root) => {
+    const e = await call('driver:earnings');
+    root.innerHTML = `
+        <h1 class="view-title">Meine Einnahmen</h1>
+        <p class="view-subtitle">Von dir erwirtschafteter Unternehmensumsatz - kein Auszahlungsanspruch.</p>
+        <div class="grid grid-3">
+            <div class="card"><div class="card-title">Diese Woche</div><div class="card-value">${formatMoney(e.thisWeek)}</div></div>
+            <div class="card"><div class="card-title">Dieser Monat</div><div class="card-value">${formatMoney(e.thisMonth)}</div></div>
+            <div class="card"><div class="card-title">Gesamt</div><div class="card-value">${formatMoney(e.total)}</div></div>
+        </div>
+        <div class="section" style="margin-top:16px;">
+            <div class="section-header"><h3>Auszahlungsstatus</h3></div>
+            <p style="color:var(--text-1);font-size:13px;line-height:1.6;">
+                Diese Beträge gehören dem <strong>Speditionsunternehmen</strong> und liegen als Unternehmensguthaben vor.
+                Sie werden <strong>nicht automatisch</strong> auf dein persönliches Spielerkonto überwiesen.
+                Auszahlungen aus dem Unternehmensguthaben kann ausschließlich die Geschäftsführung vornehmen.
+            </p>
+        </div>`;
+};
+
+VIEWS['driver-vehicle'] = async (root) => {
+    const d = await call('driver:vehicle');
+    const v = d.vehicle;
+    root.innerHTML = `
+        <h1 class="view-title">Mein Fahrzeug</h1>
+        <p class="view-subtitle">Dir aktuell zugewiesenes Firmenfahrzeug.</p>
+        ${v ? `
+        <div class="card" style="max-width:420px;">
+            <div class="card-title">${escapeHtml(v.vehicle_class)}</div>
+            <div class="card-value small">${escapeHtml(v.name)}</div>
+            <div class="stat-row"><span>Modell</span><span>${escapeHtml(v.model)}</span></div>
+            <div class="stat-row"><span>Kennzeichen</span><span>${escapeHtml(v.plate)}</span></div>
+            <div class="stat-row"><span>Kilometerstand</span><span>${Number(v.mileage).toLocaleString('de-DE')} km</span></div>
+            <div class="stat-row"><span>Tank</span><span>${v.fuel} %</span></div>
+            <div class="stat-row"><span>Status</span><span>${badge(VEHICLE_STATUS_META[v.status])}</span></div>
+        </div>` : `<div class="section card-hint">Dir ist aktuell kein Fahrzeug zugewiesen.</div>`}`;
+};
+
+VIEWS['driver-messages'] = async (root) => {
+    const d = await call('driver:messages');
+    const rows = d.messages.map((m) => `
+        <div class="section" style="margin-bottom:10px;${m.read_state ? 'opacity:0.6;' : ''}">
+            <div class="section-header">
+                <h3>${escapeHtml(m.title)}</h3>
+                <span class="card-hint">${formatDate(m.created_at, true)}</span>
+            </div>
+            <p style="font-size:13px;color:var(--text-1);margin:0 0 8px;">${escapeHtml(m.message)}</p>
+            ${m.sender_name ? `<div class="card-hint">Von: ${escapeHtml(m.sender_name)}</div>` : ''}
+            ${!m.read_state ? `<button class="btn btn-sm" style="margin-top:8px;" onclick="Actions.markRead(${m.id})">Als gelesen markieren</button>` : ''}
+        </div>`).join('');
+
+    root.innerHTML = `
+        <h1 class="view-title">Nachrichten</h1>
+        <p class="view-subtitle">Nachrichten von deinem Disponenten.</p>
+        ${rows || '<div class="section card-hint">Keine Nachrichten vorhanden.</div>'}`;
+};
+
+// ---------- DISPONENT ----------
+
+VIEWS['dispatch-drivers'] = async (root) => {
+    const d = await call('dispatch:drivers');
+    const rows = d.drivers.map((r) => `<tr>
+        <td>${badge(DRIVER_STATUS_META[r.current_status])}</td>
+        <td>${escapeHtml(r.name)}</td>
+        <td>${r.vehicle_name ? `${escapeHtml(r.vehicle_name)} (${escapeHtml(r.vehicle_plate)})` : '-'}</td>
+        <td>${r.vehicle_status ? badge(VEHICLE_STATUS_META[r.vehicle_status]) : '-'}</td>
+        <td class="btn-row">
+            <button class="btn btn-sm" onclick="Actions.messageDriver(${r.driver_id}, ${escapeHtml(JSON.stringify(r.name))})">Nachricht</button>
+            <button class="btn btn-sm" onclick="Actions.remindDriver(${r.driver_id})">Lenkzeit erinnern</button>
+        </td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Fahrerübersicht</h1>
+        <p class="view-subtitle">Alle aktiven Fahrer mit Status und aktuellem Fahrzeug.</p>
+        <div class="section">${table(['Status', 'Fahrer', 'Fahrzeug', 'Fahrzeugstatus', ''], rows)}</div>`;
+};
+
+VIEWS['dispatch-pool'] = async (root) => {
+    const [pool, drivers] = await Promise.all([call('dispatch:openOrders'), call('dispatch:drivers')]);
+    window.__availableDrivers = drivers.drivers;
+
+    const rows = pool.orders.map((o) => `<tr>
+        <td>#${o.id}</td>
+        <td>${escapeHtml(o.cargo)}${o.requires_permission ? ' <span class="pill pill-warning">Gefahrgut</span>' : ''}</td>
+        <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
+        <td>${Number(o.distance_km).toLocaleString('de-DE')} km</td>
+        <td>${formatMoney(o.value)}</td>
+        <td><button class="btn btn-sm btn-primary" onclick="Actions.openDispatchModal(${o.id}, ${escapeHtml(JSON.stringify(o.requires_permission || null))})">Disponieren</button></td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Auftragspool</h1>
+        <p class="view-subtitle">Automatisch generierte Aufträge, die noch keinem Fahrer zugewiesen sind.</p>
+        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Distanz', 'Wert', ''], rows)}</div>`;
+};
+
+VIEWS['dispatch-active'] = async (root) => {
+    const [active, drivers] = await Promise.all([call('dispatch:activeOrders'), call('dispatch:drivers')]);
+    window.__availableDrivers = drivers.drivers;
+
+    const rows = active.orders.map((o) => {
+        const cancelActions = o.pending_cancel_request_id ? `
+            <button class="btn btn-sm btn-primary" onclick="Actions.resolveCancelRequest(${o.pending_cancel_request_id}, true)">Abbruch genehmigen</button>
+            <button class="btn btn-sm" onclick="Actions.resolveCancelRequest(${o.pending_cancel_request_id}, false)">Ablehnen</button>` : '';
+        return `<tr>
+            <td>#${o.id}</td>
+            <td>${escapeHtml(o.cargo)}</td>
+            <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
+            <td>${o.driver_name ? escapeHtml(o.driver_name) : '-'}</td>
+            <td>${o.vehicle_name ? `${escapeHtml(o.vehicle_name)} (${escapeHtml(o.vehicle_plate)})` : '-'}</td>
+            <td>${badge(ORDER_STATUS_META[o.status])}${o.pending_cancel_request_id ? ' <span class="pill">⏳ Abbruch angefragt</span>' : ''}</td>
+            <td class="btn-row">
+                ${cancelActions}
+                ${['disponiert', 'angenommen', 'anfahrt', 'beladen'].includes(o.status) ? `<button class="btn btn-sm" onclick="Actions.openReassignModal(${o.id})">Neu zuweisen</button>` : ''}
+                <button class="btn btn-sm btn-danger" onclick="Actions.cancelOrder(${o.id})">Abbrechen</button>
+            </td>
+        </tr>`;
+    });
+
+    root.innerHTML = `
+        <h1 class="view-title">Aktive Aufträge</h1>
+        <p class="view-subtitle">Live-Überwachung aller disponierten und laufenden Aufträge.</p>
+        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Fahrer', 'Fahrzeug', 'Status', 'Aktion'], rows)}</div>`;
+};
+
+VIEWS['dispatch-completed'] = async (root) => {
+    const d = await call('dispatch:completedOrders');
+    const rows = d.orders.map((o) => `<tr>
+        <td>#${o.id}</td>
+        <td>${escapeHtml(o.cargo)}</td>
+        <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
+        <td>${o.driver_name ? escapeHtml(o.driver_name) : '-'}</td>
+        <td>${badge(ORDER_STATUS_META[o.status])}</td>
+        <td>${o.status === 'abgeschlossen' ? formatMoney(o.value) : '-'}</td>
+        <td>${formatDate(o.completed_at, true)}</td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Abgeschlossene Aufträge</h1>
+        <p class="view-subtitle">Historie abgeschlossener, abgebrochener und abgelehnter Aufträge.</p>
+        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Fahrer', 'Status', 'Wert', 'Datum'], rows)}</div>`;
+};
+
+VIEWS['dispatch-revenue'] = async (root) => {
+    const r = await call('dispatch:companyOrdersRevenue');
+    root.innerHTML = `
+        <h1 class="view-title">Unternehmensumsatz</h1>
+        <p class="view-subtitle">Reine Leseansicht - Auszahlungen sind der Geschäftsführung vorbehalten.</p>
+        <div class="grid grid-3">
+            <div class="card"><div class="card-title">Einnahmen heute</div><div class="card-value">${formatMoney(r.revenueToday)}</div></div>
+            <div class="card"><div class="card-title">Einnahmen Woche</div><div class="card-value">${formatMoney(r.revenueWeek)}</div></div>
+            <div class="card"><div class="card-title">Einnahmen Monat</div><div class="card-value">${formatMoney(r.revenueMonth)}</div></div>
+        </div>`;
+};
+
+// ---------- GESCHÄFTSFÜHRUNG ----------
+
+VIEWS['gf-dashboard'] = async (root) => {
+    const [d, stats] = await Promise.all([call('gf:dashboard'), call('gf:stats')]);
+    const activity = d.recentActivity.map((a) => `<div class="stat-row"><span>[${formatDate(a.created_at, true)}] ${a.employee_name ? escapeHtml(a.employee_name) : 'System'}</span><span style="color:var(--text-2);">${escapeHtml(a.details)}</span></div>`).join('');
+
+    const maxRevenue = Math.max(1, ...stats.revenueByDay.map((r) => Number(r.total)));
+    const revenueBars = stats.revenueByDay.map((r) => {
+        const pct = Math.max(3, Math.round((Number(r.total) / maxRevenue) * 100));
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;" title="${formatDate(r.day)}: ${formatMoney(r.total)}">
+            <div style="width:100%;height:90px;display:flex;align-items:flex-end;">
+                <div style="width:100%;height:${pct}%;background:var(--accent);border-radius:4px 4px 0 0;"></div>
+            </div>
+            <span style="font-size:10px;color:var(--text-2);">${formatDate(r.day).slice(0, 5)}</span>
+        </div>`;
+    }).join('');
+
+    const topDriversRows = stats.topDrivers.map((t) => `<tr>
+        <td>${escapeHtml(t.name)}</td>
+        <td>${t.total_orders}</td>
+        <td>${Number(t.total_km).toLocaleString('de-DE')} km</td>
+        <td>${t.successful_deliveries}</td>
+        <td>${t.punctuality_rate} %</td>
+    </tr>`);
+
+    const statusOrder = ['offen', 'disponiert', 'angenommen', 'anfahrt', 'beladen', 'entladen', 'unterwegs', 'abgeschlossen', 'abgebrochen', 'abgelehnt'];
+    const statusCounts = {};
+    stats.ordersByStatus.forEach((s) => { statusCounts[s.status] = s.c; });
+    const maxStatus = Math.max(1, ...Object.values(statusCounts).map(Number));
+    const statusBars = statusOrder.filter((s) => statusCounts[s]).map((s) => {
+        const count = Number(statusCounts[s]);
+        const pct = Math.max(4, Math.round((count / maxStatus) * 100));
+        return `<div class="stat-row" style="align-items:center;">
+            <span style="width:120px;">${badge(ORDER_STATUS_META[s])}</span>
+            <span style="flex:1;background:var(--bg-3);border-radius:4px;margin:0 10px;overflow:hidden;height:8px;">
+                <span style="display:block;height:100%;width:${pct}%;background:var(--accent);"></span>
+            </span>
+            <span>${count}</span>
+        </div>`;
+    }).join('');
+
+    root.innerHTML = `
+        <h1 class="view-title">Geschäftsführung</h1>
+        <p class="view-subtitle">Unternehmensübersicht in Echtzeit.</p>
+        <div class="grid grid-4">
+            <div class="card"><div class="card-title">Unternehmensguthaben</div><div class="card-value">${formatMoney(d.balance)}</div></div>
+            <div class="card"><div class="card-title">Umsatz heute</div><div class="card-value">${formatMoney(d.revenueToday)}</div></div>
+            <div class="card"><div class="card-title">Umsatz Woche</div><div class="card-value">${formatMoney(d.revenueWeek)}</div></div>
+            <div class="card"><div class="card-title">Umsatz Monat</div><div class="card-value">${formatMoney(d.revenueMonth)}</div></div>
+        </div>
+        <div class="grid grid-4" style="margin-top:16px;">
+            <div class="card"><div class="card-title">Aufträge abgeschlossen</div><div class="card-value small">${d.totalOrders}</div></div>
+            <div class="card"><div class="card-title">Offene Aufträge</div><div class="card-value small">${d.openOrders}</div></div>
+            <div class="card"><div class="card-title">Aktive Aufträge</div><div class="card-value small">${d.activeOrders}</div></div>
+            <div class="card"><div class="card-title">Fahrer / Disponenten</div><div class="card-value small">${d.drivers} / ${d.dispatchers}</div></div>
+        </div>
+        <div class="grid grid-4" style="margin-top:16px;">
+            <div class="card"><div class="card-title">LKW gesamt</div><div class="card-value small">${d.vehicles}</div></div>
+            <div class="card"><div class="card-title">LKW im Einsatz</div><div class="card-value small">${d.vehiclesInUse}</div></div>
+            <div class="card"><div class="card-title">LKW verfügbar</div><div class="card-value small">${d.vehiclesAvailable}</div></div>
+            <div class="card"><div class="card-title">LKW Wartung/Defekt</div><div class="card-value small">${d.vehiclesMaintenance}</div></div>
+        </div>
+        <div class="grid grid-2" style="margin-top:16px;">
+            <div class="section">
+                <div class="section-header"><h3>Umsatz der letzten 14 Tage</h3></div>
+                <div style="display:flex;gap:6px;align-items:flex-end;">${revenueBars || '<div class="card-hint">Keine Daten.</div>'}</div>
+            </div>
+            <div class="section">
+                <div class="section-header"><h3>Aufträge nach Status</h3></div>
+                ${statusBars || '<div class="card-hint">Keine Daten.</div>'}
+            </div>
+        </div>
+        <div class="section" style="margin-top:16px;">
+            <div class="section-header"><h3>Top-Fahrer</h3></div>
+            ${table(['Fahrer', 'Aufträge', 'Kilometer', 'Lieferungen', 'Pünktlichkeit'], topDriversRows)}
+        </div>
+        <div class="section" style="margin-top:16px;">
+            <div class="section-header"><h3>Letzte Aktivitäten</h3></div>
+            ${activity || '<div class="card-hint">Keine Aktivitäten.</div>'}
+        </div>`;
+};
+
+VIEWS['gf-employees'] = async (root) => {
+    const [d, rolesRes] = await Promise.all([call('gf:employees:list'), call('roles:list')]);
+    const roleOptions = (e) => rolesRes.roles.map((r) => `<option value="${r.key}" ${e.role === r.key ? 'selected' : ''}>${escapeHtml(r.label)}</option>`).join('');
+    const rows = d.employees.map((e) => `<tr>
+        <td>#${e.id}</td>
+        <td>${escapeHtml(e.name)}</td>
+        <td>${escapeHtml(e.username || '-')}</td>
+        <td>
+            <select onchange="Actions.changeRole(${e.id}, this.value)">${roleOptions(e)}</select>
+        </td>
+        <td>${badge(EMPLOYMENT_STATUS_META[e.status])}</td>
+        <td>${formatDate(e.hired_at)}</td>
+        <td>
+            <button class="btn btn-sm" onclick="Actions.openSetDiscordIdModal(${e.id}, '${escapeHtml(e.name)}', ${escapeHtml(JSON.stringify(e.discord_id || ''))})">${e.discord_id ? escapeHtml(e.discord_id) : 'nicht verknüpft'}</button>
+        </td>
+        <td class="btn-row">
+            <button class="btn btn-sm" onclick="Actions.openResetPasswordModal(${e.id}, '${escapeHtml(e.name)}')">Passwort zurücksetzen</button>
+            <button class="btn btn-sm ${e.status === 'aktiv' ? 'btn-danger' : 'btn-primary'}" onclick="Actions.toggleEmployeeStatus(${e.id}, '${e.status === 'aktiv' ? 'inaktiv' : 'aktiv'}')">${e.status === 'aktiv' ? 'Deaktivieren' : 'Aktivieren'}</button>
+        </td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Mitarbeiter</h1>
+        <p class="view-subtitle">Verwaltung aller Mitarbeiter, Rollen und Grade. Anmeldung erfolgt am Tablet per Name + Passwort. Die Discord-ID ist nur für den Website-Sync relevant (Config.Website) - verknüpft das Konto mit dem Discord-Login der Speditions-Website.</p>
+        <div class="btn-row" style="margin-bottom:14px;"><button class="btn btn-primary" onclick="Actions.openHireModal()">+ Mitarbeiter einstellen</button></div>
+        <div class="section">${table(['#', 'Name', 'Login-Name', 'Rolle', 'Status', 'Eingestellt', 'Discord-ID', ''], rows)}</div>`;
+};
+
+VIEWS['gf-roles'] = async (root) => {
+    const d = await call('roles:list');
+    const permLabel = (key) => {
+        const p = d.permissionCatalog.find((x) => x.key === key);
+        return p ? p.label : key;
+    };
+
+    const websiteRoleOptions = (r) => `<option value="">— keine —</option>` + Object.keys(WEBSITE_ROLE_LABELS).map((key) =>
+        `<option value="${key}" ${r.websiteRoleKey === key ? 'selected' : ''}>${escapeHtml(WEBSITE_ROLE_LABELS[key])}</option>`
+    ).join('');
+
+    const rows = d.roles.map((r) => `<tr>
+        <td>${escapeHtml(r.label)}${r.isBuiltin ? ' <span class="pill"><span class="dot dot-gray"></span>Basisrolle</span>' : ''}</td>
+        <td style="max-width:420px;">${r.permissions.map((p) => `<span class="pill" style="margin:2px 4px 2px 0;"><span class="dot dot-blue"></span>${escapeHtml(permLabel(p))}</span>`).join('') || '<span class="card-hint">Keine Berechtigungen</span>'}</td>
+        <td>
+            <select onchange="Actions.setRoleWebsiteMapping('${r.key}', this.value)">${websiteRoleOptions(r)}</select>
+        </td>
+        <td class="btn-row">
+            <button class="btn btn-sm" onclick="Actions.openEditRoleModal('${r.key}')">Bearbeiten</button>
+            ${r.isBuiltin ? '' : `<button class="btn btn-sm btn-danger" onclick="Actions.deleteRole('${r.key}', ${escapeHtml(JSON.stringify(r.label))})">Löschen</button>`}
+        </td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Rollen</h1>
+        <p class="view-subtitle">Eigene Rollen mit frei wählbaren Berechtigungen anlegen und bearbeiten. Die drei mitgelieferten Basisrollen (Fahrer/Disponent/Geschäftsführung) können nicht gelöscht, ihre Berechtigungen aber angepasst werden. Die Spalte "Website-Rolle" ordnet diese Rolle - nur relevant bei aktiviertem Website-Sync (Config.Website) - einer der 9 Rollen der Speditions-Website zu, damit Mitarbeiter mit dieser Rolle dorthin synchronisiert werden können.</p>
+        <div class="btn-row" style="margin-bottom:14px;"><button class="btn btn-primary" onclick="Actions.openCreateRoleModal()">+ Rolle anlegen</button></div>
+        <div class="section">${table(['Rolle', 'Berechtigungen', 'Website-Rolle', ''], rows)}</div>`;
+};
+
+VIEWS['gf-drivers'] = async (root) => {
+    const [d, rolesRes] = await Promise.all([call('gf:employees:list'), call('roles:list')]);
+    const driverRoleKeys = new Set(rolesRes.roles.filter((r) => r.permissions.includes('driver_actions')).map((r) => r.key));
+    const drivers = d.employees.filter((e) => driverRoleKeys.has(e.role));
+    const rows = drivers.map((e) => `<tr>
+        <td>#${e.id}</td>
+        <td>${escapeHtml(e.name)}</td>
+        <td>${e.driver_current_status ? badge(DRIVER_STATUS_META[e.driver_current_status]) : '-'}</td>
+        <td>${badge(EMPLOYMENT_STATUS_META[e.status])}</td>
+        <td><button class="btn btn-sm btn-primary" onclick="Actions.openDriverFile(${e.driver_id})">Akte öffnen</button></td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Fahrerakten</h1>
+        <p class="view-subtitle">Digitale Personalakten aller Fahrer.</p>
+        <div class="section">${table(['#', 'Name', 'Status', 'Mitarbeiter', ''], rows)}</div>`;
+};
+
+VIEWS['gf-fleet'] = async (root) => {
+    const includeArchived = window.__fleetShowArchived === true;
+    const d = await call('gf:vehicles:list', { includeArchived });
+
+    const rows = d.vehicles.map((v) => `<tr>
+        <td>${badge(VEHICLE_STATUS_META[v.status])}</td>
+        <td>${escapeHtml(v.name)}${v.archived ? ' <span class="pill">Archiviert</span>' : ''}</td>
+        <td>${escapeHtml(v.plate)}</td>
+        <td>${escapeHtml(v.vehicle_class)}</td>
+        <td>${Number(v.mileage).toLocaleString('de-DE')} km</td>
+        <td>${v.driver_name ? escapeHtml(v.driver_name) : '-'}</td>
+        <td>${v.trailer_id ? escapeHtml(v.trailer_name) : '-'}</td>
+        <td class="btn-row">
+            <button class="btn btn-sm" onclick="Actions.openVehicleFile(${v.id})">Akte</button>
+            ${!v.archived ? `
+                <button class="btn btn-sm" onclick="Actions.openVehicleEditModal(${v.id})">Bearbeiten</button>
+                <button class="btn btn-sm" onclick="Actions.openAssignModal(${v.id})">Zuweisen</button>
+                <button class="btn btn-sm btn-danger" onclick="Actions.openDeleteVehicleModal(${v.id})">Löschen</button>
+            ` : `<button class="btn btn-sm btn-primary" onclick="Actions.reactivateVehicle(${v.id})">Reaktivieren</button>`}
+        </td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Fuhrpark</h1>
+        <p class="view-subtitle">${d.vehicles.length} Fahrzeuge${includeArchived ? ' (inkl. archivierte)' : ''}</p>
+        <div class="btn-row" style="margin-bottom:14px;">
+            <button class="btn btn-primary" onclick="Actions.openVehicleCreateModal()">+ LKW hinzufügen</button>
+            <button class="btn" onclick="Actions.toggleArchivedFleet()">${includeArchived ? 'Archivierte ausblenden' : 'Archivierte anzeigen'}</button>
+        </div>
+        <div class="section">${table(['Status', 'Name', 'Kennzeichen', 'Klasse', 'Kilometerstand', 'Fahrer', 'Anhänger', ''], rows)}</div>`;
+};
+
+VIEWS['gf-trailers'] = async (root) => {
+    const d = await call('gf:trailers:list');
+    const typeLabel = (key) => (d.trailerTypes.find((t) => t.key === key) || {}).label || key;
+
+    const rows = d.trailers.map((t) => `<tr>
+        <td>${badge(VEHICLE_STATUS_META[t.status])}</td>
+        <td>${escapeHtml(t.name)}${t.archived ? ' <span class="pill">Archiviert</span>' : ''}</td>
+        <td>${escapeHtml(t.plate)}</td>
+        <td>${escapeHtml(typeLabel(t.type))}</td>
+        <td>${t.vehicle_plate ? `${escapeHtml(t.vehicle_name)} (${escapeHtml(t.vehicle_plate)})` : '-'}</td>
+        <td class="btn-row">
+            <button class="btn btn-sm" onclick="Actions.openTrailerEditModal(${t.id})">Bearbeiten</button>
+            <button class="btn btn-sm" onclick="Actions.openTrailerAssignModal(${t.id})">${t.vehicle_plate ? 'Umkuppeln' : 'Ankuppeln'}</button>
+            ${t.vehicle_plate ? `<button class="btn btn-sm" onclick="Actions.confirmTrailerAssign(${t.id}, null)">Abkuppeln</button>` : ''}
+            <button class="btn btn-sm btn-danger" onclick="Actions.confirmDeleteTrailer(${t.id})">Löschen</button>
+        </td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Anhänger</h1>
+        <p class="view-subtitle">${d.trailers.length} Anhänger</p>
+        <div class="btn-row" style="margin-bottom:14px;">
+            <button class="btn btn-primary" onclick="Actions.openTrailerCreateModal()">+ Anhänger hinzufügen</button>
+        </div>
+        <div class="section">${table(['Status', 'Name', 'Kennzeichen', 'Typ', 'Angekuppelt an', ''], rows)}</div>`;
+};
+
+VIEWS['gf-locations'] = async (root) => {
+    const d = await call('locations:list');
+
+    const rows = d.locations.map((l) => `<tr>
+        <td>${escapeHtml(l.name)}</td>
+        <td>${(l.sourceCargo || []).map((c) => `<span class="pill">${escapeHtml(c)}</span>`).join(' ') || '-'}</td>
+        <td>${(l.destCargo || []).map((c) => `<span class="pill">${escapeHtml(c)}</span>`).join(' ') || '-'}</td>
+        <td class="btn-row">
+            <button class="btn btn-sm" onclick="Actions.openLocationEditModal(${l.id})">Bearbeiten</button>
+            <button class="btn btn-sm btn-danger" onclick="Actions.confirmDeleteLocation(${l.id})">Löschen</button>
+        </td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Orte</h1>
+        <p class="view-subtitle">${d.locations.length} Be-/Entladepunkte</p>
+        <div class="btn-row" style="margin-bottom:14px;">
+            <button class="btn btn-primary" onclick="Actions.openLocationCreateModal()">+ Ort hinzufügen</button>
+        </div>
+        <div class="section">${table(['Name', 'Quelle (Abholung)', 'Ziel (Anlieferung)', ''], rows)}</div>`;
+};
+
+VIEWS['gf-cargo-types'] = async (root) => {
+    const [d, trailerData] = await Promise.all([call('cargotypes:list'), call('gf:trailers:list')]);
+    const trailerLabel = (key) => (trailerData.trailerTypes.find((t) => t.key === key) || {}).label || key;
+
+    const rows = d.cargoTypes.map((c) => `<tr>
+        <td>${escapeHtml(c.name)}</td>
+        <td>${escapeHtml(c.unit)}</td>
+        <td>${c.min} - ${c.max}</td>
+        <td>${c.hazardous ? badge({ label: 'Gefahrgut', dot: 'red' }) : '-'}</td>
+        <td>${escapeHtml(trailerLabel(c.trailerType))}</td>
+        <td class="btn-row">
+            <button class="btn btn-sm" onclick="Actions.openCargoTypeEditModal(${c.id})">Bearbeiten</button>
+            <button class="btn btn-sm btn-danger" onclick="Actions.confirmDeleteCargoType(${c.id})">Löschen</button>
+        </td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Frachtarten</h1>
+        <p class="view-subtitle">${d.cargoTypes.length} Frachtarten</p>
+        <div class="btn-row" style="margin-bottom:14px;">
+            <button class="btn btn-primary" onclick="Actions.openCargoTypeCreateModal()">+ Frachtart hinzufügen</button>
+        </div>
+        <div class="section">${table(['Name', 'Einheit', 'Menge', 'Gefahrgut', 'Anhängertyp', ''], rows)}</div>`;
+};
+
+VIEWS['gf-finance'] = async (root) => {
+    const [overview, tx] = await Promise.all([call('gf:finance:overview'), call('gf:finance:transactions', { limit: 40 })]);
+
+    const TX_TYPE_LABELS = { einnahme: 'Einnahme', auszahlung: 'Auszahlung', einzahlung: 'Einzahlung', gehalt: 'Gehalt', vertragsstrafe: 'Vertragsstrafe' };
+    const rows = tx.transactions.map((t) => `<tr>
+        <td>#${t.id}</td>
+        <td>${TX_TYPE_LABELS[t.type] || t.type}${t.driver_name ? ` - ${escapeHtml(t.driver_name)}` : ''}</td>
+        <td>${escapeHtml(t.description || '-')}</td>
+        <td style="color:${t.amount >= 0 ? 'var(--green)' : 'var(--red)'};font-weight:700;">${t.amount >= 0 ? '+' : ''}${formatMoney(t.amount)}</td>
+        <td>${formatDate(t.created_at, true)}</td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Unternehmensfinanzen</h1>
+        <div class="section finance-hero">
+            <div class="label">Aktuelles Guthaben</div>
+            <div class="value">${formatMoney(overview.balance)}</div>
+        </div>
+        <div class="grid grid-3" style="margin-top:16px;">
+            <div class="card"><div class="card-title">Einnahmen heute</div><div class="card-value">${formatMoney(overview.revenueToday)}</div></div>
+            <div class="card"><div class="card-title">Einnahmen Woche</div><div class="card-value">${formatMoney(overview.revenueWeek)}</div></div>
+            <div class="card"><div class="card-title">Einnahmen Monat</div><div class="card-value">${formatMoney(overview.revenueMonth)}</div></div>
+        </div>
+        <div class="btn-row" style="margin:16px 0;"><button class="btn btn-primary" onclick="showView('gf-payouts')">Auszahlung verwalten</button></div>
+        <div class="section">
+            <div class="section-header"><h3>Transaktionshistorie</h3></div>
+            ${table(['#', 'Typ', 'Beschreibung', 'Betrag', 'Datum'], rows)}
+        </div>`;
+};
+
+VIEWS['gf-payouts'] = async (root) => {
+    const [overview, payoutHistory, depositHistory] = await Promise.all([
+        call('gf:finance:overview'), call('gf:payout:history'), call('gf:deposit:history'),
+    ]);
+
+    const payoutRows = payoutHistory.payouts.map((p) => `<tr>
+        <td>${formatDate(p.executed_at, true)}</td>
+        <td>${formatMoney(p.amount)}</td>
+        <td>${escapeHtml(p.target)}</td>
+        <td>${escapeHtml(p.executed_by_name || '-')}</td>
+        <td>${escapeHtml(p.reason)}</td>
+    </tr>`);
+
+    const depositRows = depositHistory.deposits.map((d) => `<tr>
+        <td>${formatDate(d.executed_at, true)}</td>
+        <td>${formatMoney(d.amount)}</td>
+        <td>${escapeHtml(d.source)}</td>
+        <td>${escapeHtml(d.executed_by_name || '-')}</td>
+        <td>${escapeHtml(d.reason)}</td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Ein-/Auszahlungen</h1>
+        <div class="section finance-hero">
+            <div class="label">Aktuelles Guthaben</div>
+            <div class="value">${formatMoney(overview.balance)}</div>
+        </div>
+        <div class="grid grid-2" style="margin-top:16px;">
+            <div class="section">
+                <h3 style="margin:0 0 12px;">Einzahlung</h3>
+                <label>Einzahlungsbetrag</label>
+                <input id="deposit-amount" type="number" min="1" step="1" />
+                <label>Herkunft</label>
+                <input id="deposit-source" type="text" value="${escapeHtml(window.__depositSource || 'Bareinzahlung')}" />
+                <label>Grund</label>
+                <input id="deposit-reason" type="text" />
+                <button class="btn btn-primary" style="margin-top:16px;width:100%;" onclick="Actions.executeDeposit()">Einzahlung verbuchen</button>
+            </div>
+            <div class="section">
+                <h3 style="margin:0 0 12px;">Auszahlung</h3>
+                <label>Auszahlungsbetrag</label>
+                <input id="payout-amount" type="number" min="1" step="1" />
+                <label>Auszahlung an</label>
+                <input id="payout-target" type="text" value="${escapeHtml(window.__payoutTarget || 'Unternehmensbankkonto')}" />
+                <label>Grund</label>
+                <input id="payout-reason" type="text" />
+                <button class="btn btn-primary" style="margin-top:16px;width:100%;" onclick="Actions.executePayout()">Auszahlung bestätigen</button>
+            </div>
+        </div>
+        <div class="grid grid-2" style="margin-top:16px;">
+            <div class="section">
+                <div class="section-header"><h3>Einzahlungshistorie</h3></div>
+                ${table(['Datum', 'Betrag', 'Herkunft', 'Durchgeführt von', 'Grund'], depositRows)}
+            </div>
+            <div class="section">
+                <div class="section-header"><h3>Auszahlungshistorie</h3></div>
+                ${table(['Datum', 'Betrag', 'Ziel', 'Durchgeführt von', 'Grund'], payoutRows)}
+            </div>
+        </div>`;
+};
+
+VIEWS['gf-payroll'] = async (root) => {
+    const [ratesRes, overview] = await Promise.all([call('gf:payroll:rates'), call('gf:payroll:overview')]);
+
+    const rateRows = Object.keys(ratesRes.roleLabels).map((role) => `
+        <div class="wage-rate-row">
+            <label>${escapeHtml(ratesRes.roleLabels[role])}</label>
+            <input id="wage-rate-${role}" type="number" min="0" step="0.5" value="${Number(ratesRes.rates[role] || 0)}" />
+            <button class="btn btn-sm" onclick="Actions.setWageRate('${role}')">Speichern</button>
+        </div>`).join('');
+
+    const employeeRows = overview.employees.map((e) => `<tr>
+        <td>${escapeHtml(e.name)}</td>
+        <td>${escapeHtml(ratesRes.roleLabels[e.role] || e.role)}</td>
+        <td>
+            ${e.clockedIn ? badge({ label: 'Eingestempelt', dot: 'green' }) : badge({ label: 'Ausgestempelt', dot: 'gray' })}
+            ${e.online ? '' : ` ${badge({ label: 'Nicht online', dot: 'red' })}`}
+        </td>
+        <td>${formatHm(e.unpaidSeconds)}</td>
+        <td>${formatMoney(e.hourlyRate)}/Std.</td>
+        <td style="font-weight:700;">${formatMoney(e.amount)}</td>
+        <td class="btn-row">
+            <button class="btn btn-sm btn-primary" ${e.amount <= 0 || !e.online ? 'disabled' : ''} onclick="Actions.payEmployee(${e.id}, ${escapeHtml(JSON.stringify(e.name))})" title="${e.online ? '' : 'Mitarbeiter ist gerade nicht online/am Tablet eingeloggt'}">Auszahlen</button>
+        </td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Gehälter</h1>
+        <p class="view-subtitle">Stundenlöhne je Rolle festlegen und offene Gehälter anhand der Stempeluhr auszahlen.</p>
+        <div class="section">
+            <h3 style="margin:0 0 12px;">Stundenlöhne</h3>
+            <div class="wage-rate-list">${rateRows}</div>
+        </div>
+        <div class="section" style="margin-top:16px;">
+            <h3 style="margin:0 0 12px;">Offene Gehälter</h3>
+            ${table(['Name', 'Rolle', 'Stempeluhr', 'Offene Std.', 'Satz', 'Betrag', ''], employeeRows)}
+        </div>`;
+};
+
+VIEWS['gf-orders'] = async (root) => {
+    const filter = window.__orderStatusFilter || '';
+    const d = await call('gf:orders:all', { limit: 150, statusFilter: filter || undefined });
+
+    const rows = d.orders.map((o) => `<tr>
+        <td>#${o.id}</td>
+        <td>${escapeHtml(o.cargo)}</td>
+        <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
+        <td>${o.driver_name ? escapeHtml(o.driver_name) : '-'}</td>
+        <td>${o.vehicle_name ? escapeHtml(o.vehicle_name) : '-'}</td>
+        <td>${badge(ORDER_STATUS_META[o.status])}</td>
+        <td>${o.status === 'abgeschlossen' ? formatMoney(o.value) : '-'}</td>
+        <td>${formatDate(o.created_at, true)}</td>
+    </tr>`);
+
+    const statuses = Object.keys(ORDER_STATUS_META);
+
+    root.innerHTML = `
+        <h1 class="view-title">Aufträge</h1>
+        <p class="view-subtitle">Vollständige Übersicht aller Aufträge im Unternehmen.</p>
+        <div class="btn-row" style="margin-bottom:14px;">
+            <select id="order-status-filter" style="width:220px;" onchange="Actions.filterOrders(this.value)">
+                <option value="">Alle Status</option>
+                ${statuses.map((s) => `<option value="${s}" ${filter === s ? 'selected' : ''}>${ORDER_STATUS_META[s].label}</option>`).join('')}
+            </select>
+        </div>
+        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Fahrer', 'Fahrzeug', 'Status', 'Wert', 'Erstellt'], rows)}</div>`;
+};
+
+VIEWS['gf-log'] = async (root) => {
+    const d = await call('gf:activityLog', { limit: 150 });
+    const rows = d.entries.map((l) => `<tr>
+        <td>${formatDate(l.created_at, true)}</td>
+        <td>${l.employee_name ? escapeHtml(l.employee_name) : 'System'}</td>
+        <td>${escapeHtml(l.action)}</td>
+        <td>${escapeHtml(l.details)}</td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Aktivitätsprotokoll</h1>
+        <p class="view-subtitle">Alle protokollierten Aktionen der Geschäftsführung und des Systems.</p>
+        <div class="section">${table(['Datum', 'Mitarbeiter', 'Aktion', 'Details'], rows)}</div>`;
+};
+
+const CONSOLE_KIND_META = {
+    rpc_error: { label: 'RPC-Fehler', dot: 'red' },
+    db_error: { label: 'Datenbank-Fehler', dot: 'red' },
+    client_error: { label: 'Client-Fehler', dot: 'yellow' },
+    info: { label: 'Info', dot: 'blue' },
+};
+
+VIEWS['gf-console'] = async (root) => {
+    const d = await call('console:list');
+    const rows = [...d.entries].reverse().map((e) => `<tr>
+        <td>${formatDate(e.at, true)}</td>
+        <td>${badge(CONSOLE_KIND_META[e.kind] || { label: e.kind, dot: 'gray' })}</td>
+        <td>${escapeHtml(e.context || '-')}</td>
+        <td>${escapeHtml(e.message)}</td>
+    </tr>`);
+
+    root.innerHTML = `
+        <h1 class="view-title">Konsole</h1>
+        <p class="view-subtitle">
+            Fehler, die im Tablet selbst auftreten (RPC-/Datenbankfehler, gemeldete Client-Fehler), sowie
+            Info-Meldungen wie die Zusammenfassung des Auftrags-Resets bei jedem Ressourcenstart - neueste zuerst.
+            Zeigt NICHT die Konsolen-Ausgabe anderer Ressourcen (z.B. oxmysql selbst) und überlebt keinen
+            Ressourcen-Neustart.
+        </p>
+        <p class="card-hint" style="margin:0 0 10px;">
+            Aktuell laufende Skript-Version auf diesem Server: <b>${escapeHtml(d.version || 'unbekannt')}</b>
+            (steht in <code>fxmanifest.lua</code> - stimmt das nicht mit der zuletzt zugesendeten Version überein,
+            wurde die Datei entweder nicht ersetzt oder die Ressource nicht neu gestartet).
+        </p>
+        <button class="btn" id="console-refresh">Aktualisieren</button>
+        <div class="section">${table(['Zeit', 'Typ', 'Kontext', 'Meldung'], rows)}</div>`;
+
+    document.getElementById('console-refresh').addEventListener('click', () => showView('gf-console'));
+};
+
+// =========================================================
+// ACTIONS
+// =========================================================
+
+const Actions = {};
+
+Actions.login = async () => {
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    const errEl = document.getElementById('login-error');
+    errEl.classList.add('hidden');
+
+    if (!username || !password) {
+        errEl.textContent = 'Bitte Name und Passwort eingeben.';
+        errEl.classList.remove('hidden');
+        return;
+    }
+
+    const res = await rpc('session:login', { username, password });
+    if (!res || !res.ok) {
+        errEl.textContent = translateError(res && res.error);
+        errEl.classList.remove('hidden');
+        return;
+    }
+
+    const data = res.result;
+    State.employee = data.employee;
+    State.role = data.employee.role;
+    State.config = data;
+    hideAllScreens();
+    document.getElementById('boot-screen').classList.remove('hidden');
+    boot(data);
+};
+
+Actions.logout = async () => {
+    closeModal();
+    await call('session:logout');
+    document.getElementById('main-ui').classList.add('hidden');
+    showLoginScreen();
+};
+
+Actions.openAccountModal = () => {
+    openModal('Mein Konto', escapeHtml(State.employee.name), `
+        <label>Aktuelles Passwort</label>
+        <input id="account-current-password" type="password" autocomplete="off" />
+        <label>Neues Passwort</label>
+        <input id="account-new-password" type="password" autocomplete="off" />
+    `, `
+        <button class="btn btn-danger" onclick="Actions.logout()">Abmelden</button>
+        <button class="btn btn-primary" onclick="Actions.submitChangePassword()">Passwort ändern</button>
+    `);
+};
+
+Actions.submitChangePassword = async () => {
+    const currentPassword = modalInputValue('account-current-password');
+    const newPassword = modalInputValue('account-new-password');
+    await call('me:changePassword', { currentPassword, newPassword });
+    closeModal();
+    toast('Passwort geändert', '', 'success');
+};
+
+Actions.submitVehicleConditionAndClose = async () => {
+    const fuel = Number(document.getElementById('condition-fuel').value);
+    const notes = document.getElementById('condition-notes').value.trim();
+    const needsWorkshop = document.getElementById('condition-workshop').checked;
+    await call('driver:reportVehicleCondition', { fuel, notes, needsWorkshop });
+    closeModal();
+    requestClose();
+};
+
+Actions.setDriverStatus = async () => {
+    const status = document.getElementById('driver-status-select').value;
+    await call('driver:setStatus', { status });
+    toast('Status aktualisiert', '', 'success');
+    showView('driver-card');
+};
+
+Actions.acceptOrder = async (orderId) => {
+    await call('driver:acceptOrder', { orderId });
+    toast('Auftrag angenommen', `Auftrag #${orderId} wurde angenommen.`, 'success');
+    showView('driver-orders');
+};
+
+Actions.declineOrder = (orderId) => {
+    openModal('Auftrag ablehnen', `Auftrag #${orderId}`, `
+        <label>Grund</label>
+        <textarea id="decline-reason"></textarea>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-danger" onclick="Actions.confirmDecline(${orderId})">Ablehnen</button>
+    `);
+};
+Actions.confirmDecline = async (orderId) => {
+    const reason = modalInputValue('decline-reason');
+    await call('driver:declineOrder', { orderId, reason });
+    closeModal();
+    toast('Auftrag abgelehnt', '', 'success');
+    showView('driver-orders');
+};
+
+Actions.selfAssignOrder = async (orderId) => {
+    await call('driver:selfAssignOrder', { orderId });
+    toast('Auftrag übernommen', `Auftrag #${orderId} wurde dir zugewiesen - du kannst ihn jetzt annehmen.`, 'success');
+    showView('driver-orders');
+};
+
+Actions.requestCancelOrder = (orderId) => {
+    openModal('Auftrag abbrechen', `Auftrag #${orderId}`, `
+        <label>Grund</label>
+        <textarea id="cancel-order-reason"></textarea>
+        <p class="card-hint" style="margin-top:8px;">Ist ein Disponent online, muss er den Abbruch erst genehmigen. Ist niemand online, wird sofort abgebrochen - das kostet der Firma eine Vertragsstrafe.</p>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Zurück</button>
+        <button class="btn btn-danger" onclick="Actions.confirmCancelOrderRequest(${orderId})">Abbrechen bestätigen</button>
+    `);
+};
+Actions.confirmCancelOrderRequest = async (orderId) => {
+    const reason = modalInputValue('cancel-order-reason');
+    const r = await call('driver:requestCancelOrder', { orderId, reason });
+    closeModal();
+    if (r.pending) {
+        toast('Abbruch angefragt', 'Warte auf Genehmigung des Disponenten.', 'info');
+    } else {
+        toast('Auftrag abgebrochen', `Vertragsstrafe für die Firma: ${formatMoney(r.penalty)}`, 'error');
+    }
+    showView('driver-orders');
+};
+
+Actions.resolveCancelRequest = async (requestId, approve) => {
+    await call('dispatch:resolveCancelRequest', { requestId, approve });
+    toast(approve ? 'Abbruch genehmigt' : 'Abbruch abgelehnt', '', approve ? 'success' : 'info');
+    showView('dispatch-active');
+};
+
+function trailerTypeLabel(trailerTypes, key) {
+    return (trailerTypes.find((t) => t.key === key) || {}).label || key;
+}
+
+Actions.openStartShiftModal = async () => {
+    const d = await call('driver:shiftOptions');
+
+    if (d.vehicles.length === 0) {
+        openModal('Fahrerkarte einstecken', '', `
+            <p style="font-size:13px;color:var(--text-1);">Aktuell ist kein freies Fahrzeug verfügbar - entweder sind alle im Einsatz/in Wartung, oder bereits von einem anderen Fahrer im Dienst beansprucht. Wende dich an die Geschäftsführung/Disposition.</p>
+        `, `<button class="btn btn-ghost" onclick="closeModal()">Schließen</button>`);
+        return;
+    }
+
+    const vehicleOptions = d.vehicles.map((v) => `<option value="${v.id}">${escapeHtml(v.name)} (${escapeHtml(v.plate)}, ${escapeHtml(v.vehicle_class)})${v.trailer_id ? ` - bereits angekuppelt: ${escapeHtml(v.trailer_name)}` : ''}</option>`).join('');
+    const trailerOptions = d.trailers.map((t) => `<option value="${t.id}">${escapeHtml(t.name)} (${escapeHtml(t.plate)}) - ${escapeHtml(trailerTypeLabel(d.trailerTypes, t.type))}</option>`).join('');
+
+    openModal('Fahrerkarte einstecken', 'Wähle dein Fahrzeug und einen Anhänger.', `
+        <label>Fahrzeug</label>
+        <select id="shift-vehicle">${vehicleOptions}</select>
+
+        <label style="margin-top:12px;">Anhänger</label>
+        <select id="shift-trailer" onchange="document.getElementById('shift-workshop-hint').classList.toggle('hidden', this.value !== '')">
+            <option value="">- Werkstattfahrt (kein Anhänger) -</option>
+            ${trailerOptions}
+        </select>
+        <p id="shift-workshop-hint" class="card-hint">Ohne Anhänger kannst du keine Frachtaufträge annehmen, bis du dir einen ankuppelst - für reine Werkstatt-/Testfahrten reicht das aber aus.</p>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmStartShift()">Fahrerkarte einstecken</button>
+    `);
+};
+
+Actions.confirmStartShift = async () => {
+    const vehicleId = Number(modalInputValue('shift-vehicle')) || null;
+    const trailerRaw = modalInputValue('shift-trailer');
+    const trailerId = trailerRaw ? Number(trailerRaw) : null;
+    await call('driver:startShift', { vehicleId, trailerId, workshopMode: !trailerId });
+    closeModal();
+    toast('Fahrerkarte eingesteckt', 'Deine Fahrt hat begonnen - Lenk-/Ruhezeiten werden erfasst.', 'success');
+    showView('driver-card');
+};
+
+Actions.endShift = async () => {
+    await call('driver:endShift');
+    toast('Fahrerkarte abgezogen', 'Deine Fahrt wurde beendet.', 'info');
+    showView('driver-card');
+};
+
+Actions.markRead = async (id) => {
+    await call('driver:markMessageRead', { notificationId: id });
+    showView('driver-messages');
+};
+
+Actions.messageDriver = (driverId, driverName) => {
+    openModal('Nachricht senden', driverName, `
+        <label>Nachricht</label>
+        <textarea id="message-text"></textarea>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmMessageDriver(${driverId})">Senden</button>
+    `);
+};
+Actions.confirmMessageDriver = async (driverId) => {
+    const message = modalInputValue('message-text');
+    if (!message.trim()) return;
+    await call('dispatch:messageDriver', { driverId, message });
+    closeModal();
+    toast('Nachricht gesendet', '', 'success');
+};
+
+Actions.remindDriver = async (driverId) => {
+    await call('dispatch:remindDriver', { driverId });
+    toast('Erinnerung gesendet', 'Der Fahrer wurde an seine Lenk-/Ruhezeiten erinnert.', 'success');
+};
+
+Actions.openDispatchModal = (orderId, requiresPermission) => {
+    const hasPerm = (d) => !requiresPermission || (d.permissions || '').split(',').includes(requiresPermission);
+    const drivers = (window.__availableDrivers || []).filter((d) => d.current_status === 'verfuegbar' && hasPerm(d));
+    const options = drivers.map((d) => `<option value="${d.driver_id}">${escapeHtml(d.name)}${d.vehicle_name ? ` - ${escapeHtml(d.vehicle_name)} (${escapeHtml(d.vehicle_plate)})` : ' - kein Fahrzeug'}</option>`).join('');
+    const hint = requiresPermission ? `<p class="card-hint" style="margin:0 0 10px;">Dieser Auftrag erfordert die Berechtigung "${escapeHtml(requiresPermission)}" - nur berechtigte, verfügbare Fahrer werden angezeigt.</p>` : '';
+    openModal('Auftrag disponieren', `Auftrag #${orderId}`, `
+        ${hint}
+        <label>Fahrer</label>
+        <select id="dispatch-driver">${options || '<option value="">Kein berechtigter/verfügbarer Fahrer</option>'}</select>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmDispatch(${orderId})">Zuweisen</button>
+    `);
+};
+Actions.confirmDispatch = async (orderId) => {
+    const driverId = Number(modalInputValue('dispatch-driver'));
+    if (!driverId) return;
+    await call('dispatch:assignOrder', { orderId, driverId });
+    closeModal();
+    toast('Auftrag disponiert', '', 'success');
+    showView('dispatch-pool');
+};
+
+Actions.openReassignModal = (orderId) => {
+    const drivers = (window.__availableDrivers || []);
+    const options = drivers.map((d) => `<option value="${d.driver_id}">${escapeHtml(d.name)}</option>`).join('');
+    openModal('Auftrag neu zuweisen', `Auftrag #${orderId}`, `
+        <label>Neuer Fahrer</label>
+        <select id="reassign-driver">${options}</select>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmReassign(${orderId})">Zuweisen</button>
+    `);
+};
+Actions.confirmReassign = async (orderId) => {
+    const driverId = Number(modalInputValue('reassign-driver'));
+    if (!driverId) return;
+    await call('dispatch:reassignOrder', { orderId, driverId });
+    closeModal();
+    toast('Auftrag neu zugewiesen', '', 'success');
+    showView('dispatch-active');
+};
+
+Actions.cancelOrder = (orderId) => {
+    openModal('Auftrag abbrechen', `Auftrag #${orderId}`, `
+        <label>Grund</label>
+        <textarea id="cancel-reason"></textarea>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-danger" onclick="Actions.confirmCancelOrder(${orderId})">Auftrag abbrechen</button>
+    `);
+};
+Actions.confirmCancelOrder = async (orderId) => {
+    const reason = modalInputValue('cancel-reason');
+    await call('dispatch:cancelOrder', { orderId, reason });
+    closeModal();
+    toast('Auftrag abgebrochen', '', 'success');
+    showView('dispatch-active');
+};
+
+Actions.openHireModal = async () => {
+    const rolesRes = await call('roles:list');
+    const roleOptions = rolesRes.roles.map((r) => `<option value="${r.key}">${escapeHtml(r.label)}</option>`).join('');
+    openModal('Mitarbeiter einstellen', 'Legt ein neues Mitarbeiterkonto mit Login-Name und Passwort an - die Person muss dafür nicht online sein.', `
+        <label>Anzeigename</label>
+        <input id="hire-name" type="text" />
+        <label>Login-Name</label>
+        <input id="hire-username" type="text" autocomplete="off" />
+        <label>Passwort</label>
+        <input id="hire-password" type="password" autocomplete="off" />
+        <label>Rolle</label>
+        <select id="hire-role">${roleOptions}</select>
+        <label>Discord-ID <span style="font-weight:400;color:var(--text-2);">(optional, nur für Website-Sync)</span></label>
+        <input id="hire-discord-id" type="text" autocomplete="off" placeholder="z.B. 123456789012345678" />
+        <label>Führerscheinklassen <span style="font-weight:400;color:var(--text-2);">(nur relevant, falls die Rolle Fahrerfunktionen hat)</span></label>
+        <div class="form-row" style="flex-wrap:wrap;">${(State.config.driverPermissions || []).map((p) => `
+            <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:400;">
+                <input type="checkbox" class="hire-driver-perm" value="${escapeHtml(p.key)}" style="width:auto;" />
+                ${escapeHtml(p.label)}
+            </label>`).join('')}</div>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmHire()">Einstellen</button>
+    `);
+};
+Actions.confirmHire = async () => {
+    const name = modalInputValue('hire-name').trim();
+    const username = modalInputValue('hire-username').trim();
+    const password = modalInputValue('hire-password');
+    const role = modalInputValue('hire-role');
+    const discordId = modalInputValue('hire-discord-id').trim();
+    const driverPermissions = Array.from(document.querySelectorAll('.hire-driver-perm:checked')).map((el) => el.value);
+    if (!name || !username || !password) { toast('Fehler', 'Bitte Anzeigename, Login-Name und Passwort ausfüllen.', 'error'); return; }
+    await call('gf:employees:hire', { name, username, password, role, discordId, driverPermissions });
+    closeModal();
+    toast('Mitarbeiter eingestellt', '', 'success');
+    showView('gf-employees');
+};
+
+Actions.openResetPasswordModal = (employeeId, name) => {
+    openModal('Passwort zurücksetzen', name, `
+        <label>Neues Passwort</label>
+        <input id="reset-password-value" type="password" autocomplete="off" />
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmResetPassword(${employeeId})">Zurücksetzen</button>
+    `);
+};
+Actions.confirmResetPassword = async (employeeId) => {
+    const newPassword = modalInputValue('reset-password-value');
+    if (!newPassword) { toast('Fehler', 'Bitte ein neues Passwort eingeben.', 'error'); return; }
+    await call('gf:employees:resetPassword', { employeeId, newPassword });
+    closeModal();
+    toast('Passwort zurückgesetzt', '', 'success');
+};
+
+Actions.openSetDiscordIdModal = (employeeId, name, currentDiscordId) => {
+    openModal('Discord-ID verknüpfen', `${escapeHtml(name)} - nur relevant für den Website-Sync (Config.Website): verknüpft das Konto mit dem Discord-Login der Speditions-Website.`, `
+        <label>Discord-Nutzer-ID</label>
+        <input id="discord-id-value" type="text" autocomplete="off" placeholder="z.B. 123456789012345678" value="${escapeHtml(currentDiscordId || '')}" />
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmSetDiscordId(${employeeId})">Speichern</button>
+    `);
+};
+Actions.confirmSetDiscordId = async (employeeId) => {
+    const discordId = modalInputValue('discord-id-value').trim();
+    await call('gf:employees:setDiscordId', { employeeId, discordId });
+    closeModal();
+    toast('Discord-ID gespeichert', '', 'success');
+    showView('gf-employees');
+};
+
+Actions.changeRole = async (employeeId, role) => {
+    await call('gf:employees:changeRole', { employeeId, role });
+    toast('Rolle geändert', '', 'success');
+    showView('gf-employees');
+};
+
+Actions.toggleEmployeeStatus = async (employeeId, status) => {
+    await call('gf:employees:setStatus', { employeeId, status });
+    toast('Status geändert', '', 'success');
+    showView('gf-employees');
+};
+
+Actions.openCreateRoleModal = async () => {
+    const d = await call('roles:list');
+    openModal('Rolle anlegen', 'Name und Berechtigungen der neuen Rolle festlegen.', `
+        <label>Name</label>
+        <input id="role-label" type="text" />
+        <div id="role-perm-list">${permissionCheckboxesHtml(d.permissionCatalog, [])}</div>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmCreateRole()">Anlegen</button>
+    `);
+};
+Actions.confirmCreateRole = async () => {
+    const label = modalInputValue('role-label').trim();
+    const permissions = Array.from(document.querySelectorAll('#role-perm-list .role-perm-checkbox:checked')).map((el) => el.value);
+    if (!label) { toast('Fehler', 'Bitte einen Namen eingeben.', 'error'); return; }
+    if (!permissions.length) { toast('Fehler', 'Bitte mindestens eine Berechtigung auswählen.', 'error'); return; }
+    await call('gf:roles:create', { label, permissions });
+    closeModal();
+    toast('Rolle angelegt', '', 'success');
+    showView('gf-roles');
+};
+
+Actions.openEditRoleModal = async (roleKey) => {
+    const d = await call('roles:list');
+    const role = d.roles.find((r) => r.key === roleKey);
+    if (!role) return;
+    openModal(`Rolle bearbeiten - ${escapeHtml(role.label)}`, role.isBuiltin ? 'Mitgelieferte Basisrolle - der Rollenschlüssel bleibt fix, Name und Berechtigungen sind aber anpassbar.' : '', `
+        <label>Name</label>
+        <input id="role-label" type="text" value="${escapeHtml(role.label)}" />
+        <div id="role-perm-list">${permissionCheckboxesHtml(d.permissionCatalog, role.permissions)}</div>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmEditRole('${roleKey}')">Speichern</button>
+    `);
+};
+Actions.confirmEditRole = async (roleKey) => {
+    const label = modalInputValue('role-label').trim();
+    const permissions = Array.from(document.querySelectorAll('#role-perm-list .role-perm-checkbox:checked')).map((el) => el.value);
+    if (!label) { toast('Fehler', 'Bitte einen Namen eingeben.', 'error'); return; }
+    if (!permissions.length) { toast('Fehler', 'Bitte mindestens eine Berechtigung auswählen.', 'error'); return; }
+    await call('gf:roles:update', { roleKey, label, permissions });
+    closeModal();
+    toast('Rolle gespeichert', '', 'success');
+    showView('gf-roles');
+};
+
+Actions.deleteRole = (roleKey, label) => {
+    openModal('Rolle löschen', `Rolle "${escapeHtml(label)}" wirklich löschen? Das ist nur möglich, wenn ihr aktuell kein Mitarbeiter zugeordnet ist.`, '', `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-danger" onclick="Actions.confirmDeleteRole('${roleKey}')">Löschen</button>
+    `);
+};
+Actions.confirmDeleteRole = async (roleKey) => {
+    await call('gf:roles:delete', { roleKey });
+    closeModal();
+    toast('Rolle gelöscht', '', 'success');
+    showView('gf-roles');
+};
+
+Actions.setRoleWebsiteMapping = async (roleKey, websiteRoleKey) => {
+    if (!websiteRoleKey) return; // "— keine —" ausgewählt: keine Aktion, Zuordnung bleibt wie sie war
+    await call('gf:roles:setWebsiteRole', { roleKey, websiteRoleKey });
+    toast('Website-Rolle zugeordnet', '', 'success');
+};
+
+Actions.openDriverFile = async (driverId) => {
+    const f = await call('gf:drivers:file', { driverId });
+    const permsHtml = f.permissions.map((p) => `
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-0);margin:6px 0;">
+            <input type="checkbox" style="width:auto;" ${p.granted ? 'checked' : ''} onchange="Actions.togglePermission(${driverId}, '${p.key}', this.checked)" />
+            ${escapeHtml(p.label)}
+        </label>`).join('');
+
+    openModal(`Fahrerakte - ${escapeHtml(f.employee.name)}`, `Mitarbeiter-ID #${f.employee.id}`, `
+        <div class="stat-row"><span>Status</span><span>${badge(DRIVER_STATUS_META[f.driver.current_status])}</span></div>
+        <div class="stat-row"><span>Aufträge</span><span>${f.statistics.total_orders}</span></div>
+        <div class="stat-row"><span>Kilometer</span><span>${Number(f.statistics.total_km).toLocaleString('de-DE')} km</span></div>
+        <div class="stat-row"><span>Pünktlichkeit</span><span>${f.statistics.punctuality_rate} %</span></div>
+        <div class="stat-row"><span>Einnahmen gesamt</span><span>${formatMoney(f.earnings.total)}</span></div>
+        <div style="margin-top:14px;">${renderHoursBlock(f.hours)}</div>
+        <div style="margin-top:14px;">${permsHtml}</div>
+        <label>Verwarnungen / Notizen</label>
+        <textarea id="driver-notes">${escapeHtml(f.driver.notes || '')}</textarea>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Schließen</button>
+        <button class="btn btn-primary" onclick="Actions.saveDriverNote(${driverId})">Notiz speichern</button>
+    `);
+};
+Actions.togglePermission = async (driverId, key, granted) => {
+    await call('gf:drivers:setPermission', { driverId, permissionKey: key, granted });
+    toast('Berechtigung aktualisiert', '', 'success');
+};
+Actions.saveDriverNote = async (driverId) => {
+    const note = modalInputValue('driver-notes');
+    await call('gf:drivers:setNote', { driverId, note });
+    closeModal();
+    toast('Notiz gespeichert', '', 'success');
+};
+
+Actions.toggleArchivedFleet = () => {
+    window.__fleetShowArchived = !window.__fleetShowArchived;
+    showView('gf-fleet');
+};
+
+Actions.openVehicleCreateModal = () => {
+    const classOptions = (State.config.vehicleClasses || []).map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    openModal('Fahrzeug erstellen', '', `
+        <label>Fahrzeugname</label><input id="v-name" type="text" />
+        <label>Modell</label><input id="v-model" type="text" />
+        <label>Kennzeichen</label><input id="v-plate" type="text" />
+        <label>Fahrzeugklasse</label><select id="v-class">${classOptions}</select>
+        <div class="form-row">
+            <div><label>Kilometerstand</label><input id="v-mileage" type="number" min="0" value="0" /></div>
+            <div><label>Tank (%)</label><input id="v-fuel" type="number" min="0" max="100" value="100" /></div>
+        </div>
+        <label>Fahrgestell-/Fahrzeug-ID</label><input id="v-identifier" type="text" />
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmCreateVehicle()">Fahrzeug erstellen</button>
+    `);
+};
+Actions.confirmCreateVehicle = async () => {
+    await call('gf:vehicles:create', {
+        name: modalInputValue('v-name'),
+        model: modalInputValue('v-model'),
+        plate: modalInputValue('v-plate'),
+        vehicleClass: modalInputValue('v-class'),
+        mileage: Number(modalInputValue('v-mileage')) || 0,
+        fuel: Number(modalInputValue('v-fuel')) || 100,
+        vehicleIdentifier: modalInputValue('v-identifier'),
+    });
+    closeModal();
+    toast('Fahrzeug erstellt', '', 'success');
+    showView('gf-fleet');
+};
+
+Actions.openVehicleEditModal = async (vehicleId) => {
+    const f = await call('gf:vehicles:file', { vehicleId });
+    const v = f.vehicle;
+    const classOptions = (State.config.vehicleClasses || []).map((c) => `<option value="${escapeHtml(c)}" ${v.vehicle_class === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
+    const statusOptions = Object.keys(VEHICLE_STATUS_META).map((s) => `<option value="${s}" ${v.status === s ? 'selected' : ''}>${VEHICLE_STATUS_META[s].label}</option>`).join('');
+
+    openModal('Fahrzeug bearbeiten', `${escapeHtml(v.name)} - ${escapeHtml(v.plate)}`, `
+        <label>Fahrzeugname</label><input id="v-name" type="text" value="${escapeHtml(v.name)}" />
+        <label>Modell</label><input id="v-model" type="text" value="${escapeHtml(v.model)}" />
+        <label>Kennzeichen</label><input id="v-plate" type="text" value="${escapeHtml(v.plate)}" />
+        <label>Fahrzeugklasse</label><select id="v-class">${classOptions}</select>
+        <div class="form-row">
+            <div><label>Kilometerstand</label><input id="v-mileage" type="number" min="0" value="${v.mileage}" /></div>
+            <div><label>Tank (%)</label><input id="v-fuel" type="number" min="0" max="100" value="${v.fuel}" /></div>
+        </div>
+        <label>Status</label><select id="v-status">${statusOptions}</select>
+        <label>Notizen</label><textarea id="v-notes">${escapeHtml(v.notes || '')}</textarea>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmEditVehicle(${vehicleId})">Speichern</button>
+    `);
+};
+Actions.confirmEditVehicle = async (vehicleId) => {
+    await call('gf:vehicles:update', {
+        vehicleId,
+        name: modalInputValue('v-name'),
+        model: modalInputValue('v-model'),
+        plate: modalInputValue('v-plate'),
+        vehicleClass: modalInputValue('v-class'),
+        mileage: Number(modalInputValue('v-mileage')) || 0,
+        fuel: Number(modalInputValue('v-fuel')) || 0,
+        status: modalInputValue('v-status'),
+        notes: modalInputValue('v-notes'),
+    });
+    closeModal();
+    toast('Fahrzeug aktualisiert', '', 'success');
+    showView('gf-fleet');
+};
+
+Actions.openAssignModal = async (vehicleId) => {
+    const drivers = await call('dispatch:drivers');
+    const options = drivers.drivers.map((d) => `<option value="${d.driver_id}">${escapeHtml(d.name)}</option>`).join('');
+    openModal('Fahrzeug zuweisen', '', `
+        <label>Neuer Fahrer</label>
+        <select id="assign-driver">
+            <option value="">- Zuweisung aufheben -</option>
+            ${options}
+        </select>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmAssignVehicle(${vehicleId})">Zuweisen</button>
+    `);
+};
+Actions.confirmAssignVehicle = async (vehicleId) => {
+    const driverId = Number(modalInputValue('assign-driver')) || null;
+    await call('gf:vehicles:assign', { vehicleId, driverId });
+    closeModal();
+    toast('Fahrzeug zugewiesen', '', 'success');
+    showView('gf-fleet');
+};
+
+Actions.openDeleteVehicleModal = (vehicleId) => {
+    openModal('Fahrzeug löschen?', 'Diese Aktion wird serverseitig geprüft.', `
+        <p style="font-size:13px;color:var(--text-1);">Möchtest du dieses Fahrzeug wirklich aus dem Fuhrpark entfernen?
+        Standardmäßig wird es archiviert, damit die Fahrzeughistorie erhalten bleibt.</p>
+        <label style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="v-hard-delete" style="width:auto;" />
+            <span style="font-size:12.5px;">Endgültig löschen (nur möglich, wenn keine Auftragshistorie vorhanden ist)</span>
+        </label>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-danger" onclick="Actions.confirmDeleteVehicle(${vehicleId})">Löschen</button>
+    `);
+};
+Actions.confirmDeleteVehicle = async (vehicleId) => {
+    const hard = document.getElementById('v-hard-delete').checked;
+    const r = await call('gf:vehicles:delete', { vehicleId, mode: hard ? 'hard' : 'archive' });
+    closeModal();
+    if (r.forced) {
+        toast('Fahrzeug archiviert', 'Endgültiges Löschen war wegen vorhandener Auftragshistorie nicht möglich.', 'info');
+    } else {
+        toast(r.mode === 'hard' ? 'Fahrzeug gelöscht' : 'Fahrzeug archiviert', '', 'success');
+    }
+    showView('gf-fleet');
+};
+
+Actions.reactivateVehicle = async (vehicleId) => {
+    await call('gf:vehicles:reactivate', { vehicleId });
+    toast('Fahrzeug reaktiviert', '', 'success');
+    showView('gf-fleet');
+};
+
+// ---------------------------------------------------------
+// Anhänger
+// ---------------------------------------------------------
+
+function trailerTypeOptions(trailerTypes, selectedKey) {
+    return trailerTypes.map((t) => `<option value="${t.key}" ${t.key === selectedKey ? 'selected' : ''}>${escapeHtml(t.label)}</option>`).join('');
+}
+
+Actions.openTrailerCreateModal = async () => {
+    const d = await call('gf:trailers:list');
+    openModal('Anhänger erstellen', '', `
+        <label>Name</label><input id="tr-name" type="text" />
+        <label>Kennzeichen</label><input id="tr-plate" type="text" />
+        <label>Typ</label><select id="tr-type">${trailerTypeOptions(d.trailerTypes)}</select>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmCreateTrailer()">Anhänger erstellen</button>
+    `);
+};
+Actions.confirmCreateTrailer = async () => {
+    await call('gf:trailers:create', {
+        name: modalInputValue('tr-name'),
+        plate: modalInputValue('tr-plate'),
+        type: modalInputValue('tr-type'),
+    });
+    closeModal();
+    toast('Anhänger erstellt', '', 'success');
+    showView('gf-trailers');
+};
+
+Actions.openTrailerEditModal = async (trailerId) => {
+    const d = await call('gf:trailers:list');
+    const t = d.trailers.find((x) => x.id === trailerId);
+    if (!t) return;
+    const statusOptions = Object.keys(VEHICLE_STATUS_META).map((s) => `<option value="${s}" ${t.status === s ? 'selected' : ''}>${VEHICLE_STATUS_META[s].label}</option>`).join('');
+    openModal('Anhänger bearbeiten', `${escapeHtml(t.name)} - ${escapeHtml(t.plate)}`, `
+        <label>Name</label><input id="tr-name" type="text" value="${escapeHtml(t.name)}" />
+        <label>Kennzeichen</label><input id="tr-plate" type="text" value="${escapeHtml(t.plate)}" />
+        <label>Typ</label><select id="tr-type">${trailerTypeOptions(d.trailerTypes, t.type)}</select>
+        <label>Status</label><select id="tr-status">${statusOptions}</select>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmEditTrailer(${trailerId})">Speichern</button>
+    `);
+};
+Actions.confirmEditTrailer = async (trailerId) => {
+    await call('gf:trailers:update', {
+        trailerId,
+        name: modalInputValue('tr-name'),
+        plate: modalInputValue('tr-plate'),
+        type: modalInputValue('tr-type'),
+        status: modalInputValue('tr-status'),
+    });
+    closeModal();
+    toast('Anhänger aktualisiert', '', 'success');
+    showView('gf-trailers');
+};
+
+Actions.openTrailerAssignModal = async (trailerId) => {
+    const d = await call('gf:vehicles:list');
+    const options = d.vehicles.filter((v) => !v.archived).map((v) => `<option value="${v.id}">${escapeHtml(v.name)} (${escapeHtml(v.plate)})</option>`).join('');
+    openModal('Anhänger ankuppeln', '', `
+        <label>Fahrzeug</label>
+        <select id="tr-assign-vehicle">${options}</select>
+        <p class="card-hint">Ein bereits an dieses Fahrzeug gekuppelter Anhänger wird automatisch abgekuppelt.</p>
+    `, `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmTrailerAssign(${trailerId}, Number(modalInputValue('tr-assign-vehicle')))">Ankuppeln</button>
+    `);
+};
+Actions.confirmTrailerAssign = async (trailerId, vehicleId) => {
+    await call('gf:trailers:assign', { trailerId, vehicleId });
+    closeModal();
+    toast(vehicleId ? 'Anhänger angekuppelt' : 'Anhänger abgekuppelt', '', 'success');
+    showView('gf-trailers');
+};
+
+Actions.confirmDeleteTrailer = (trailerId) => {
+    openConfirmModal('Anhänger archivieren?', 'Diesen Anhänger wirklich archivieren?', 'Archivieren', `Actions.reallyDeleteTrailer(${trailerId})`);
+};
+Actions.reallyDeleteTrailer = async (trailerId) => {
+    await call('gf:trailers:delete', { trailerId, mode: 'archive' });
+    closeModal();
+    toast('Anhänger archiviert', '', 'success');
+    showView('gf-trailers');
+};
+
+// ---------------------------------------------------------
+// Orte
+// ---------------------------------------------------------
+
+function cargoCheckboxes(prefix, cargoTypes, selectedList) {
+    const selected = new Set(selectedList || []);
+    return cargoTypes.map((c) => `
+        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:400;">
+            <input type="checkbox" class="${prefix}-cargo" value="${escapeHtml(c)}" style="width:auto;" ${selected.has(c) ? 'checked' : ''} />
+            ${escapeHtml(c)}
+        </label>`).join('');
+}
+
+function readCheckedCargo(prefix) {
+    return Array.from(document.querySelectorAll(`.${prefix}-cargo:checked`)).map((el) => el.value);
+}
+
+function locationFormFields(l) {
+    const cargoTypes = State.config.cargoTypes || [];
+    l = l || {};
+    return `
+        <label>Name</label><input id="loc-name" type="text" value="${escapeHtml(l.name || '')}" />
+        <div class="btn-row" style="margin:4px 0;">
+            <button type="button" class="btn btn-sm" onclick="Actions.useCurrentPositionForLocation()">Aktuelle Position übernehmen</button>
+            <span id="loc-pos-hint" class="card-hint">${l.coords ? `x=${l.coords.x.toFixed(1)}, y=${l.coords.y.toFixed(1)}, z=${l.coords.z.toFixed(1)}` : 'Noch keine Position gesetzt.'}</span>
+        </div>
+        <input id="loc-x" type="hidden" value="${l.coords ? l.coords.x : ''}" />
+        <input id="loc-y" type="hidden" value="${l.coords ? l.coords.y : ''}" />
+        <input id="loc-z" type="hidden" value="${l.coords ? l.coords.z : ''}" />
+        <input id="loc-heading" type="hidden" value="${l.coords ? l.coords.w : 0}" />
+        <label>Quelle (hier abholbare Frachtarten)</label>
+        <div class="form-row" style="flex-wrap:wrap;">${cargoCheckboxes('loc-src', cargoTypes, l.sourceCargo)}</div>
+        <label>Ziel (hier anlieferbare Frachtarten)</label>
+        <div class="form-row" style="flex-wrap:wrap;">${cargoCheckboxes('loc-dst', cargoTypes, l.destCargo)}</div>
+    `;
+}
+
+Actions.useCurrentPositionForLocation = async () => {
+    const pos = await call('gf:locations:currentPosition');
+    document.getElementById('loc-x').value = pos.x;
+    document.getElementById('loc-y').value = pos.y;
+    document.getElementById('loc-z').value = pos.z;
+    document.getElementById('loc-heading').value = pos.heading;
+    document.getElementById('loc-pos-hint').textContent = `x=${pos.x.toFixed(1)}, y=${pos.y.toFixed(1)}, z=${pos.z.toFixed(1)} (übernommen)`;
+    toast('Position übernommen', '', 'success');
+};
+
+Actions.openLocationCreateModal = () => {
+    openModal('Ort erstellen', '', locationFormFields(null), `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmCreateLocation()">Ort erstellen</button>
+    `);
+};
+Actions.confirmCreateLocation = async () => {
+    await call('gf:locations:create', {
+        name: modalInputValue('loc-name'),
+        x: Number(modalInputValue('loc-x')),
+        y: Number(modalInputValue('loc-y')),
+        z: Number(modalInputValue('loc-z')),
+        heading: Number(modalInputValue('loc-heading')) || 0,
+        sourceCargo: readCheckedCargo('loc-src'),
+        destCargo: readCheckedCargo('loc-dst'),
+    });
+    closeModal();
+    toast('Ort erstellt', '', 'success');
+    showView('gf-locations');
+};
+
+Actions.openLocationEditModal = async (locationId) => {
+    const d = await call('locations:list');
+    const l = d.locations.find((x) => x.id === locationId);
+    if (!l) return;
+    openModal('Ort bearbeiten', escapeHtml(l.name), locationFormFields(l), `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmEditLocation(${locationId})">Speichern</button>
+    `);
+};
+Actions.confirmEditLocation = async (locationId) => {
+    await call('gf:locations:update', {
+        locationId,
+        name: modalInputValue('loc-name'),
+        x: Number(modalInputValue('loc-x')),
+        y: Number(modalInputValue('loc-y')),
+        z: Number(modalInputValue('loc-z')),
+        heading: Number(modalInputValue('loc-heading')) || 0,
+        sourceCargo: readCheckedCargo('loc-src'),
+        destCargo: readCheckedCargo('loc-dst'),
+    });
+    closeModal();
+    toast('Ort aktualisiert', '', 'success');
+    showView('gf-locations');
+};
+
+Actions.confirmDeleteLocation = (locationId) => {
+    openConfirmModal('Ort löschen?', 'Diesen Ort wirklich löschen?', 'Löschen', `Actions.reallyDeleteLocation(${locationId})`);
+};
+Actions.reallyDeleteLocation = async (locationId) => {
+    await call('gf:locations:delete', { locationId });
+    closeModal();
+    toast('Ort gelöscht', '', 'success');
+    showView('gf-locations');
+};
+
+// ---------------------------------------------------------
+// Frachtarten
+// ---------------------------------------------------------
+
+function cargoTypeFormFields(c, trailerTypes) {
+    c = c || {};
+    return `
+        <label>Name</label><input id="ct-name" type="text" value="${escapeHtml(c.name || '')}" />
+        <label>Einheit</label><input id="ct-unit" type="text" placeholder="z.B. Stück, kg, Liter" value="${escapeHtml(c.unit || '')}" />
+        <div class="form-row">
+            <div>
+                <label>Menge min.</label>
+                <input id="ct-min" type="number" min="1" step="1" value="${c.min != null ? c.min : ''}" />
+            </div>
+            <div>
+                <label>Menge max.</label>
+                <input id="ct-max" type="number" min="1" step="1" value="${c.max != null ? c.max : ''}" />
+            </div>
+        </div>
+        <label>Benötigter Anhängertyp</label>
+        <select id="ct-trailer-type">${trailerTypeOptions(trailerTypes, c.trailerType)}</select>
+        <label style="display:flex;align-items:center;gap:6px;">
+            <input id="ct-hazardous" type="checkbox" style="width:auto;" ${c.hazardous ? 'checked' : ''} />
+            Gefahrgut (Fahrer benötigt Gefahrgut-Berechtigung)
+        </label>
+    `;
+}
+
+Actions.openCargoTypeCreateModal = async () => {
+    const d = await call('gf:trailers:list');
+    openModal('Frachtart erstellen', '', cargoTypeFormFields(null, d.trailerTypes), `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmCreateCargoType()">Frachtart erstellen</button>
+    `);
+};
+Actions.confirmCreateCargoType = async () => {
+    await call('gf:cargotypes:create', {
+        name: modalInputValue('ct-name'),
+        unit: modalInputValue('ct-unit'),
+        min: Number(modalInputValue('ct-min')),
+        max: Number(modalInputValue('ct-max')),
+        hazardous: document.getElementById('ct-hazardous').checked,
+        trailerType: modalInputValue('ct-trailer-type'),
+    });
+    closeModal();
+    toast('Frachtart erstellt', '', 'success');
+    showView('gf-cargo-types');
+};
+
+Actions.openCargoTypeEditModal = async (cargoTypeId) => {
+    const [d, trailerData] = await Promise.all([call('cargotypes:list'), call('gf:trailers:list')]);
+    const c = d.cargoTypes.find((x) => x.id === cargoTypeId);
+    if (!c) return;
+    openModal('Frachtart bearbeiten', escapeHtml(c.name), cargoTypeFormFields(c, trailerData.trailerTypes), `
+        <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="Actions.confirmEditCargoType(${cargoTypeId})">Speichern</button>
+    `);
+};
+Actions.confirmEditCargoType = async (cargoTypeId) => {
+    await call('gf:cargotypes:update', {
+        cargoTypeId,
+        name: modalInputValue('ct-name'),
+        unit: modalInputValue('ct-unit'),
+        min: Number(modalInputValue('ct-min')),
+        max: Number(modalInputValue('ct-max')),
+        hazardous: document.getElementById('ct-hazardous').checked,
+        trailerType: modalInputValue('ct-trailer-type'),
+    });
+    closeModal();
+    toast('Frachtart aktualisiert', '', 'success');
+    showView('gf-cargo-types');
+};
+
+Actions.confirmDeleteCargoType = (cargoTypeId) => {
+    openConfirmModal('Frachtart löschen?', 'Diese Frachtart wirklich löschen? Bereits laufende Aufträge mit dieser Frachtart bleiben unberührt.', 'Löschen', `Actions.reallyDeleteCargoType(${cargoTypeId})`);
+};
+Actions.reallyDeleteCargoType = async (cargoTypeId) => {
+    await call('gf:cargotypes:delete', { cargoTypeId });
+    closeModal();
+    toast('Frachtart gelöscht', '', 'success');
+    showView('gf-cargo-types');
+};
+
+Actions.openVehicleFile = async (vehicleId) => {
+    const f = await call('gf:vehicles:file', { vehicleId });
+    const v = f.vehicle;
+    const ordersHtml = f.recentOrders.map((o) => `<div class="stat-row"><span>#${o.id} ${o.driver_name ? escapeHtml(o.driver_name) : ''}</span><span>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</span></div>`).join('') || '<div class="card-hint">Keine Aufträge.</div>';
+
+    openModal(`Fahrzeugakte - ${escapeHtml(v.name)}`, escapeHtml(v.plate), `
+        <div class="stat-row"><span>Kilometer</span><span>${Number(v.mileage).toLocaleString('de-DE')} km</span></div>
+        <div class="stat-row"><span>Abgeschlossene Aufträge</span><span>${f.totalOrders}</span></div>
+        <div class="stat-row"><span>Gefahrene Strecke</span><span>${Number(f.totalKm).toLocaleString('de-DE')} km</span></div>
+        <div class="stat-row"><span>Aktueller Fahrer</span><span>${f.currentDriverName ? escapeHtml(f.currentDriverName) : '-'}</span></div>
+        <h4 style="margin:16px 0 8px;font-size:11px;text-transform:uppercase;color:var(--text-2);">Letzte Aufträge</h4>
+        ${ordersHtml}
+    `, `<button class="btn btn-ghost" onclick="closeModal()">Schließen</button>`);
+};
+
+Actions.executePayout = async () => {
+    const amount = Number(document.getElementById('payout-amount').value);
+    const target = document.getElementById('payout-target').value;
+    const reason = document.getElementById('payout-reason').value;
+    if (!amount || amount <= 0) { toast('Ungültiger Betrag', 'Bitte einen gültigen Auszahlungsbetrag angeben.', 'error'); return; }
+    window.__payoutTarget = target;
+    const result = await call('gf:payout:execute', { amount, target, reason });
+    if (result.cashGiven) {
+        toast('Auszahlung durchgeführt', `${formatMoney(amount)} als Bargeld erhalten.`, 'success');
+    } else {
+        toast('Achtung: kein Bargeld erhalten!', `${formatMoney(amount)} wurde verbucht, aber die Wirtschafts-Anbindung (Config.MoneyBridge) hat kein Bargeld übergeben - Server-Konsole prüfen.`, 'error');
+    }
+    showView('gf-payouts');
+};
+
+Actions.executeDeposit = async () => {
+    const amount = Number(document.getElementById('deposit-amount').value);
+    const source = document.getElementById('deposit-source').value;
+    const reason = document.getElementById('deposit-reason').value;
+    if (!amount || amount <= 0) { toast('Ungültiger Betrag', 'Bitte einen gültigen Einzahlungsbetrag angeben.', 'error'); return; }
+    window.__depositSource = source;
+    await call('gf:deposit:execute', { amount, source, reason });
+    toast('Einzahlung verbucht', `${formatMoney(amount)} Bargeld abgezogen.`, 'success');
+    showView('gf-payouts');
+};
+
+Actions.setWageRate = async (role) => {
+    const hourlyRate = Number(document.getElementById(`wage-rate-${role}`).value);
+    if (hourlyRate === null || hourlyRate < 0 || Number.isNaN(hourlyRate)) {
+        toast('Ungültiger Betrag', 'Bitte einen gültigen Stundenlohn angeben.', 'error');
+        return;
+    }
+    await call('gf:payroll:setRate', { role, hourlyRate });
+    toast('Stundenlohn gespeichert', '', 'success');
+    showView('gf-payroll');
+};
+
+Actions.payEmployee = async (employeeId, name) => {
+    const result = await call('gf:payroll:pay', { employeeId });
+    if (result.cashGiven) {
+        toast('Gehalt ausgezahlt', `${formatMoney(result.amount)} an ${name} als Bargeld übergeben.`, 'success');
+    } else {
+        toast('Achtung: kein Bargeld erhalten!', `${formatMoney(result.amount)} für ${name} wurde verbucht, aber NICHT als Bargeld übergeben (nicht online, oder Config.MoneyBridge funktioniert nicht - Server-Konsole prüfen).`, 'error');
+    }
+    showView('gf-payroll');
+};
+
+Actions.filterOrders = (status) => {
+    window.__orderStatusFilter = status;
+    showView('gf-orders');
+};
