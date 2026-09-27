@@ -649,6 +649,7 @@ function handlePush(event, data) {
         'orders:cancelRequested': () => { toast('Abbruch-Anfrage', 'Ein Fahrer möchte einen Auftrag abbrechen.', 'warning'); refreshIfViewing(['dispatch-active']); },
         'orders:completed': () => { toast('Auftrag abgeschlossen', 'Ein Auftrag wurde erfolgreich abgeschlossen.', 'success'); refreshIfViewing(['dispatch-active', 'dispatch-completed', 'gf-dashboard']); },
         'dispatch:driversChanged': () => refreshIfViewing(['dispatch-drivers']),
+        'dispatch:dutyChanged': () => refreshIfViewing(['dispatch-board', 'dispatch-pool', 'driver-orders']),
         'fleet:changed': () => refreshIfViewing(['gf-fleet', 'dispatch-drivers']),
         'finance:balanceChanged': () => refreshIfViewing(['gf-finance', 'gf-dashboard']),
         'roles:changed': () => refreshAfterRolesChanged(),
@@ -999,13 +1000,25 @@ VIEWS['dispatch-active'] = async (root) => {
 };
 
 VIEWS['dispatch-board'] = async (root) => {
-    const [pool, active, drivers] = await Promise.all([call('dispatch:openOrders'), call('dispatch:activeOrders'), call('dispatch:drivers')]);
+    const [pool, active, drivers, duty] = await Promise.all([call('dispatch:openOrders'), call('dispatch:activeOrders'), call('dispatch:drivers'), call('dispatch:dutyStatus')]);
     window.__availableDrivers = drivers.drivers;
     root.innerHTML = `
         <h1 class="view-title">Allgemeine Disposition</h1>
         <p class="view-subtitle">Auftragspool, aktive Aufträge und Fahrerübersicht an einem Ort - für den laufenden Disponenten-Alltag.</p>
 
-        <h2 class="view-title" style="font-size:15px;margin-top:18px;">Offener Auftragspool</h2>
+        <div class="section" style="display:flex;align-items:center;justify-content:space-between;gap:14px;">
+            <div>
+                <div class="card-title">Dispositions-Dienst</div>
+                <div class="card-hint">${duty.onDuty
+                    ? `Im Dienst seit ${formatDate(duty.shiftStartedAt, true)} - solange bist du für Fahrer als verfügbarer Disponent sichtbar und die Selbstzuweisung offener Aufträge ist für sie gesperrt.`
+                    : 'Nicht im Dienst - Fahrer können sich offene Aufträge derzeit selbst zuweisen, solange kein Disponent im Dienst ist.'}</div>
+            </div>
+            ${duty.onDuty
+                ? `<button class="btn btn-danger" onclick="Actions.endDispatchDuty()">Dienst beenden</button>`
+                : `<button class="btn btn-primary" onclick="Actions.startDispatchDuty()">Dienst beginnen</button>`}
+        </div>
+
+        <h2 class="view-title" style="font-size:15px;margin-top:22px;">Offener Auftragspool</h2>
         <div class="section">${table(['#', 'Fracht', 'Strecke', 'Distanz', 'Wert', ''], openOrdersTableRows(pool.orders))}</div>
 
         <h2 class="view-title" style="font-size:15px;margin-top:22px;">Aktive Aufträge</h2>
@@ -1708,6 +1721,17 @@ Actions.confirmMessageDriver = async (driverId) => {
 Actions.remindDriver = async (driverId) => {
     await call('dispatch:remindDriver', { driverId });
     toast('Erinnerung gesendet', 'Der Fahrer wurde an seine Lenk-/Ruhezeiten erinnert.', 'success');
+};
+
+Actions.startDispatchDuty = async () => {
+    await call('dispatch:startDuty');
+    toast('Dienst begonnen', 'Fahrer können sich offene Aufträge jetzt nicht mehr selbst zuweisen.', 'success');
+    showView('dispatch-board');
+};
+Actions.endDispatchDuty = async () => {
+    await call('dispatch:endDuty');
+    toast('Dienst beendet', '', 'success');
+    showView('dispatch-board');
 };
 
 Actions.openDispatchModal = (orderId, requiresPermission) => {

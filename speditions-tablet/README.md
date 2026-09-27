@@ -164,14 +164,31 @@ zugewiesen, muss er zuerst Tankstand und ggf. Mängel/Besonderheiten melden
 automatisch auf "Wartung"). Ohne zugewiesenes Fahrzeug meldet er sich direkt
 ab. Siehe `Vehicles.ReportCondition` in `server/sv_vehicles.lua`.
 
-### Auftrags-Selbstzuweisung ohne Disponent
+### Dispositions-Dienst & Auftrags-Selbstzuweisung ohne Disponent
 
-Ist gerade weder ein Disponent noch die Geschäftsführung online (bzw. hat
-das Tablet in der aktuellen Verbindung noch nicht geöffnet), können Fahrer
-sich einen offenen Auftrag im "Offener Auftragspool"-Bereich unter "Meine
-Aufträge" selbst zuweisen ("Übernehmen"). Sobald wieder jemand mit
-Dispositionsrecht online ist, wird der Button gesperrt und die normale
-Disposition greift wieder. Siehe `Orders.SelfAssign` in `server/sv_orders.lua`.
+Ein bloß am Tablet angemeldeter Disponent/Geschäftsführung reicht **nicht**
+aus, um die Selbstzuweisung zu sperren - der Dispositions-Dienst muss dafür
+in der App **"Allgemeine Disposition"** (Kategorie Disposition) über den
+Button "Dienst beginnen" aktiv eingeschaltet sein (analog zur Fahrerkarte
+bei Fahrern). Solange niemand im Dienst ist, können Fahrer sich einen
+offenen Auftrag im "Offener Auftragspool"-Bereich unter "Aufträge" selbst
+zuweisen ("Übernehmen"). Sobald mindestens ein Disponent "Dienst beginnen"
+gedrückt hat, wird der Button gesperrt und die normale Disposition greift
+wieder - bis "Dienst beenden" gedrückt wird oder der Disponent den Server
+verlässt (automatisches Beenden bei Verbindungsabbruch). Siehe
+`server/sv_dispatch_shift.lua` (`Dispatch.StartDuty`/`EndDuty`) und
+`Orders.SelfAssign`/`isDispatcherAvailable` in `server/sv_orders.lua`.
+
+**Bestandsinstallationen:** die neuen Spalten `dispatch_on_duty`/
+`dispatch_shift_started_at` auf `st_employees` werden nur bei einer
+komplett frischen Installation automatisch aus `sql/install.sql` angelegt.
+Läuft euer Server schon länger, einmalig folgendes SQL gegen eure
+Datenbank ausführen, bevor ihr die neue Ressourcenversion startet:
+```sql
+ALTER TABLE `st_employees`
+    ADD COLUMN `dispatch_on_duty` TINYINT(1) NOT NULL DEFAULT 0 AFTER `status`,
+    ADD COLUMN `dispatch_shift_started_at` DATETIME NULL AFTER `dispatch_on_duty`;
+```
 
 ## Rollen & Berechtigungen
 
@@ -543,7 +560,7 @@ Siehe `sql/install.sql`. Wichtigste Tabellen:
 
 ```
 st_roles                Frei anlegbare Rollen (Rollenschlüssel, Bezeichnung, Berechtigungen als JSON, Basisrolle ja/nein)
-st_employees            Mitarbeiterstammdaten (Login-Name, Passwort-Hash/Salt, Rolle, Status, zuletzt bekannter FiveM-Charakter nur informativ)
+st_employees            Mitarbeiterstammdaten (Login-Name, Passwort-Hash/Salt, Rolle, Status, zuletzt bekannter FiveM-Charakter nur informativ, Dispositions-Dienst-Status)
 st_drivers              Fahrer-Zusatzdaten (Status, Notizen, Fahrzeugzuweisung, Fahrerkarte eingesteckt/seit)
 st_driver_permissions   Führerscheinklassen / Sonderberechtigungen
 st_driver_statistics    Aggregierte Fahrerstatistik (aus st_orders berechnet)

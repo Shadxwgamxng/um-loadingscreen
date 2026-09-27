@@ -45,6 +45,12 @@ CREATE TABLE IF NOT EXISTS `st_employees` (
     -- ENUM mehr, seit die Geschäftsführung eigene Rollen anlegen kann.
     `role` VARCHAR(50) NOT NULL DEFAULT 'fahrer',
     `status` ENUM('aktiv','inaktiv') NOT NULL DEFAULT 'aktiv',
+    -- "Disposition Dienst" - analog zu st_drivers.on_shift, aber für die
+    -- dispatch-Berechtigung: nur solange dieser Wert bei mindestens einem
+    -- verbundenen Mitarbeiter 1 ist, gilt ein Disponent als "online"
+    -- (Orders.SelfAssign/isDispatcherAvailable in server/sv_orders.lua).
+    `dispatch_on_duty` TINYINT(1) NOT NULL DEFAULT 0,
+    `dispatch_shift_started_at` DATETIME NULL,
     `hired_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

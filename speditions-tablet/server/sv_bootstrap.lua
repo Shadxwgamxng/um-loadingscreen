@@ -162,6 +162,12 @@ AddEventHandler('playerDropped', function()
         elseif didClockOut then
             print(('^2[speditions-tablet]^7 %s wurde beim Verlassen des Servers automatisch ausgestempelt.'):format(emp.name))
         end
+        if Utils.ToBool(emp.dispatch_on_duty) then
+            local dutyOk, dutyErr = pcall(Dispatch.ForceEndDuty, emp.id)
+            if not dutyOk then
+                print(('^1[speditions-tablet]^7 Automatisches Beenden des Dispositions-Dienstes bei Verbindungsabbruch fehlgeschlagen fuer %s: %s'):format(emp.name, tostring(dutyErr)))
+            end
+        end
     end
     Employees.Logout(src)
 end)

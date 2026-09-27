@@ -89,15 +89,17 @@ local function vehicleHasTrailer(vehicleId, requiredType)
     return trailer ~= nil and trailer.type == requiredType
 end
 
---- Prüft, ob gerade ein Disponent ODER die Geschäftsführung online UND am
---- Tablet erkannt ist (d.h. das Tablet in dieser Verbindung schon einmal
---- geöffnet hat). Nur wenn das NICHT der Fall ist, dürfen Fahrer sich
---- offene Aufträge selbst zuweisen.
+--- Prüft, ob gerade ein Disponent ODER die Geschäftsführung online UND aktiv
+--- im Dispositions-Dienst ist (server/sv_dispatch_shift.lua,
+--- Dispatch.StartDuty/EndDuty - ein reiner "am Tablet angemeldet"-Zustand
+--- reicht NICHT mehr, der Dienst muss explizit begonnen worden sein). Nur
+--- wenn das NICHT der Fall ist, dürfen Fahrer sich offene Aufträge selbst
+--- zuweisen.
 local function isDispatcherAvailable()
     for _, playerId in ipairs(GetPlayers()) do
         local src = tonumber(playerId)
         local emp = Employees.GetLoggedIn(src)
-        if emp and Roles.HasPermission(emp.role, 'dispatch') then
+        if emp and Roles.HasPermission(emp.role, 'dispatch') and Utils.ToBool(emp.dispatch_on_duty) then
             return true
         end
     end
