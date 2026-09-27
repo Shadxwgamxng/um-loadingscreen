@@ -252,6 +252,18 @@ Framework-Anbindung in diesem Standalone-Setup).
   erscheint ein In-Game-Warnhinweis ("Dir ist noch kein Fahrzeug zugewiesen
   ..."), statt
   dass die Zähler kommentarlos bei 0 bleiben (`client/cl_hours.lua`).
+- **Bugfix: manueller Status "Pause" setzte Lenkzeit nicht zurück**: Der
+  Status-Dropdown in der Fahrerkarte (`current_status` - "Verfügbar/Im
+  Einsatz/Pause") war bisher komplett unabhängig von der Lenk-/Ruhezeiten-
+  Erfassung. Wer manuell auf "Pause" wechselte, ohne dabei tatsächlich aus
+  dem zugewiesenen Fahrzeug auszusteigen, hatte also nie einen `resting_since`-
+  Zeitstempel gesetzt - die ununterbrochene Lenkzeit lief dadurch nie ab und
+  wurde nie zurückgesetzt, egal wie lange "Pause" aktiv war. `Drivers.SetStatus`
+  (`server/sv_drivers.lua`) ruft beim Wechsel auf "Pause" jetzt zusätzlich
+  `Hours.RestStart()` auf (idempotent, wie beim automatischen Aussteigen aus
+  dem Fahrzeug) - die Lenkzeit setzt sich damit nach der konfigurierten
+  Mindestpause (`Config.DrivingRules.requiredBreakMinutes`) auch bei manuell
+  gesetzter Pause zuverlässig zurück.
 - **Automatische Wegpunkte**: Beim Annehmen eines Auftrags wird automatisch
   ein GPS-Wegpunkt zum Beladepunkt gesetzt, beim Losfahren (Statuswechsel auf
   "Unterwegs") automatisch einer zum Zielort. Die Koordinaten kommen aus den

@@ -38,6 +38,15 @@ function Drivers.SetStatus(src, status)
     local driver = Drivers.EnsureDriverRecord(emp.id)
     MySQL.update.await('UPDATE st_drivers SET current_status = ? WHERE id = ?', { status, driver.id })
 
+    -- "Pause" ist ein rein manuell vom Fahrer gesetzter Status - ohne diesen
+    -- Aufruf wusste die Lenkzeit-Erfassung (server/sv_hours.lua) nichts davon:
+    -- resting_since blieb leer, wodurch die ununterbrochene Lenkzeit auch nach
+    -- einer ausreichend langen Pause nie zurückgesetzt wurde. Hours.RestStart
+    -- ist idempotent (setzt resting_since nur, falls noch nicht gesetzt).
+    if status == 'pause' then
+        Hours.RestStart(src)
+    end
+
     RPC.PushToPermission('dispatch', 'dispatch:driversChanged', {})
 
     return { ok = true, status = status }
