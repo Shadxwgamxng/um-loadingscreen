@@ -207,13 +207,13 @@ function WebsiteBridge.PushDriverPositionRemove(tabletEmployeeId)
     WebsiteBridge.PushEvent('driver_position.remove', { tabletEmployeeId = tabletEmployeeId })
 end
 
---- Meldet die aktuell konfigurierten/kalibrierten Live-Karten-Kartengrenzen
+--- Meldet die aktuell konfigurierten Live-Karten-Kartengrenzen
 --- (Config.LiveMap.bounds) an die Website, damit deren eigene Kartenansicht
 --- dieselbe Umrechnung Weltkoordinaten→Kartenbild-Prozent verwendet wie das
 --- Tablet, statt eine eigene, potenziell veraltete Kopie hart zu
---- hinterlegen. Wird beim Ressourcenstart gepusht - nach einer Kalibrierung
---- (Reiter "Live-Karte", Werte in config.lua übernommen) reicht ein
---- Ressourcen-Neustart, damit auch die Website die neuen Grenzen erhält.
+--- hinterlegen. Wird beim Ressourcenstart gepusht - nach einer manuellen
+--- Anpassung der vier Zahlen in config.lua reicht ein Ressourcen-Neustart,
+--- damit auch die Website die neuen Grenzen erhält.
 function WebsiteBridge.PushLiveMapBounds()
     if not websiteConfigured() then return end
     if not (Config.LiveMap and Config.LiveMap.bounds) then return end

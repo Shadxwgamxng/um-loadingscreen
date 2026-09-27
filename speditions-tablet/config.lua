@@ -126,9 +126,15 @@ Config.DefaultRolePermissions = {
 }
 
 -- Live-Karte: Aktualisierungsintervall des serverseitigen Trackings und die
--- Standard-Kartengrenzen (Weltkoordinaten, die auf die 0-100%-Fläche des
--- hinterlegten Kartenbilds abgebildet werden) - über das Kalibrierungstool
--- im Reiter "Live-Karte" per Zwei-Punkt-Klick neu ermittelbar.
+-- Kartengrenzen (Weltkoordinaten, die auf die 0-100%-Fläche des
+-- hinterlegten Kartenbilds abgebildet werden). Die Fahrerposition selbst
+-- kommt immer direkt und serverseitig von GTA (GetEntityCoords,
+-- server/sv_tracking.lua) - kein Kalibrierungswerkzeug nötig. Passt dein
+-- eigenes Kartenbild nicht zu den unten hinterlegten Standardwerten
+-- (leichter Versatz der Marker), passe die vier Zahlen hier direkt an -
+-- z.B. anhand von zwei bekannten Orten, deren Weltkoordinaten du kennst
+-- (Reiter "Orte" zeigt sie an) und deren Position auf deinem Kartenbild du
+-- in Prozent abschätzt (siehe README "Live-Karte").
 Config.LiveMap = {
     trackingIntervalMs = 3000,
     bounds = { minX = -4300, maxX = 4700, minY = -4300, maxY = 8200 },

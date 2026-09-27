@@ -774,7 +774,6 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
     overflow-y: auto;
 }
 .live-map-img { display: block; width: 100%; height: auto; }
-.live-map-wrap.calibrating .live-map-img { cursor: crosshair; }
 .live-map-img-fallback-hint {
     display: none;
     padding: 40px 20px;
