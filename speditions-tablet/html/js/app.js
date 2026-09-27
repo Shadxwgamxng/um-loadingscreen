@@ -7,6 +7,8 @@ const State = {
     role: null,
     config: null,
     currentView: null,
+    currentScreen: null,
+    currentCategory: null,
 };
 
 // ---------------------------------------------------------
@@ -300,54 +302,125 @@ function openConfirmModal(title, message, confirmLabel, actionCall) {
 // Navigation
 // ---------------------------------------------------------
 
-// Welche Reiter sichtbar sind, hängt NICHT mehr von der Rolle selbst ab,
-// sondern von deren Berechtigungen (server/sv_roles.lua) - so tauchen auch
-// von der Geschäftsführung frei angelegte Rollen mit den passenden
-// Berechtigungen automatisch mit den richtigen Reitern auf.
-const NAV_ITEMS = [
-    { id: 'driver-card', label: 'Fahrerkarte', perm: 'driver_actions' },
-    { id: 'driver-orders', label: 'Aufträge', perm: 'driver_actions' },
-    { id: 'driver-history', label: 'Historie', perm: 'driver_actions' },
-    { id: 'driver-earnings', label: 'Einnahmen', perm: 'driver_actions' },
-    { id: 'driver-vehicle', label: 'Mein Fahrzeug', perm: 'driver_actions' },
-    { id: 'driver-messages', label: 'Nachrichten', perm: 'driver_actions' },
-    { id: 'dispatch-drivers', label: 'Fahrerübersicht', perm: 'dispatch' },
-    { id: 'dispatch-pool', label: 'Auftragspool', perm: 'dispatch' },
-    { id: 'dispatch-active', label: 'Aktive Aufträge', perm: 'dispatch' },
-    { id: 'dispatch-completed', label: 'Abgeschlossen', perm: 'dispatch' },
-    { id: 'dispatch-revenue', label: 'Unternehmensumsatz', perm: 'dispatch' },
-    { id: 'gf-dashboard', label: 'Dashboard', perm: 'stats_view' },
-    { id: 'gf-employees', label: 'Mitarbeiter', perm: 'employees_manage' },
-    { id: 'gf-roles', label: 'Rollen', perm: 'roles_manage' },
-    { id: 'gf-drivers', label: 'Fahrerakten', perm: 'employees_manage' },
-    { id: 'gf-fleet', label: 'Fuhrpark', perm: 'fleet_manage' },
-    { id: 'gf-trailers', label: 'Anhänger', perm: 'fleet_manage' },
-    { id: 'gf-locations', label: 'Orte', perm: 'locations_manage' },
-    { id: 'gf-cargo-types', label: 'Frachtarten', perm: 'cargo_types_manage' },
-    { id: 'gf-finance', label: 'Finanzen', perm: 'finance_view' },
-    { id: 'gf-payouts', label: 'Ein-/Auszahlungen', perm: 'finance_payout' },
-    { id: 'gf-payroll', label: 'Gehälter', perm: 'wages_manage' },
-    { id: 'gf-orders', label: 'Aufträge', perm: 'stats_view' },
-    { id: 'gf-log', label: 'Protokoll', perm: 'activity_log_view' },
-    { id: 'gf-console', label: 'Konsole', perm: 'console_view' },
+// Welche Apps sichtbar sind, hängt NICHT von der Rolle selbst ab, sondern
+// von deren Berechtigungen (server/sv_roles.lua) - so tauchen auch von der
+// Geschäftsführung frei angelegte Rollen mit den passenden Berechtigungen
+// automatisch mit den richtigen Apps auf. Jede App gehört zusätzlich zu
+// genau einer Kategorie (Homescreen-Ordner).
+const CATEGORIES = [
+    { id: 'auftraege', label: 'Aufträge', icon: 'truck' },
+    { id: 'finanzen', label: 'Finanzen', icon: 'cash' },
+    { id: 'fuhrpark', label: 'Fuhrpark', icon: 'garage' },
+    { id: 'mitarbeiter', label: 'Mitarbeiterverwaltung', icon: 'people' },
+    { id: 'disposition', label: 'Disposition', icon: 'radio' },
+    { id: 'geschaeftsfuehrung', label: 'Geschäftsführung', icon: 'briefcase' },
 ];
 
-function visibleNavItems(permissions) {
-    const perms = permissions || [];
-    return NAV_ITEMS.filter((item) => perms.includes(item.perm));
+const APPS = [
+    { id: 'driver-card', label: 'Fahrerkarte', perm: 'driver_actions', category: 'fuhrpark' },
+    { id: 'driver-orders', label: 'Aufträge', perm: 'driver_actions', category: 'auftraege' },
+    { id: 'driver-history', label: 'Historie', perm: 'driver_actions', category: 'auftraege' },
+    { id: 'driver-earnings', label: 'Einnahmen', perm: 'driver_actions', category: 'finanzen' },
+    { id: 'driver-vehicle', label: 'Mein Fahrzeug', perm: 'driver_actions', category: 'fuhrpark' },
+    { id: 'driver-messages', label: 'Nachrichten', perm: 'driver_actions', category: 'disposition' },
+    { id: 'dispatch-drivers', label: 'Fahrerübersicht', perm: 'dispatch', category: 'mitarbeiter' },
+    { id: 'dispatch-pool', label: 'Auftragspool', perm: 'dispatch', category: 'auftraege' },
+    { id: 'dispatch-active', label: 'Aktive Aufträge', perm: 'dispatch', category: 'auftraege' },
+    { id: 'dispatch-completed', label: 'Abgeschlossen', perm: 'dispatch', category: 'auftraege' },
+    { id: 'dispatch-revenue', label: 'Unternehmensumsatz', perm: 'dispatch', category: 'finanzen' },
+    { id: 'gf-dashboard', label: 'Dashboard', perm: 'stats_view', category: 'finanzen' },
+    { id: 'gf-employees', label: 'Mitarbeiter', perm: 'employees_manage', category: 'mitarbeiter' },
+    { id: 'gf-roles', label: 'Rollen', perm: 'roles_manage', category: 'mitarbeiter' },
+    { id: 'gf-fleet', label: 'Fuhrpark', perm: 'fleet_manage', category: 'fuhrpark' },
+    { id: 'gf-trailers', label: 'Anhänger', perm: 'fleet_manage', category: 'fuhrpark' },
+    { id: 'gf-locations', label: 'Orte', perm: 'locations_manage', category: 'geschaeftsfuehrung' },
+    { id: 'gf-cargo-types', label: 'Frachtarten', perm: 'cargo_types_manage', category: 'auftraege' },
+    { id: 'gf-finance', label: 'Finanzen', perm: 'finance_view', category: 'finanzen' },
+    { id: 'gf-payouts', label: 'Ein-/Auszahlungen', perm: 'finance_payout', category: 'finanzen' },
+    { id: 'gf-payroll', label: 'Gehälter', perm: 'wages_manage', category: 'finanzen' },
+    { id: 'gf-orders', label: 'Aufträge', perm: 'stats_view', category: 'auftraege' },
+    { id: 'gf-log', label: 'Protokoll', perm: 'activity_log_view', category: 'geschaeftsfuehrung' },
+    { id: 'gf-console', label: 'Konsole', perm: 'console_view', category: 'geschaeftsfuehrung' },
+];
+
+// Kleines, selbst gezeichnetes Icon-Set (kein Emoji, keine externen
+// Schriften/CDN-Requests) für die Kategorie-Kacheln auf dem Homescreen.
+const CATEGORY_ICON_PATHS = {
+    truck: '<path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/>',
+    cash: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="3"/>',
+    garage: '<path d="M4 11 12 4l8 7"/><path d="M5 11v8h14v-8"/><path d="M9 19v-5h6v5"/>',
+    people: '<circle cx="9" cy="8" r="3"/><path d="M3 19c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 13.2c2.5.3 4.5 2.4 4.5 5.3"/>',
+    radio: '<circle cx="12" cy="17" r="1.6"/><path d="M8.5 13.5a5 5 0 0 1 7 0"/><path d="M5.8 10.8a9 9 0 0 1 12.4 0"/><path d="M3.2 8a13 13 0 0 1 17.6 0"/>',
+    briefcase: '<rect x="3" y="8" width="18" height="11" rx="2"/><path d="M9 8V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M3 13h18"/>',
+};
+
+function categoryIconSvg(key) {
+    const inner = CATEGORY_ICON_PATHS[key] || CATEGORY_ICON_PATHS.briefcase;
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
 }
 
-function buildSidebar(permissions) {
-    const sidebar = document.getElementById('sidebar');
-    sidebar.innerHTML = '';
-    visibleNavItems(permissions).forEach((item) => {
-        const el = document.createElement('div');
-        el.className = 'nav-item';
-        el.dataset.view = item.id;
-        el.innerHTML = `<span>${escapeHtml(item.label)}</span>`;
-        el.addEventListener('click', () => showView(item.id));
-        sidebar.appendChild(el);
-    });
+function visibleApps(permissions) {
+    const perms = permissions || [];
+    return APPS.filter((item) => perms.includes(item.perm));
+}
+
+function appsInCategory(categoryId, permissions) {
+    return visibleApps(permissions).filter((item) => item.category === categoryId);
+}
+
+function visibleCategories(permissions) {
+    return CATEGORIES.filter((c) => appsInCategory(c.id, permissions).length > 0);
+}
+
+function currentPermissions() {
+    return (State.config && State.config.permissions) || [];
+}
+
+function renderHome() {
+    State.currentScreen = 'home';
+    State.currentCategory = null;
+    document.getElementById('home-grid').classList.remove('hidden');
+    document.getElementById('category-grid').classList.add('hidden');
+    document.getElementById('app-view').classList.add('hidden');
+    const grid = document.getElementById('home-grid');
+    grid.innerHTML = visibleCategories(currentPermissions()).map((c) => `
+        <div class="category-tile" onclick="showCategory('${c.id}')">
+            <div class="tile-icon">${categoryIconSvg(c.icon)}</div>
+            <div class="tile-label">${escapeHtml(c.label)}</div>
+        </div>
+    `).join('');
+}
+
+function showHome() {
+    if (activeViewInterval) { clearInterval(activeViewInterval); activeViewInterval = null; }
+    State.currentView = null;
+    renderHome();
+}
+
+function showCategory(catId) {
+    if (activeViewInterval) { clearInterval(activeViewInterval); activeViewInterval = null; }
+    State.currentScreen = 'category';
+    State.currentCategory = catId;
+    State.currentView = null;
+    document.getElementById('home-grid').classList.add('hidden');
+    document.getElementById('app-view').classList.add('hidden');
+    const catGrid = document.getElementById('category-grid');
+    catGrid.classList.remove('hidden');
+    const category = CATEGORIES.find((c) => c.id === catId);
+    const apps = appsInCategory(catId, currentPermissions());
+    catGrid.innerHTML = `
+        <div class="category-header">
+            <button class="app-back-btn" onclick="showHome()">&#8249; Startbildschirm</button>
+            <span class="category-title">${escapeHtml(category ? category.label : '')}</span>
+        </div>
+        <div class="app-grid">
+            ${apps.map((a) => `
+                <div class="app-tile" onclick="showView('${a.id}')">
+                    <div class="tile-icon app-tile-icon">${escapeHtml((a.label || '?').trim().charAt(0).toUpperCase())}</div>
+                    <div class="tile-label">${escapeHtml(a.label)}</div>
+                </div>
+            `).join('')}
+        </div>`;
 }
 
 // Manche Ansichten können periodisch pollen, solange sie aktiv sind -
@@ -357,7 +430,14 @@ let activeViewInterval = null;
 async function showView(id) {
     if (activeViewInterval) { clearInterval(activeViewInterval); activeViewInterval = null; }
     State.currentView = id;
-    document.querySelectorAll('.nav-item').forEach((el) => el.classList.toggle('active', el.dataset.view === id));
+    State.currentScreen = 'app';
+    const app = APPS.find((a) => a.id === id);
+    if (app) State.currentCategory = app.category;
+    document.getElementById('home-grid').classList.add('hidden');
+    document.getElementById('category-grid').classList.add('hidden');
+    document.getElementById('app-view').classList.remove('hidden');
+    const titleEl = document.getElementById('app-topbar-title');
+    if (titleEl) titleEl.textContent = app ? app.label : '';
     const content = document.getElementById('content');
     content.innerHTML = '<div class="card-hint">Lädt...</div>';
     try {
@@ -507,9 +587,7 @@ function boot(data) {
     document.getElementById('employee-name').textContent = data.employee.name;
     document.getElementById('employee-role').textContent = data.roleLabels[data.employee.role] || data.employee.role;
     document.getElementById('topbar-brand').textContent = State.companyName;
-    buildSidebar(data.permissions);
-    const first = visibleNavItems(data.permissions)[0];
-    if (first) showView(first.id);
+    showHome();
     startTimeclockWidget();
 }
 
@@ -590,7 +668,8 @@ async function refreshAfterRolesChanged() {
         State.role = data.employee.role;
         State.config = data;
         document.getElementById('employee-role').textContent = data.roleLabels[data.employee.role] || data.employee.role;
-        buildSidebar(data.permissions);
+        if (State.currentScreen === 'home') renderHome();
+        else if (State.currentScreen === 'category') showCategory(State.currentCategory);
     }
     refreshIfViewing(['gf-roles', 'gf-employees', 'gf-payroll']);
 }
@@ -1038,6 +1117,7 @@ VIEWS['gf-employees'] = async (root) => {
             <button class="btn btn-sm" onclick="Actions.openSetDiscordIdModal(${e.id}, '${escapeHtml(e.name)}', ${escapeHtml(JSON.stringify(e.discord_id || ''))})">${e.discord_id ? escapeHtml(e.discord_id) : 'nicht verknüpft'}</button>
         </td>
         <td class="btn-row">
+            ${e.driver_id ? `<button class="btn btn-sm btn-primary" onclick="Actions.openDriverFile(${e.driver_id})">Fahrerakte</button>` : ''}
             <button class="btn btn-sm" onclick="Actions.openResetPasswordModal(${e.id}, '${escapeHtml(e.name)}')">Passwort zurücksetzen</button>
             <button class="btn btn-sm ${e.status === 'aktiv' ? 'btn-danger' : 'btn-primary'}" onclick="Actions.toggleEmployeeStatus(${e.id}, '${e.status === 'aktiv' ? 'inaktiv' : 'aktiv'}')">${e.status === 'aktiv' ? 'Deaktivieren' : 'Aktivieren'}</button>
         </td>
@@ -1045,7 +1125,7 @@ VIEWS['gf-employees'] = async (root) => {
 
     root.innerHTML = `
         <h1 class="view-title">Mitarbeiter</h1>
-        <p class="view-subtitle">Verwaltung aller Mitarbeiter, Rollen und Grade. Anmeldung erfolgt am Tablet per Name + Passwort. Die Discord-ID ist nur für den Website-Sync relevant (Config.Website) - verknüpft das Konto mit dem Discord-Login der Speditions-Website.</p>
+        <p class="view-subtitle">Verwaltung aller Mitarbeiter, Rollen und Grade. Anmeldung erfolgt am Tablet per Name + Passwort. Die Discord-ID ist nur für den Website-Sync relevant (Config.Website) - verknüpft das Konto mit dem Discord-Login der Speditions-Website. Fahrer haben zusätzlich einen "Fahrerakte"-Button für die digitale Personalakte.</p>
         <div class="btn-row" style="margin-bottom:14px;"><button class="btn btn-primary" onclick="Actions.openHireModal()">+ Mitarbeiter einstellen</button></div>
         <div class="section">${table(['#', 'Name', 'Login-Name', 'Rolle', 'Status', 'Eingestellt', 'Discord-ID', ''], rows)}</div>`;
 };
@@ -1078,24 +1158,6 @@ VIEWS['gf-roles'] = async (root) => {
         <p class="view-subtitle">Eigene Rollen mit frei wählbaren Berechtigungen anlegen und bearbeiten. Die drei mitgelieferten Basisrollen (Fahrer/Disponent/Geschäftsführung) können nicht gelöscht, ihre Berechtigungen aber angepasst werden. Die Spalte "Website-Rolle" ordnet diese Rolle - nur relevant bei aktiviertem Website-Sync (Config.Website) - einer der 9 Rollen der Speditions-Website zu, damit Mitarbeiter mit dieser Rolle dorthin synchronisiert werden können.</p>
         <div class="btn-row" style="margin-bottom:14px;"><button class="btn btn-primary" onclick="Actions.openCreateRoleModal()">+ Rolle anlegen</button></div>
         <div class="section">${table(['Rolle', 'Berechtigungen', 'Website-Rolle', ''], rows)}</div>`;
-};
-
-VIEWS['gf-drivers'] = async (root) => {
-    const [d, rolesRes] = await Promise.all([call('gf:employees:list'), call('roles:list')]);
-    const driverRoleKeys = new Set(rolesRes.roles.filter((r) => r.permissions.includes('driver_actions')).map((r) => r.key));
-    const drivers = d.employees.filter((e) => driverRoleKeys.has(e.role));
-    const rows = drivers.map((e) => `<tr>
-        <td>#${e.id}</td>
-        <td>${escapeHtml(e.name)}</td>
-        <td>${e.driver_current_status ? badge(DRIVER_STATUS_META[e.driver_current_status]) : '-'}</td>
-        <td>${badge(EMPLOYMENT_STATUS_META[e.status])}</td>
-        <td><button class="btn btn-sm btn-primary" onclick="Actions.openDriverFile(${e.driver_id})">Akte öffnen</button></td>
-    </tr>`);
-
-    root.innerHTML = `
-        <h1 class="view-title">Fahrerakten</h1>
-        <p class="view-subtitle">Digitale Personalakten aller Fahrer.</p>
-        <div class="section">${table(['#', 'Name', 'Status', 'Mitarbeiter', ''], rows)}</div>`;
 };
 
 VIEWS['gf-fleet'] = async (root) => {

@@ -78,10 +78,38 @@ oder aktualisiert Passwort/Rolle, falls der Login-Name bereits existiert.
   (`Config.TabletProp`, Standard-Modell `prop_cs_tablet`) - rein optisch,
   ohne Bewegungseinschränkung. Modell/Position/Rotation sind über
   `Config.TabletProp` in `config.lua` anpassbar.
-- Die Oberfläche verwendet bewusst **keine Emojis** - Reiter-Icons,
+- Die Oberfläche verwendet bewusst **keine Emojis** - App-Icons,
   Warnhinweise (z.B. Gefahrgut) und Statusanzeigen (z.B. Fahrerberechtigungen)
-  kommen ausschließlich über Text und Farbe (Pills, farbige Punkte) statt über
-  Symbolzeichen, für ein einheitlicheres, seriöseres Erscheinungsbild.
+  kommen ausschließlich über Text, Farbe und einfache Liniensymbole (kein
+  externer Font/CDN) statt über Symbolzeichen, für ein einheitlicheres,
+  seriöseres Erscheinungsbild.
+
+### Navigation: Startbildschirm + Apps (statt Seitenleiste)
+
+Seit v1.11.0 gibt es keine feste Seitenleiste mit allen Reitern mehr,
+sondern ein klassisches Tablet-Menü:
+
+1. Nach dem Anmelden landet man immer zuerst auf dem **Startbildschirm** mit
+   den Kategorie-Kacheln, für die man mindestens eine Berechtigung hat:
+   **Aufträge, Finanzen, Fuhrpark, Mitarbeiterverwaltung, Disposition,
+   Geschäftsführung**.
+2. Ein Tipp auf eine Kategorie öffnet ein Kachel-Menü mit den einzelnen Apps
+   darin (frühere "Reiter", z.B. "Fahrerkarte" unter Fuhrpark).
+3. Ein Tipp auf eine App öffnet sie wie gewohnt - Inhalte/Funktionen sind
+   unverändert, nur der Weg dorthin hat sich geändert. Der Button
+   "‹ Zurück" führt zur Kategorie zurück, der Button "Startbildschirm" oben
+   rechts jederzeit direkt zum Startbildschirm.
+4. Welche Kategorien/Apps sichtbar sind, richtet sich weiterhin
+   ausschließlich nach den Berechtigungen der eigenen Rolle (siehe
+   "Rollen & Berechtigungen" unten) - daran hat sich nichts geändert, nur die
+   Darstellung wurde von einer Liste zu einem Kachel-Menü.
+5. Die frühere eigenständige "Fahrerakten"-App ist entfallen - ein
+   "Fahrerakte"-Button erscheint jetzt direkt in der Zeile eines Fahrers in
+   der App **Mitarbeiter** (Kategorie Mitarbeiterverwaltung).
+
+Alle folgenden Abschnitte dieses READMEs sprechen aus historischen Gründen
+weiterhin von "Reitern" - gemeint ist damit jeweils die entsprechende App im
+neuen Kategorie-Menü.
 
 ### Tablet nur per Item öffnen
 

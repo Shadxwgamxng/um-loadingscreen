@@ -58,6 +58,7 @@
                             <span class="brand-sub">Speditions-Tablet</span>
                         </div>
                         <div class="topbar-right">
+                            <button id="home-btn" class="home-btn" title="Startbildschirm" onclick="showHome()">Startbildschirm</button>
                             <button id="timeclock-btn" class="timeclock-chip" title="Ein-/Ausstempeln">
                                 <span id="timeclock-dot" class="timeclock-dot"></span>
                                 <span id="timeclock-label">Stempeluhr</span>
@@ -72,8 +73,15 @@
                     </header>
 
                     <div class="body-wrap">
-                        <nav id="sidebar" class="sidebar"></nav>
-                        <main id="content" class="content"></main>
+                        <div id="home-grid" class="home-grid hidden"></div>
+                        <div id="category-grid" class="category-grid hidden"></div>
+                        <div id="app-view" class="app-view hidden">
+                            <div class="app-topbar">
+                                <button id="app-back-btn" class="app-back-btn" onclick="showCategory(State.currentCategory)">&#8249; Zurück</button>
+                                <span id="app-topbar-title" class="app-topbar-title"></span>
+                            </div>
+                            <main id="content" class="content"></main>
+                        </div>
                     </div>
                 </div>
 
