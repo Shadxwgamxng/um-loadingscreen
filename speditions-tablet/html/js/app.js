@@ -318,33 +318,37 @@ const CATEGORIES = [
     { id: 'geschaeftsfuehrung', label: 'Geschäftsführung', icon: 'briefcase' },
 ];
 
+// Mehrere frühere Einzel-Apps sind zu je einer App mit rechter Sektionen-
+// Leiste zusammengelegt (renderSectionedApp), damit nicht jede Kleinigkeit
+// eine eigene Kachel braucht - siehe VIEWS['driver-orders']/['dispatch-
+// orders']/['gf-finance-hub']/['gf-fleet-hub']/['gf-employees']. `perm` ist
+// entweder eine einzelne Berechtigung oder (bei zusammengelegten Apps mit
+// unterschiedlich berechtigten Sektionen) ein Array - sichtbar, wenn
+// mindestens eine davon vorhanden ist (siehe appHasPermission()).
+// Fahrerkarte bleibt vorerst hier (zieht mit dem Home-Dock in Schritt C um).
 const APPS = [
-    { id: 'driver-card', label: 'Fahrerkarte', perm: 'driver_actions', category: 'fuhrpark' },
-    { id: 'driver-orders', label: 'Aufträge', perm: 'driver_actions', category: 'auftraege' },
-    { id: 'driver-history', label: 'Historie', perm: 'driver_actions', category: 'auftraege' },
-    { id: 'driver-earnings', label: 'Einnahmen', perm: 'driver_actions', category: 'finanzen' },
-    { id: 'driver-vehicle', label: 'Mein Fahrzeug', perm: 'driver_actions', category: 'fuhrpark' },
-    { id: 'driver-messages', label: 'Nachrichten', perm: 'driver_actions', category: 'disposition' },
-    { id: 'dispatch-map', label: 'Live Karte', perm: 'live_map_view', category: 'disposition' },
-    { id: 'dispatch-drivers', label: 'Fahrerübersicht', perm: 'dispatch', category: 'mitarbeiter' },
-    { id: 'dispatch-pool', label: 'Auftragspool', perm: 'dispatch', category: 'auftraege' },
-    { id: 'dispatch-active', label: 'Aktive Aufträge', perm: 'dispatch', category: 'auftraege' },
-    { id: 'dispatch-completed', label: 'Abgeschlossen', perm: 'dispatch', category: 'auftraege' },
-    { id: 'dispatch-revenue', label: 'Unternehmensumsatz', perm: 'dispatch', category: 'finanzen' },
-    { id: 'dispatch-board', label: 'Allgemeine Disposition', perm: 'dispatch', category: 'disposition' },
-    { id: 'gf-dashboard', label: 'Dashboard', perm: 'stats_view', category: 'finanzen' },
-    { id: 'gf-employees', label: 'Mitarbeiter', perm: 'employees_manage', category: 'mitarbeiter' },
-    { id: 'gf-roles', label: 'Rollen', perm: 'roles_manage', category: 'mitarbeiter' },
-    { id: 'gf-fleet', label: 'Fuhrpark', perm: 'fleet_manage', category: 'fuhrpark' },
-    { id: 'gf-trailers', label: 'Anhänger', perm: 'fleet_manage', category: 'fuhrpark' },
-    { id: 'gf-locations', label: 'Orte', perm: 'locations_manage', category: 'geschaeftsfuehrung' },
-    { id: 'gf-cargo-types', label: 'Frachtarten', perm: 'cargo_types_manage', category: 'auftraege' },
-    { id: 'gf-finance', label: 'Finanzen', perm: 'finance_view', category: 'finanzen' },
-    { id: 'gf-payouts', label: 'Ein-/Auszahlungen', perm: 'finance_payout', category: 'finanzen' },
-    { id: 'gf-payroll', label: 'Gehälter', perm: 'wages_manage', category: 'finanzen' },
-    { id: 'gf-orders', label: 'Aufträge', perm: 'stats_view', category: 'auftraege' },
-    { id: 'gf-log', label: 'Protokoll', perm: 'activity_log_view', category: 'geschaeftsfuehrung' },
-    { id: 'gf-console', label: 'Konsole', perm: 'console_view', category: 'geschaeftsfuehrung' },
+    // Aufträge
+    { id: 'driver-orders', label: 'Meine Aufträge', perm: 'driver_actions', category: 'auftraege', icon: 'list' },
+    { id: 'dispatch-orders', label: 'Auftragsverwaltung', perm: 'dispatch', category: 'auftraege', icon: 'clipboard' },
+    { id: 'gf-cargo-types', label: 'Frachtarten', perm: 'cargo_types_manage', category: 'auftraege', icon: 'box' },
+    { id: 'gf-orders', label: 'Auftragsstatistik', perm: 'stats_view', category: 'auftraege', icon: 'chart' },
+    // Finanzen
+    { id: 'driver-earnings', label: 'Meine Einnahmen', perm: 'driver_actions', category: 'finanzen', icon: 'wallet' },
+    { id: 'gf-finance-hub', label: 'Finanzcenter', perm: ['dispatch', 'stats_view', 'finance_view', 'wages_manage', 'finance_payout'], category: 'finanzen', icon: 'wallet' },
+    // Fuhrpark
+    { id: 'driver-card', label: 'Fahrerkarte', perm: 'driver_actions', category: 'fuhrpark', icon: 'idcard' },
+    { id: 'driver-vehicle', label: 'Mein Fahrzeug', perm: 'driver_actions', category: 'fuhrpark', icon: 'car' },
+    { id: 'gf-fleet-hub', label: 'Fuhrpark-Verwaltung', perm: 'fleet_manage', category: 'fuhrpark', icon: 'garage' },
+    // Mitarbeiterverwaltung
+    { id: 'gf-employees', label: 'Mitarbeiter', perm: ['employees_manage', 'roles_manage'], category: 'mitarbeiter', icon: 'idcard' },
+    { id: 'dispatch-drivers', label: 'Fahrerübersicht', perm: 'dispatch', category: 'mitarbeiter', icon: 'people' },
+    // Disposition
+    { id: 'driver-messages', label: 'Nachrichten', perm: 'driver_actions', category: 'disposition', icon: 'chat' },
+    { id: 'dispatch-map', label: 'Live Karte', perm: 'live_map_view', category: 'disposition', icon: 'pin' },
+    // Geschäftsführung
+    { id: 'gf-locations', label: 'Orte', perm: 'locations_manage', category: 'geschaeftsfuehrung', icon: 'pin' },
+    { id: 'gf-log', label: 'Protokoll', perm: 'activity_log_view', category: 'geschaeftsfuehrung', icon: 'clipboard' },
+    { id: 'gf-console', label: 'Konsole', perm: 'console_view', category: 'geschaeftsfuehrung', icon: 'terminal' },
 ];
 
 // Kleines, selbst gezeichnetes Icon-Set (kein Emoji, keine externen
@@ -363,9 +367,34 @@ function categoryIconSvg(key) {
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
 }
 
+// Zusätzliches Icon-Set für einzelne App-Kacheln (statt des früheren
+// Buchstaben-Platzhalters) - fällt auf das Kategorie-Icon zurück, wenn eine
+// App keinen eigenen Schlüssel hat oder dieser unbekannt ist.
+const APP_ICON_PATHS = {
+    list: '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><circle cx="3.5" cy="6" r="1.4"/><circle cx="3.5" cy="12" r="1.4"/><circle cx="3.5" cy="18" r="1.4"/>',
+    chart: '<path d="M4 20V10"/><path d="M11 20V4"/><path d="M18 20v-7"/><path d="M3 20h18"/>',
+    wallet: '<path d="M3 7a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M16 12h3"/>',
+    idcard: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16c0-1.7 1.3-3 3-3s3 1.3 3 3"/><path d="M14 10h4"/><path d="M14 14h4"/>',
+    car: '<path d="M4 16V11l2-5h12l2 5v5"/><path d="M4 16h16"/><circle cx="7.5" cy="17.5" r="1.6"/><circle cx="16.5" cy="17.5" r="1.6"/>',
+    chat: '<path d="M4 5h16v10H8l-4 4Z"/>',
+    pin: '<path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Z"/><circle cx="12" cy="10" r="2.4"/>',
+    clipboard: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="M9 11h6"/><path d="M9 15h6"/>',
+    terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3"/><path d="M12 15h5"/>',
+    box: '<path d="m3 8 9-5 9 5-9 5-9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
+};
+
+function iconSvg(key) {
+    const inner = APP_ICON_PATHS[key] || CATEGORY_ICON_PATHS[key] || CATEGORY_ICON_PATHS.briefcase;
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+}
+
+function appHasPermission(item, perms) {
+    return Array.isArray(item.perm) ? item.perm.some((p) => perms.includes(p)) : perms.includes(item.perm);
+}
+
 function visibleApps(permissions) {
     const perms = permissions || [];
-    return APPS.filter((item) => perms.includes(item.perm));
+    return APPS.filter((item) => appHasPermission(item, perms));
 }
 
 function appsInCategory(categoryId, permissions) {
@@ -420,7 +449,7 @@ function showCategory(catId) {
         <div class="app-grid">
             ${apps.map((a) => `
                 <div class="app-tile" onclick="showView('${a.id}')">
-                    <div class="tile-icon app-tile-icon cat-${catId}">${escapeHtml((a.label || '?').trim().charAt(0).toUpperCase())}</div>
+                    <div class="tile-icon cat-${catId}">${iconSvg(a.icon || (category ? category.icon : 'briefcase'))}</div>
                     <div class="tile-label">${escapeHtml(a.label)}</div>
                 </div>
             `).join('')}
@@ -647,14 +676,14 @@ document.getElementById('timeclock-btn').addEventListener('click', async () => {
 function handlePush(event, data) {
     const map = {
         'notifications:new': () => { toast(data.title, data.message, 'info'); refreshIfViewing(['driver-messages', 'driver-orders']); },
-        'orders:newOpenOrder': () => { toast('Neuer Auftrag', 'Ein neuer Auftrag ist im Pool verfügbar.', 'info'); refreshIfViewing(['dispatch-pool']); },
-        'orders:activeChanged': () => refreshIfViewing(['dispatch-active', 'dispatch-pool', 'driver-orders']),
-        'orders:cancelRequested': () => { toast('Abbruch-Anfrage', 'Ein Fahrer möchte einen Auftrag abbrechen.', 'warning'); refreshIfViewing(['dispatch-active']); },
-        'orders:completed': () => { toast('Auftrag abgeschlossen', 'Ein Auftrag wurde erfolgreich abgeschlossen.', 'success'); refreshIfViewing(['dispatch-active', 'dispatch-completed', 'gf-dashboard']); },
+        'orders:newOpenOrder': () => { toast('Neuer Auftrag', 'Ein neuer Auftrag ist im Pool verfügbar.', 'info'); refreshIfViewing(['dispatch-orders']); },
+        'orders:activeChanged': () => refreshIfViewing(['dispatch-orders', 'driver-orders']),
+        'orders:cancelRequested': () => { toast('Abbruch-Anfrage', 'Ein Fahrer möchte einen Auftrag abbrechen.', 'warning'); refreshIfViewing(['dispatch-orders']); },
+        'orders:completed': () => { toast('Auftrag abgeschlossen', 'Ein Auftrag wurde erfolgreich abgeschlossen.', 'success'); refreshIfViewing(['dispatch-orders', 'gf-finance-hub']); },
         'dispatch:driversChanged': () => refreshIfViewing(['dispatch-drivers']),
-        'dispatch:dutyChanged': () => refreshIfViewing(['dispatch-board', 'dispatch-pool', 'driver-orders']),
-        'fleet:changed': () => refreshIfViewing(['gf-fleet', 'dispatch-drivers']),
-        'finance:balanceChanged': () => refreshIfViewing(['gf-finance', 'gf-dashboard']),
+        'dispatch:dutyChanged': () => refreshIfViewing(['dispatch-orders', 'driver-orders']),
+        'fleet:changed': () => refreshIfViewing(['gf-fleet-hub', 'dispatch-drivers']),
+        'finance:balanceChanged': () => refreshIfViewing(['gf-finance-hub']),
         'roles:changed': () => refreshAfterRolesChanged(),
         'cargotypes:changed': () => refreshAfterCargoTypesChanged(),
     };
@@ -676,7 +705,7 @@ async function refreshAfterRolesChanged() {
         if (State.currentScreen === 'home') renderHome();
         else if (State.currentScreen === 'category') showCategory(State.currentCategory);
     }
-    refreshIfViewing(['gf-roles', 'gf-employees', 'gf-payroll']);
+    refreshIfViewing(['gf-employees', 'gf-finance-hub']);
 }
 
 // Wird ausgeloest, sobald sich Frachtarten aendern (angelegt/bearbeitet/
@@ -696,6 +725,57 @@ async function refreshAfterCargoTypesChanged() {
 // =========================================================
 
 const VIEWS = {};
+
+// ---------------------------------------------------------
+// Split-View-Helper (Sektionen-Leiste rechts, iPad-Splitview-Prinzip) -
+// für Apps, die mehrere frühere Einzel-Apps zu einem Bereich zusammenlegen
+// (z.B. "Auftragsverwaltung", "Finanzcenter"). Jede Sektion bleibt
+// permission-gated wie zuvor die jeweilige Einzel-App; der zuletzt aktive
+// Tab pro App bleibt gemerkt, damit ein Refresh (refreshIfViewing) nicht
+// auf den ersten Tab zurückspringt.
+// ---------------------------------------------------------
+
+const sectionedAppActiveKey = {};
+
+async function renderSectionedApp(root, appId, sections) {
+    const perms = currentPermissions();
+    const visible = sections.filter((s) => !s.perm || perms.includes(s.perm));
+    if (!visible.length) {
+        root.innerHTML = '<div class="card-hint">Keine Berechtigung für diese App.</div>';
+        return;
+    }
+    if (!visible.some((s) => s.key === sectionedAppActiveKey[appId])) {
+        sectionedAppActiveKey[appId] = visible[0].key;
+    }
+
+    root.innerHTML = `
+        <div class="app-split">
+            <div class="app-split-content" id="app-split-content"><div class="card-hint">Lädt...</div></div>
+            <div class="app-split-sidebar">
+                ${visible.map((s) => `
+                    <button class="app-split-tab ${s.key === sectionedAppActiveKey[appId] ? 'active' : ''}" data-section="${s.key}">${escapeHtml(s.label)}</button>
+                `).join('')}
+            </div>
+        </div>`;
+
+    root.querySelectorAll('.app-split-tab').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            sectionedAppActiveKey[appId] = btn.dataset.section;
+            renderSectionedApp(root, appId, sections);
+        });
+    });
+
+    const active = visible.find((s) => s.key === sectionedAppActiveKey[appId]);
+    const content = root.querySelector('#app-split-content');
+    await active.render(content);
+}
+
+// Springt innerhalb einer zusammengelegten App direkt zu einer bestimmten
+// Sektion (z.B. ein Verweis-Button von "Finanzen" zu "Ein-/Auszahlungen").
+function jumpToSection(appId, key) {
+    sectionedAppActiveKey[appId] = key;
+    showView(appId);
+}
 
 // ---------- FAHRER ----------
 
@@ -773,7 +853,17 @@ VIEWS['driver-card'] = async (root) => {
         </div>`;
 };
 
+// "Meine Aufträge" - zusammengelegte Fahrer-App: aktuelle Aufträge/Pool +
+// Historie als Sektionen rechts (renderSectionedApp), statt zwei eigener
+// Kategorie-Kacheln ("Aufträge" + "Historie").
 VIEWS['driver-orders'] = async (root) => {
+    await renderSectionedApp(root, 'driver-orders', [
+        { key: 'current', label: 'Aktuell', render: renderDriverOrdersCurrent },
+        { key: 'history', label: 'Historie', render: renderDriverOrdersHistory },
+    ]);
+};
+
+async function renderDriverOrdersCurrent(root) {
     const [d, pool] = await Promise.all([call('driver:myOrders'), call('driver:openOrders')]);
 
     const cargoHint = { anfahrt: 'Zum Beladepunkt fahren, dort per E abholen', beladen: 'Zum Zielort fahren, dort per E abliefern', entladen: 'Wird entladen...' };
@@ -849,9 +939,9 @@ VIEWS['driver-orders'] = async (root) => {
             ? 'Ein Disponent ist gerade online - Aufträge werden von ihm zugewiesen.'
             : 'Aktuell ist kein Disponent verfügbar - du kannst dir einen offenen Auftrag selbst übernehmen.'}</p>
         <div class="section">${table(['#', 'Fracht', 'Strecke', 'Distanz', 'Wert', ''], poolRows)}</div>`;
-};
+}
 
-VIEWS['driver-history'] = async (root) => {
+async function renderDriverOrdersHistory(root) {
     const d = await call('driver:history');
     const rows = d.history.map((o) => `<tr>
         <td>#${o.id}</td>
@@ -867,7 +957,7 @@ VIEWS['driver-history'] = async (root) => {
         <h1 class="view-title">Auftragshistorie</h1>
         <p class="view-subtitle">Deine abgeschlossenen, abgebrochenen und abgelehnten Aufträge.</p>
         <div class="section">${table(['#', 'Fracht', 'Strecke', 'Status', 'Pünktlichkeit', 'Wert', 'Datum'], rows)}</div>`;
-};
+}
 
 VIEWS['driver-earnings'] = async (root) => {
     const e = await call('driver:earnings');
@@ -1181,54 +1271,39 @@ VIEWS['dispatch-drivers'] = async (root) => {
         <div class="section">${table(['Status', 'Fahrer', 'Fahrzeug', 'Fahrzeugstatus', ''], driversTableRows(d.drivers))}</div>`;
 };
 
-VIEWS['dispatch-pool'] = async (root) => {
+// "Auftragsverwaltung" - zusammengelegte Disponenten-App: Pool/Aktiv/
+// Abgeschlossen als Sektionen rechts statt drei eigener Kategorie-Kacheln
+// (löst außerdem das frühere "Allgemeine Disposition"-Cockpit ab - die
+// Fahrerübersicht bleibt als eigene App unter Mitarbeiterverwaltung
+// erhalten, statt hier dupliziert zu werden). Der Dispositions-Dienst-
+// Toggle zieht mit dem Home-Dock in Schritt C um.
+VIEWS['dispatch-orders'] = async (root) => {
+    await renderSectionedApp(root, 'dispatch-orders', [
+        { key: 'pool', label: 'Pool', render: renderDispatchOrdersPool },
+        { key: 'active', label: 'Aktiv', render: renderDispatchOrdersActive },
+        { key: 'completed', label: 'Abgeschlossen', render: renderDispatchOrdersCompleted },
+    ]);
+};
+
+async function renderDispatchOrdersPool(root) {
     const [pool, drivers] = await Promise.all([call('dispatch:openOrders'), call('dispatch:drivers')]);
     window.__availableDrivers = drivers.drivers;
     root.innerHTML = `
         <h1 class="view-title">Auftragspool</h1>
         <p class="view-subtitle">Automatisch generierte Aufträge, die noch keinem Fahrer zugewiesen sind.</p>
         <div class="section">${table(['#', 'Fracht', 'Strecke', 'Distanz', 'Wert', ''], openOrdersTableRows(pool.orders))}</div>`;
-};
+}
 
-VIEWS['dispatch-active'] = async (root) => {
+async function renderDispatchOrdersActive(root) {
     const [active, drivers] = await Promise.all([call('dispatch:activeOrders'), call('dispatch:drivers')]);
     window.__availableDrivers = drivers.drivers;
     root.innerHTML = `
         <h1 class="view-title">Aktive Aufträge</h1>
         <p class="view-subtitle">Live-Überwachung aller disponierten und laufenden Aufträge.</p>
         <div class="section">${table(['#', 'Fracht', 'Strecke', 'Fahrer', 'Fahrzeug', 'Status', 'Aktion'], activeOrdersTableRows(active.orders))}</div>`;
-};
+}
 
-VIEWS['dispatch-board'] = async (root) => {
-    const [pool, active, drivers, duty] = await Promise.all([call('dispatch:openOrders'), call('dispatch:activeOrders'), call('dispatch:drivers'), call('dispatch:dutyStatus')]);
-    window.__availableDrivers = drivers.drivers;
-    root.innerHTML = `
-        <h1 class="view-title">Allgemeine Disposition</h1>
-        <p class="view-subtitle">Auftragspool, aktive Aufträge und Fahrerübersicht an einem Ort - für den laufenden Disponenten-Alltag.</p>
-
-        <div class="section" style="display:flex;align-items:center;justify-content:space-between;gap:14px;">
-            <div>
-                <div class="card-title">Dispositions-Dienst</div>
-                <div class="card-hint">${duty.onDuty
-                    ? `Im Dienst seit ${formatDate(duty.shiftStartedAt, true)} - solange bist du für Fahrer als verfügbarer Disponent sichtbar und die Selbstzuweisung offener Aufträge ist für sie gesperrt.`
-                    : 'Nicht im Dienst - Fahrer können sich offene Aufträge derzeit selbst zuweisen, solange kein Disponent im Dienst ist.'}</div>
-            </div>
-            ${duty.onDuty
-                ? `<button class="btn btn-danger" onclick="Actions.endDispatchDuty()">Dienst beenden</button>`
-                : `<button class="btn btn-primary" onclick="Actions.startDispatchDuty()">Dienst beginnen</button>`}
-        </div>
-
-        <h2 class="view-title" style="font-size:15px;margin-top:22px;">Offener Auftragspool</h2>
-        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Distanz', 'Wert', ''], openOrdersTableRows(pool.orders))}</div>
-
-        <h2 class="view-title" style="font-size:15px;margin-top:22px;">Aktive Aufträge</h2>
-        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Fahrer', 'Fahrzeug', 'Status', 'Aktion'], activeOrdersTableRows(active.orders))}</div>
-
-        <h2 class="view-title" style="font-size:15px;margin-top:22px;">Fahrerübersicht</h2>
-        <div class="section">${table(['Status', 'Fahrer', 'Fahrzeug', 'Fahrzeugstatus', ''], driversTableRows(drivers.drivers))}</div>`;
-};
-
-VIEWS['dispatch-completed'] = async (root) => {
+async function renderDispatchOrdersCompleted(root) {
     const d = await call('dispatch:completedOrders');
     const rows = d.orders.map((o) => `<tr>
         <td>#${o.id}</td>
@@ -1244,9 +1319,26 @@ VIEWS['dispatch-completed'] = async (root) => {
         <h1 class="view-title">Abgeschlossene Aufträge</h1>
         <p class="view-subtitle">Historie abgeschlossener, abgebrochener und abgelehnter Aufträge.</p>
         <div class="section">${table(['#', 'Fracht', 'Strecke', 'Fahrer', 'Status', 'Wert', 'Datum'], rows)}</div>`;
+}
+
+// ---------- GESCHÄFTSFÜHRUNG ----------
+
+// "Finanzcenter" - zusammengelegte Finanz-App: Übersicht/Umsatz/Finanzen/
+// Gehälter/Ein-Auszahlungen als Sektionen rechts, statt fünf eigener
+// Kategorie-Kacheln unter "Finanzen". Jede Sektion behält ihre bisherige
+// Berechtigung (appHasPermission() macht die App sichtbar, sobald
+// mindestens eine davon vorhanden ist).
+VIEWS['gf-finance-hub'] = async (root) => {
+    await renderSectionedApp(root, 'gf-finance-hub', [
+        { key: 'overview', label: 'Übersicht', perm: 'stats_view', render: renderFinanceOverview },
+        { key: 'revenue', label: 'Umsatz', perm: 'dispatch', render: renderFinanceRevenue },
+        { key: 'finance', label: 'Finanzen', perm: 'finance_view', render: renderFinanceLedger },
+        { key: 'payroll', label: 'Gehälter', perm: 'wages_manage', render: renderFinancePayroll },
+        { key: 'payouts', label: 'Ein-/Auszahlungen', perm: 'finance_payout', render: renderFinancePayouts },
+    ]);
 };
 
-VIEWS['dispatch-revenue'] = async (root) => {
+async function renderFinanceRevenue(root) {
     const r = await call('dispatch:companyOrdersRevenue');
     root.innerHTML = `
         <h1 class="view-title">Unternehmensumsatz</h1>
@@ -1256,11 +1348,9 @@ VIEWS['dispatch-revenue'] = async (root) => {
             <div class="card"><div class="card-title">Einnahmen Woche</div><div class="card-value">${formatMoney(r.revenueWeek)}</div></div>
             <div class="card"><div class="card-title">Einnahmen Monat</div><div class="card-value">${formatMoney(r.revenueMonth)}</div></div>
         </div>`;
-};
+}
 
-// ---------- GESCHÄFTSFÜHRUNG ----------
-
-VIEWS['gf-dashboard'] = async (root) => {
+async function renderFinanceOverview(root) {
     const [d, stats] = await Promise.all([call('gf:dashboard'), call('gf:stats')]);
     const activity = d.recentActivity.map((a) => `<div class="stat-row"><span>[${formatDate(a.created_at, true)}] ${a.employee_name ? escapeHtml(a.employee_name) : 'System'}</span><span style="color:var(--text-2);">${escapeHtml(a.details)}</span></div>`).join('');
 
@@ -1338,9 +1428,18 @@ VIEWS['gf-dashboard'] = async (root) => {
             <div class="section-header"><h3>Letzte Aktivitäten</h3></div>
             ${activity || '<div class="card-hint">Keine Aktivitäten.</div>'}
         </div>`;
+}
+
+// "Mitarbeiter" - zusammengelegte App: Mitarbeiter/Rollen als Sektionen
+// rechts statt zweier eigener Kategorie-Kacheln unter Mitarbeiterverwaltung.
+VIEWS['gf-employees'] = async (root) => {
+    await renderSectionedApp(root, 'gf-employees', [
+        { key: 'staff', label: 'Mitarbeiter', perm: 'employees_manage', render: renderStaffList },
+        { key: 'roles', label: 'Rollen', perm: 'roles_manage', render: renderStaffRoles },
+    ]);
 };
 
-VIEWS['gf-employees'] = async (root) => {
+async function renderStaffList(root) {
     const [d, rolesRes] = await Promise.all([call('gf:employees:list'), call('roles:list')]);
     const roleOptions = (e) => rolesRes.roles.map((r) => `<option value="${r.key}" ${e.role === r.key ? 'selected' : ''}>${escapeHtml(r.label)}</option>`).join('');
     const rows = d.employees.map((e) => `<tr>
@@ -1367,9 +1466,9 @@ VIEWS['gf-employees'] = async (root) => {
         <p class="view-subtitle">Verwaltung aller Mitarbeiter, Rollen und Grade. Anmeldung erfolgt am Tablet per Name + Passwort. Die Discord-ID ist nur für den Website-Sync relevant (Config.Website) - verknüpft das Konto mit dem Discord-Login der Speditions-Website. Fahrer haben zusätzlich einen "Fahrerakte"-Button für die digitale Personalakte.</p>
         <div class="btn-row" style="margin-bottom:14px;"><button class="btn btn-primary" onclick="Actions.openHireModal()">+ Mitarbeiter einstellen</button></div>
         <div class="section">${table(['#', 'Name', 'Login-Name', 'Rolle', 'Status', 'Eingestellt', 'Discord-ID', ''], rows)}</div>`;
-};
+}
 
-VIEWS['gf-roles'] = async (root) => {
+async function renderStaffRoles(root) {
     const d = await call('roles:list');
     const permLabel = (key) => {
         const p = d.permissionCatalog.find((x) => x.key === key);
@@ -1397,9 +1496,19 @@ VIEWS['gf-roles'] = async (root) => {
         <p class="view-subtitle">Eigene Rollen mit frei wählbaren Berechtigungen anlegen und bearbeiten. Die drei mitgelieferten Basisrollen (Fahrer/Disponent/Geschäftsführung) können nicht gelöscht, ihre Berechtigungen aber angepasst werden. Die Spalte "Website-Rolle" ordnet diese Rolle - nur relevant bei aktiviertem Website-Sync (Config.Website) - einer der 9 Rollen der Speditions-Website zu, damit Mitarbeiter mit dieser Rolle dorthin synchronisiert werden können.</p>
         <div class="btn-row" style="margin-bottom:14px;"><button class="btn btn-primary" onclick="Actions.openCreateRoleModal()">+ Rolle anlegen</button></div>
         <div class="section">${table(['Rolle', 'Berechtigungen', 'Website-Rolle', ''], rows)}</div>`;
+}
+
+// "Fuhrpark-Verwaltung" - zusammengelegte App: Fahrzeuge/Anhänger als
+// Sektionen rechts statt zweier eigener Kategorie-Kacheln (beide teilen
+// ohnehin dieselbe Berechtigung fleet_manage).
+VIEWS['gf-fleet-hub'] = async (root) => {
+    await renderSectionedApp(root, 'gf-fleet-hub', [
+        { key: 'vehicles', label: 'Fahrzeuge', render: renderFleetVehicles },
+        { key: 'trailers', label: 'Anhänger', render: renderFleetTrailers },
+    ]);
 };
 
-VIEWS['gf-fleet'] = async (root) => {
+async function renderFleetVehicles(root) {
     const includeArchived = window.__fleetShowArchived === true;
     const d = await call('gf:vehicles:list', { includeArchived });
 
@@ -1429,9 +1538,9 @@ VIEWS['gf-fleet'] = async (root) => {
             <button class="btn" onclick="Actions.toggleArchivedFleet()">${includeArchived ? 'Archivierte ausblenden' : 'Archivierte anzeigen'}</button>
         </div>
         <div class="section">${table(['Status', 'Name', 'Kennzeichen', 'Klasse', 'Kilometerstand', 'Fahrer', 'Anhänger', ''], rows)}</div>`;
-};
+}
 
-VIEWS['gf-trailers'] = async (root) => {
+async function renderFleetTrailers(root) {
     const d = await call('gf:trailers:list');
     const typeLabel = (key) => (d.trailerTypes.find((t) => t.key === key) || {}).label || key;
 
@@ -1456,7 +1565,7 @@ VIEWS['gf-trailers'] = async (root) => {
             <button class="btn btn-primary" onclick="Actions.openTrailerCreateModal()">+ Anhänger hinzufügen</button>
         </div>
         <div class="section">${table(['Status', 'Name', 'Kennzeichen', 'Typ', 'Angekuppelt an', ''], rows)}</div>`;
-};
+}
 
 VIEWS['gf-locations'] = async (root) => {
     const d = await call('locations:list');
@@ -1505,7 +1614,7 @@ VIEWS['gf-cargo-types'] = async (root) => {
         <div class="section">${table(['Name', 'Einheit', 'Menge', 'Gefahrgut', 'Anhängertyp', ''], rows)}</div>`;
 };
 
-VIEWS['gf-finance'] = async (root) => {
+async function renderFinanceLedger(root) {
     const [overview, tx] = await Promise.all([call('gf:finance:overview'), call('gf:finance:transactions', { limit: 40 })]);
 
     const TX_TYPE_LABELS = { einnahme: 'Einnahme', auszahlung: 'Auszahlung', einzahlung: 'Einzahlung', gehalt: 'Gehalt', vertragsstrafe: 'Vertragsstrafe' };
@@ -1528,14 +1637,14 @@ VIEWS['gf-finance'] = async (root) => {
             <div class="card"><div class="card-title">Einnahmen Woche</div><div class="card-value">${formatMoney(overview.revenueWeek)}</div></div>
             <div class="card"><div class="card-title">Einnahmen Monat</div><div class="card-value">${formatMoney(overview.revenueMonth)}</div></div>
         </div>
-        <div class="btn-row" style="margin:16px 0;"><button class="btn btn-primary" onclick="showView('gf-payouts')">Auszahlung verwalten</button></div>
+        <div class="btn-row" style="margin:16px 0;"><button class="btn btn-primary" onclick="jumpToSection('gf-finance-hub', 'payouts')">Auszahlung verwalten</button></div>
         <div class="section">
             <div class="section-header"><h3>Transaktionshistorie</h3></div>
             ${table(['#', 'Typ', 'Beschreibung', 'Betrag', 'Datum'], rows)}
         </div>`;
-};
+}
 
-VIEWS['gf-payouts'] = async (root) => {
+async function renderFinancePayouts(root) {
     const [overview, payoutHistory, depositHistory] = await Promise.all([
         call('gf:finance:overview'), call('gf:payout:history'), call('gf:deposit:history'),
     ]);
@@ -1594,9 +1703,9 @@ VIEWS['gf-payouts'] = async (root) => {
                 ${table(['Datum', 'Betrag', 'Ziel', 'Durchgeführt von', 'Grund'], payoutRows)}
             </div>
         </div>`;
-};
+}
 
-VIEWS['gf-payroll'] = async (root) => {
+async function renderFinancePayroll(root) {
     const [ratesRes, overview] = await Promise.all([call('gf:payroll:rates'), call('gf:payroll:overview')]);
 
     const rateRows = Object.keys(ratesRes.roleLabels).map((role) => `
@@ -1632,7 +1741,7 @@ VIEWS['gf-payroll'] = async (root) => {
             <h3 style="margin:0 0 12px;">Offene Gehälter</h3>
             ${table(['Name', 'Rolle', 'Stempeluhr', 'Offene Std.', 'Satz', 'Betrag', ''], employeeRows)}
         </div>`;
-};
+}
 
 VIEWS['gf-orders'] = async (root) => {
     const filter = window.__orderStatusFilter || '';
@@ -1652,7 +1761,7 @@ VIEWS['gf-orders'] = async (root) => {
     const statuses = Object.keys(ORDER_STATUS_META);
 
     root.innerHTML = `
-        <h1 class="view-title">Aufträge</h1>
+        <h1 class="view-title">Auftragsstatistik</h1>
         <p class="view-subtitle">Vollständige Übersicht aller Aufträge im Unternehmen.</p>
         <div class="btn-row" style="margin-bottom:14px;">
             <select id="order-status-filter" style="width:220px;" onchange="Actions.filterOrders(this.value)">
@@ -1891,7 +2000,7 @@ Actions.confirmCancelOrderRequest = async (orderId) => {
 Actions.resolveCancelRequest = async (requestId, approve) => {
     await call('dispatch:resolveCancelRequest', { requestId, approve });
     toast(approve ? 'Abbruch genehmigt' : 'Abbruch abgelehnt', '', approve ? 'success' : 'info');
-    showView('dispatch-active');
+    showView('dispatch-orders');
 };
 
 function trailerTypeLabel(trailerTypes, key) {
@@ -2001,7 +2110,7 @@ Actions.confirmDispatch = async (orderId) => {
     await call('dispatch:assignOrder', { orderId, driverId });
     closeModal();
     toast('Auftrag disponiert', '', 'success');
-    showView('dispatch-pool');
+    showView('dispatch-orders');
 };
 
 Actions.openReassignModal = (orderId) => {
@@ -2021,7 +2130,7 @@ Actions.confirmReassign = async (orderId) => {
     await call('dispatch:reassignOrder', { orderId, driverId });
     closeModal();
     toast('Auftrag neu zugewiesen', '', 'success');
-    showView('dispatch-active');
+    showView('dispatch-orders');
 };
 
 Actions.cancelOrder = (orderId) => {
@@ -2038,7 +2147,7 @@ Actions.confirmCancelOrder = async (orderId) => {
     await call('dispatch:cancelOrder', { orderId, reason });
     closeModal();
     toast('Auftrag abgebrochen', '', 'success');
-    showView('dispatch-active');
+    showView('dispatch-orders');
 };
 
 Actions.openHireModal = async () => {
@@ -2145,7 +2254,7 @@ Actions.confirmCreateRole = async () => {
     await call('gf:roles:create', { label, permissions });
     closeModal();
     toast('Rolle angelegt', '', 'success');
-    showView('gf-roles');
+    showView('gf-employees');
 };
 
 Actions.openEditRoleModal = async (roleKey) => {
@@ -2169,7 +2278,7 @@ Actions.confirmEditRole = async (roleKey) => {
     await call('gf:roles:update', { roleKey, label, permissions });
     closeModal();
     toast('Rolle gespeichert', '', 'success');
-    showView('gf-roles');
+    showView('gf-employees');
 };
 
 Actions.deleteRole = (roleKey, label) => {
@@ -2182,7 +2291,7 @@ Actions.confirmDeleteRole = async (roleKey) => {
     await call('gf:roles:delete', { roleKey });
     closeModal();
     toast('Rolle gelöscht', '', 'success');
-    showView('gf-roles');
+    showView('gf-employees');
 };
 
 Actions.setRoleWebsiteMapping = async (roleKey, websiteRoleKey) => {
@@ -2227,7 +2336,7 @@ Actions.saveDriverNote = async (driverId) => {
 
 Actions.toggleArchivedFleet = () => {
     window.__fleetShowArchived = !window.__fleetShowArchived;
-    showView('gf-fleet');
+    showView('gf-fleet-hub');
 };
 
 Actions.openVehicleCreateModal = () => {
@@ -2259,7 +2368,7 @@ Actions.confirmCreateVehicle = async () => {
     });
     closeModal();
     toast('Fahrzeug erstellt', '', 'success');
-    showView('gf-fleet');
+    showView('gf-fleet-hub');
 };
 
 Actions.openVehicleEditModal = async (vehicleId) => {
@@ -2298,7 +2407,7 @@ Actions.confirmEditVehicle = async (vehicleId) => {
     });
     closeModal();
     toast('Fahrzeug aktualisiert', '', 'success');
-    showView('gf-fleet');
+    showView('gf-fleet-hub');
 };
 
 Actions.openAssignModal = async (vehicleId) => {
@@ -2320,7 +2429,7 @@ Actions.confirmAssignVehicle = async (vehicleId) => {
     await call('gf:vehicles:assign', { vehicleId, driverId });
     closeModal();
     toast('Fahrzeug zugewiesen', '', 'success');
-    showView('gf-fleet');
+    showView('gf-fleet-hub');
 };
 
 Actions.openDeleteVehicleModal = (vehicleId) => {
@@ -2345,13 +2454,13 @@ Actions.confirmDeleteVehicle = async (vehicleId) => {
     } else {
         toast(r.mode === 'hard' ? 'Fahrzeug gelöscht' : 'Fahrzeug archiviert', '', 'success');
     }
-    showView('gf-fleet');
+    showView('gf-fleet-hub');
 };
 
 Actions.reactivateVehicle = async (vehicleId) => {
     await call('gf:vehicles:reactivate', { vehicleId });
     toast('Fahrzeug reaktiviert', '', 'success');
-    showView('gf-fleet');
+    showView('gf-fleet-hub');
 };
 
 // ---------------------------------------------------------
@@ -2381,7 +2490,7 @@ Actions.confirmCreateTrailer = async () => {
     });
     closeModal();
     toast('Anhänger erstellt', '', 'success');
-    showView('gf-trailers');
+    showView('gf-fleet-hub');
 };
 
 Actions.openTrailerEditModal = async (trailerId) => {
@@ -2409,7 +2518,7 @@ Actions.confirmEditTrailer = async (trailerId) => {
     });
     closeModal();
     toast('Anhänger aktualisiert', '', 'success');
-    showView('gf-trailers');
+    showView('gf-fleet-hub');
 };
 
 Actions.openTrailerAssignModal = async (trailerId) => {
@@ -2428,7 +2537,7 @@ Actions.confirmTrailerAssign = async (trailerId, vehicleId) => {
     await call('gf:trailers:assign', { trailerId, vehicleId });
     closeModal();
     toast(vehicleId ? 'Anhänger angekuppelt' : 'Anhänger abgekuppelt', '', 'success');
-    showView('gf-trailers');
+    showView('gf-fleet-hub');
 };
 
 Actions.confirmDeleteTrailer = (trailerId) => {
@@ -2438,7 +2547,7 @@ Actions.reallyDeleteTrailer = async (trailerId) => {
     await call('gf:trailers:delete', { trailerId, mode: 'archive' });
     closeModal();
     toast('Anhänger archiviert', '', 'success');
-    showView('gf-trailers');
+    showView('gf-fleet-hub');
 };
 
 // ---------------------------------------------------------
@@ -2654,7 +2763,7 @@ Actions.executePayout = async () => {
     } else {
         toast('Achtung: kein Bargeld erhalten!', `${formatMoney(amount)} wurde verbucht, aber die Wirtschafts-Anbindung (Config.MoneyBridge) hat kein Bargeld übergeben - Server-Konsole prüfen.`, 'error');
     }
-    showView('gf-payouts');
+    showView('gf-finance-hub');
 };
 
 Actions.executeDeposit = async () => {
@@ -2665,7 +2774,7 @@ Actions.executeDeposit = async () => {
     window.__depositSource = source;
     await call('gf:deposit:execute', { amount, source, reason });
     toast('Einzahlung verbucht', `${formatMoney(amount)} Bargeld abgezogen.`, 'success');
-    showView('gf-payouts');
+    showView('gf-finance-hub');
 };
 
 Actions.setWageRate = async (role) => {
@@ -2676,7 +2785,7 @@ Actions.setWageRate = async (role) => {
     }
     await call('gf:payroll:setRate', { role, hourlyRate });
     toast('Stundenlohn gespeichert', '', 'success');
-    showView('gf-payroll');
+    showView('gf-finance-hub');
 };
 
 Actions.payEmployee = async (employeeId, name) => {
@@ -2686,7 +2795,7 @@ Actions.payEmployee = async (employeeId, name) => {
     } else {
         toast('Achtung: kein Bargeld erhalten!', `${formatMoney(result.amount)} für ${name} wurde verbucht, aber NICHT als Bargeld übergeben (nicht online, oder Config.MoneyBridge funktioniert nicht - Server-Konsole prüfen).`, 'error');
     }
-    showView('gf-payroll');
+    showView('gf-finance-hub');
 };
 
 Actions.filterOrders = (status) => {
