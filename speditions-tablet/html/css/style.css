@@ -407,7 +407,7 @@ html, body {
     cursor: pointer;
     user-select: none;
 }
-.dock-item .tile-icon { width: 52px; height: 52px; border-radius: 15px; }
+.dock-item .tile-icon { position: relative; width: 52px; height: 52px; border-radius: 15px; }
 .dock-item .tile-icon svg { width: 24px; height: 24px; }
 .dock-item .tile-label { font-size: 11px; }
 .dock-status-dot {

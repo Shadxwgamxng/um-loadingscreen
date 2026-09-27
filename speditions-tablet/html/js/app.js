@@ -335,8 +335,8 @@ const APPS = [
     // Finanzen
     { id: 'driver-earnings', label: 'Meine Einnahmen', perm: 'driver_actions', category: 'finanzen', icon: 'wallet' },
     { id: 'gf-finance-hub', label: 'Finanzcenter', perm: ['dispatch', 'stats_view', 'finance_view', 'wages_manage', 'finance_payout'], category: 'finanzen', icon: 'wallet' },
-    // Fuhrpark
-    { id: 'driver-card', label: 'Fahrerkarte', perm: 'driver_actions', category: 'fuhrpark', icon: 'idcard' },
+    // Fuhrpark (Fahrerkarte liegt als Dock-Icon auf dem Home-Screen, s.
+    // renderDock() - nicht mehr hier in der Kategorie)
     { id: 'driver-vehicle', label: 'Mein Fahrzeug', perm: 'driver_actions', category: 'fuhrpark', icon: 'car' },
     { id: 'gf-fleet-hub', label: 'Fuhrpark-Verwaltung', perm: 'fleet_manage', category: 'fuhrpark', icon: 'garage' },
     // Mitarbeiterverwaltung
@@ -422,12 +422,66 @@ function renderHome() {
             <div class="tile-label">${escapeHtml(c.label)}</div>
         </div>
     `).join('');
+    renderDock();
+}
+
+// Dock (fixiert unten auf dem Home-Screen, analog iPad) - Fahrerkarte und
+// Dispositions-Dienst liegen bewusst hier statt in einer Kategorie: beides
+// ist ein "bin ich gerade im Dienst"-Schalter, kein eigentlicher
+// Arbeitsbereich. Sichtbar je nach Berechtigung, mit Status-Punkt
+// (im Dienst/eingesteckt = grün), der kurz nach dem Rendern nachgeladen wird.
+const DOCK_ITEMS = [
+    { id: 'driver-card', label: 'Fahrerkarte', perm: 'driver_actions', icon: 'idcard', statusRpc: 'driver:card', statusPath: (r) => r && r.driver && r.driver.onShift },
+    { id: 'dispatch-duty', label: 'Dispositions-Dienst', perm: 'dispatch', icon: 'radio', statusRpc: 'dispatch:dutyStatus', statusPath: (r) => r && r.onDuty },
+];
+
+function renderDock() {
+    const perms = currentPermissions();
+    const items = DOCK_ITEMS.filter((it) => perms.includes(it.perm));
+    const dock = document.getElementById('dock');
+    if (!dock) return;
+    if (!items.length) {
+        dock.classList.add('hidden');
+        dock.innerHTML = '';
+        return;
+    }
+    dock.classList.remove('hidden');
+    dock.innerHTML = items.map((it) => `
+        <div class="dock-item" onclick="showView('${it.id}')">
+            <div class="tile-icon">
+                ${iconSvg(it.icon)}
+                <span class="dock-status-dot" id="dock-status-${it.id}"></span>
+            </div>
+            <div class="dock-item-label tile-label">${escapeHtml(it.label)}</div>
+        </div>
+    `).join('');
+    refreshDockStatus();
+}
+
+// Best-effort - wie refreshTimeclock() bewusst über das rohe rpc() statt
+// call(), damit ein Fehler hier keinen Fehler-Toast auf dem Homescreen
+// auslöst (reiner Status-Punkt, keine kritische Aktion).
+async function refreshDockStatus() {
+    for (const it of DOCK_ITEMS) {
+        const dot = document.getElementById(`dock-status-${it.id}`);
+        if (!dot) continue;
+        const res = await rpc(it.statusRpc);
+        if (res && res.ok) dot.classList.toggle('on', !!it.statusPath(res.result));
+    }
 }
 
 function showHome() {
     if (activeViewInterval) { clearInterval(activeViewInterval); activeViewInterval = null; }
     State.currentView = null;
     renderHome();
+}
+
+// Zurück-Button im App-Topbar - führt zur Kategorie zurück, aus der die App
+// geöffnet wurde, oder direkt zum Startbildschirm bei Dock-Apps (Fahrerkarte/
+// Dispositions-Dienst), die keiner Kategorie angehören.
+function showBackFromApp() {
+    if (State.currentCategory) showCategory(State.currentCategory);
+    else showHome();
 }
 
 function showCategory(catId) {
@@ -437,6 +491,7 @@ function showCategory(catId) {
     State.currentView = null;
     document.getElementById('home-grid').classList.add('hidden');
     document.getElementById('app-view').classList.add('hidden');
+    document.getElementById('dock').classList.add('hidden');
     const catGrid = document.getElementById('category-grid');
     catGrid.classList.remove('hidden');
     const category = CATEGORIES.find((c) => c.id === catId);
@@ -465,12 +520,16 @@ async function showView(id) {
     State.currentView = id;
     State.currentScreen = 'app';
     const app = APPS.find((a) => a.id === id);
-    if (app) State.currentCategory = app.category;
+    // Dock-Apps (Fahrerkarte/Dispositions-Dienst) gehören keiner Kategorie
+    // an - Zurück führt bei ihnen über showBackFromApp() zum Startbildschirm.
+    State.currentCategory = app ? app.category : null;
     document.getElementById('home-grid').classList.add('hidden');
     document.getElementById('category-grid').classList.add('hidden');
+    document.getElementById('dock').classList.add('hidden');
     document.getElementById('app-view').classList.remove('hidden');
     const titleEl = document.getElementById('app-topbar-title');
-    if (titleEl) titleEl.textContent = app ? app.label : '';
+    const dockItem = DOCK_ITEMS.find((it) => it.id === id);
+    if (titleEl) titleEl.textContent = app ? app.label : (dockItem ? dockItem.label : '');
     const content = document.getElementById('content');
     content.innerHTML = '<div class="card-hint">Lädt...</div>';
     try {
@@ -681,7 +740,7 @@ function handlePush(event, data) {
         'orders:cancelRequested': () => { toast('Abbruch-Anfrage', 'Ein Fahrer möchte einen Auftrag abbrechen.', 'warning'); refreshIfViewing(['dispatch-orders']); },
         'orders:completed': () => { toast('Auftrag abgeschlossen', 'Ein Auftrag wurde erfolgreich abgeschlossen.', 'success'); refreshIfViewing(['dispatch-orders', 'gf-finance-hub']); },
         'dispatch:driversChanged': () => refreshIfViewing(['dispatch-drivers']),
-        'dispatch:dutyChanged': () => refreshIfViewing(['dispatch-orders', 'driver-orders']),
+        'dispatch:dutyChanged': () => { refreshIfViewing(['dispatch-orders', 'driver-orders', 'dispatch-duty']); if (State.currentScreen === 'home') refreshDockStatus(); },
         'fleet:changed': () => refreshIfViewing(['gf-fleet-hub', 'dispatch-drivers']),
         'finance:balanceChanged': () => refreshIfViewing(['gf-finance-hub']),
         'roles:changed': () => refreshAfterRolesChanged(),
@@ -1269,6 +1328,28 @@ VIEWS['dispatch-drivers'] = async (root) => {
         <h1 class="view-title">Fahrerübersicht</h1>
         <p class="view-subtitle">Alle aktiven Fahrer mit Status und aktuellem Fahrzeug.</p>
         <div class="section">${table(['Status', 'Fahrer', 'Fahrzeug', 'Fahrzeugstatus', ''], driversTableRows(d.drivers))}</div>`;
+};
+
+// Dock-App (kein Kategorie-Eintrag, s. DOCK_ITEMS/renderDock()) - der
+// Dispositions-Dienst-Toggle: erst wenn ein Disponent im Dienst ist, gilt
+// die Disposition als aktiv (isDispatcherAvailable() serverseitig), vorher
+// dürfen Fahrer offene Aufträge wieder selbst übernehmen.
+VIEWS['dispatch-duty'] = async (root) => {
+    const duty = await call('dispatch:dutyStatus');
+    root.innerHTML = `
+        <h1 class="view-title">Dispositions-Dienst</h1>
+        <p class="view-subtitle">Erst wenn ein Disponent im Dienst ist, gilt die Disposition als aktiv - vorher können Fahrer offene Aufträge wieder selbst übernehmen.</p>
+        <div class="section" style="display:flex;align-items:center;justify-content:space-between;gap:14px;">
+            <div>
+                <div class="card-title">Status</div>
+                <div class="card-hint">${duty.onDuty
+                    ? `Im Dienst seit ${formatDate(duty.shiftStartedAt, true)} - du bist für Fahrer als verfügbarer Disponent sichtbar, die Selbstzuweisung offener Aufträge ist für sie gesperrt.`
+                    : 'Nicht im Dienst - Fahrer können sich offene Aufträge derzeit selbst zuweisen, solange kein Disponent im Dienst ist.'}</div>
+            </div>
+            ${duty.onDuty
+                ? `<button class="btn btn-danger" onclick="Actions.endDispatchDuty()">Dienst beenden</button>`
+                : `<button class="btn btn-primary" onclick="Actions.startDispatchDuty()">Dienst beginnen</button>`}
+        </div>`;
 };
 
 // "Auftragsverwaltung" - zusammengelegte Disponenten-App: Pool/Aktiv/
@@ -2082,12 +2163,12 @@ Actions.remindDriver = async (driverId) => {
 Actions.startDispatchDuty = async () => {
     await call('dispatch:startDuty');
     toast('Dienst begonnen', 'Fahrer können sich offene Aufträge jetzt nicht mehr selbst zuweisen.', 'success');
-    showView('dispatch-board');
+    showView('dispatch-duty');
 };
 Actions.endDispatchDuty = async () => {
     await call('dispatch:endDuty');
     toast('Dienst beendet', '', 'success');
-    showView('dispatch-board');
+    showView('dispatch-duty');
 };
 
 Actions.openDispatchModal = (orderId, requiresPermission) => {
