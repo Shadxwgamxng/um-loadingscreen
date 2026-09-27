@@ -262,8 +262,8 @@ Framework-Anbindung in diesem Standalone-Setup).
   (`server/sv_drivers.lua`) ruft beim Wechsel auf "Pause" jetzt zusätzlich
   `Hours.RestStart()` auf (idempotent, wie beim automatischen Aussteigen aus
   dem Fahrzeug) - die Lenkzeit setzt sich damit nach der konfigurierten
-  Mindestpause (`Config.DrivingRules.requiredBreakMinutes`) auch bei manuell
-  gesetzter Pause zuverlässig zurück.
+  Mindestpause (`Config.DrivingRules.requiredBreakMinutes`, aktuell **10
+  Minuten**) auch bei manuell gesetzter Pause zuverlässig zurück.
 - **Automatische Wegpunkte**: Beim Annehmen eines Auftrags wird automatisch
   ein GPS-Wegpunkt zum Beladepunkt gesetzt, beim Losfahren (Statuswechsel auf
   "Unterwegs") automatisch einer zum Zielort. Die Koordinaten kommen aus den

@@ -337,7 +337,7 @@ Config.DrivingRules = {
 
     -- Wie lange die Pause mindestens dauern muss, um die ununterbrochene
     -- Lenkzeit zurückzusetzen.
-    requiredBreakMinutes = 20,
+    requiredBreakMinutes = 10,
 
     -- Maximale Lenkzeit pro Tag.
     maxDailyDrivingMinutes = 660, -- 9 Stunden
