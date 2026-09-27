@@ -111,6 +111,9 @@ sondern ein klassisches Tablet-Menü:
    Fahrerübersicht auf einer Seite als Cockpit für den laufenden
    Disponenten-Alltag - die einzelnen Ansichten (Auftragspool, Aktive
    Aufträge, Fahrerübersicht) bleiben als eigene Apps zusätzlich bestehen.
+7. Ebenfalls neu in der Kategorie **Disposition**: die App **"Live Karte"**
+   (Berechtigung `live_map_view`) - siehe eigener Abschnitt "Live-Karte"
+   weiter unten.
 
 Alle folgenden Abschnitte dieses READMEs sprechen aus historischen Gründen
 weiterhin von "Reitern" - gemeint ist damit jeweils die entsprechende App im
@@ -574,6 +577,46 @@ Im Reiter "Aufträge" hat ein Fahrer bei jedem laufenden Auftrag
 - **Ist niemand online**: Der Auftrag wird sofort abgebrochen, und dem
   Unternehmensguthaben wird eine **Vertragsstrafe** (`Config.OrderCancelPenalty`,
   Standard 500$) als eigene Transaktion (`vertragsstrafe`) belastet.
+
+## Live-Karte
+
+Die App **"Live Karte"** (Kategorie Disposition, Berechtigung `live_map_view`)
+zeigt ausschließlich gerade eingestempelte Fahrer (`st_drivers.on_shift = 1`)
+als Marker über einem selbst hinterlegten Kartenbild - alle 3 Sekunden
+(`Config.LiveMap.trackingIntervalMs`) aktualisiert.
+
+- **Kein GTA-V-Kartenbild inklusive**: Rockstars Kartengrafik ist
+  urheberrechtlich geschützt und wird nicht mitgeliefert. Lege ein eigenes
+  Bild unter `html/img/map.jpg` ab (siehe
+  `html/img/KARTENBILD_HIER_ABLEGEN.txt`) - ohne Datei zeigt die Karte einen
+  Hinweistext statt eines kaputten Bildes.
+- **Kalibrierung**: Die mitgelieferten Standard-Kartengrenzen
+  (`Config.LiveMap.bounds`) passen mit hoher Wahrscheinlichkeit nicht zu
+  deinem konkreten Kartenausschnitt. Über den Button "Karte kalibrieren"
+  klickst du zweimal auf eine im Spiel eindeutig wiederfindbare Stelle,
+  läufst jeweils dorthin und bestätigst mit "Aktuelle Position übernehmen"
+  (oder trägst die Weltkoordinaten manuell ein) - daraus werden automatisch
+  die vier `Config.LiveMap.bounds`-Werte berechnet, per Live-Vorschau direkt
+  überprüfbar, und als fertiges Snippet zum Einfügen in `config.lua`
+  angezeigt. Nach dem Eintragen die Ressource neu starten, damit die Werte
+  dauerhaft gelten (und - sofern Website-Sync aktiv - auch die Website
+  automatisch dieselben Grenzen erhält, siehe unten).
+- **Serverseitig ermittelt**: Position, Fahrzeug und laufender Auftrag jedes
+  getrackten Fahrers werden ausschließlich serverseitig ermittelt
+  (`GetEntityCoords`/`GetVehiclePedIsIn`), nie vom Client gemeldet. Rein
+  transient im Arbeitsspeicher (`server/sv_tracking.lua`) - keine
+  Datenbank-Tabelle, keine Historie.
+- **Website-Sync**: Ist `Config.Website.enabled` aktiv, werden Positionen
+  live an die Speditions-Website gepusht (`driver_position.update`/
+  `.remove`) und die konfigurierten Kartengrenzen beim Ressourcenstart als
+  `live_map.bounds` mitgeschickt, damit die Website dieselbe
+  Weltkoordinaten→Kartenbild-Umrechnung verwendet wie das Tablet.
+
+**Bestandsinstallationen:** `live_map_view` ist eine neue Berechtigung -
+bestehende Rollen bekommen sie NICHT automatisch (`Config.DefaultRolePermissions`
+wirkt nur bei der Erstbefüllung einer Rolle, siehe "Rollen & Berechtigungen"
+oben). Öffne den Reiter "Rollen", wähle Disponent/Geschäftsführung und hake
+"Live-Karte einsehen" manuell an.
 
 ## Datenbankschema
 

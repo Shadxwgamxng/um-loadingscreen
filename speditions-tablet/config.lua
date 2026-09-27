@@ -97,6 +97,7 @@ Config.RoleLabels = {
 Config.Permissions = {
     { key = 'driver_actions',    label = 'Fahrerfunktionen (Aufträge fahren, Fahrerkarte, eigene Statistik, Nachrichten empfangen)', group = 'Fahrer' },
     { key = 'dispatch',          label = 'Disposition (Fahrerübersicht, Auftragspool disponieren, Fahrer kontaktieren)', group = 'Disposition' },
+    { key = 'live_map_view',     label = 'Live-Karte einsehen (Position, Fahrzeug, Auftrag jedes eingestempelten Fahrers)', group = 'Disposition' },
     { key = 'fleet_manage',      label = 'Fuhrparkverwaltung (Fahrzeuge anlegen/bearbeiten/löschen/zuweisen)', group = 'Fuhrpark' },
     { key = 'locations_manage',  label = 'Orte verwalten (Be-/Entladepunkte anlegen/bearbeiten/löschen)', group = 'Fuhrpark' },
     { key = 'cargo_types_manage', label = 'Frachtarten verwalten (anlegen/bearbeiten/löschen)', group = 'Fuhrpark' },
@@ -114,14 +115,23 @@ Config.Permissions = {
 -- Anlegen der jeweiligen Rolle in st_roles relevant, siehe oben).
 Config.DefaultRolePermissions = {
     fahrer = { 'driver_actions' },
-    disponent = { 'dispatch' },
+    disponent = { 'dispatch', 'live_map_view' },
     -- driver_actions dabei: die Geschäftsführung soll alles können, was ein
     -- LKW-Fahrer auch kann (Fahrerkarte, Aufträge fahren, eigene Statistik,
     -- Nachrichten empfangen) - zusätzlich zu den GF-eigenen Funktionen.
     geschaeftsfuehrung = {
-        'driver_actions', 'dispatch', 'fleet_manage', 'locations_manage', 'cargo_types_manage', 'employees_manage', 'roles_manage',
+        'driver_actions', 'dispatch', 'live_map_view', 'fleet_manage', 'locations_manage', 'cargo_types_manage', 'employees_manage', 'roles_manage',
         'finance_view', 'finance_payout', 'wages_manage', 'activity_log_view', 'stats_view', 'console_view',
     },
+}
+
+-- Live-Karte: Aktualisierungsintervall des serverseitigen Trackings und die
+-- Standard-Kartengrenzen (Weltkoordinaten, die auf die 0-100%-Fläche des
+-- hinterlegten Kartenbilds abgebildet werden) - über das Kalibrierungstool
+-- im Reiter "Live-Karte" per Zwei-Punkt-Klick neu ermittelbar.
+Config.LiveMap = {
+    trackingIntervalMs = 3000,
+    bounds = { minX = -4300, maxX = 4700, minY = -4300, maxY = 8200 },
 }
 
 -- =========================================================

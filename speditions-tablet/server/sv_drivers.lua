@@ -292,6 +292,7 @@ function Drivers.EndShift(src)
     end
     Logs.Write(emp.id, 'shift_ended', ('%s hat die Fahrerkarte abgezogen (Fahrt beendet).'):format(emp.name))
     if WebsiteBridge then WebsiteBridge.PushDriverShiftUpdate(emp.id, false) end
+    if Tracking then Tracking.RemoveDriver(emp.id) end
     return { ok = true }
 end
 

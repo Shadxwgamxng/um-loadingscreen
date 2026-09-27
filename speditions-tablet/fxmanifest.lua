@@ -5,7 +5,7 @@ lua54 'yes'
 name 'speditions-tablet'
 author 'shadxwgamxng'
 description 'Standalone FiveM Speditions-Tablet - Fahrer-, Disponenten- und Fuhrparkmanagement'
-version '1.11.3'
+version '1.12.0'
 
 dependency 'oxmysql'
 
@@ -42,6 +42,7 @@ server_scripts {
     'server/sv_trailers.lua',
     'server/sv_drivers.lua',
     'server/sv_dispatch_shift.lua',
+    'server/sv_tracking.lua',
     'server/sv_hours.lua',
     'server/sv_orders.lua',
     'server/sv_website_bridge.lua',
@@ -61,5 +62,11 @@ ui_page 'html/index.html'
 files {
     'html/index.html',
     'html/css/style.css',
-    'html/js/app.js'
+    'html/js/app.js',
+    -- Eigenes Kartenbild für die Live-Karte (siehe html/img/KARTENBILD_HIER_ABLEGEN.txt) -
+    -- Glob deckt gängige Formate ab, falls map.jpg nicht exakt passt.
+    'html/img/*.jpg',
+    'html/img/*.jpeg',
+    'html/img/*.png',
+    'html/img/*.webp'
 }

@@ -191,6 +191,35 @@ function WebsiteBridge.PushDriverShiftUpdate(tabletEmployeeId, onShift)
     })
 end
 
+--- Meldet die Live-Position eines gerade getrackten Fahrers - jeder
+--- Tracking-Tick (Config.LiveMap.trackingIntervalMs), ausschließlich für
+--- Fahrer, die gerade tatsächlich getrackt werden (siehe
+--- server/sv_tracking.lua).
+function WebsiteBridge.PushDriverPosition(data)
+    if not websiteConfigured() then return end
+    WebsiteBridge.PushEvent('driver_position.update', data)
+end
+
+--- Entfernt einen Fahrer sofort von der Website-Live-Karte (Schichtende
+--- oder Disconnect) - siehe Tracking.RemoveDriver.
+function WebsiteBridge.PushDriverPositionRemove(tabletEmployeeId)
+    if not websiteConfigured() then return end
+    WebsiteBridge.PushEvent('driver_position.remove', { tabletEmployeeId = tabletEmployeeId })
+end
+
+--- Meldet die aktuell konfigurierten/kalibrierten Live-Karten-Kartengrenzen
+--- (Config.LiveMap.bounds) an die Website, damit deren eigene Kartenansicht
+--- dieselbe Umrechnung Weltkoordinaten→Kartenbild-Prozent verwendet wie das
+--- Tablet, statt eine eigene, potenziell veraltete Kopie hart zu
+--- hinterlegen. Wird beim Ressourcenstart gepusht - nach einer Kalibrierung
+--- (Reiter "Live-Karte", Werte in config.lua übernommen) reicht ein
+--- Ressourcen-Neustart, damit auch die Website die neuen Grenzen erhält.
+function WebsiteBridge.PushLiveMapBounds()
+    if not websiteConfigured() then return end
+    if not (Config.LiveMap and Config.LiveMap.bounds) then return end
+    WebsiteBridge.PushEvent('live_map.bounds', { bounds = Config.LiveMap.bounds })
+end
+
 --- Meldet eine abgeschlossene Fracht als Fahrtenbuch-Eintrag an die Website -
 --- siehe Orders.Complete (server/sv_orders.lua). `tabletOrderId` ist der
 --- Abgleichsschlüssel, damit ein erneuter Push (z.B. nach Ressourcen-Neustart)
@@ -244,6 +273,7 @@ CreateThread(function()
     -- (Konfiguration/DB-Verbindung stehen dann sicher bereit).
     Wait(5000)
     WebsiteBridge.PushLocations()
+    WebsiteBridge.PushLiveMapBounds()
 end)
 
 
