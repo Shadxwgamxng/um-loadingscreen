@@ -84,6 +84,20 @@ html, body {
     box-shadow: 0 0 0 1px var(--border);
 }
 
+/* Eigenes Wallpaper, vom Betreiber selbst unter html/img/wallpaper.jpg
+   hinterlegt (siehe html/img/WALLPAPER_HIER_ABLEGEN.txt) - ohne Datei bleibt
+   der Verlaufshintergrund von .tablet-screen als Fallback sichtbar (gleiche
+   Onerror-Technik wie beim Live-Karten-Bild). */
+.wallpaper-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+}
+.wallpaper-img.wallpaper-missing { display: none; }
+
 /* ---------- Boot screen ---------- */
 
 .boot-screen {
@@ -183,16 +197,20 @@ html, body {
 
 /* ---------- Main UI ---------- */
 
-.main-ui { display: flex; flex-direction: column; height: 100%; }
+.main-ui { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; }
 .main-ui.hidden { display: none; }
 
 .topbar {
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 14px 20px;
-    background: var(--bg-2);
-    border-bottom: 1px solid var(--border);
+    background: rgba(20, 31, 56, 0.72);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     flex: 0 0 auto;
 }
 .topbar-left { display: flex; align-items: baseline; gap: 10px; }
@@ -218,8 +236,8 @@ html, body {
     display: flex;
     align-items: center;
     gap: 7px;
-    background: var(--bg-3);
-    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
     color: var(--text-1);
     padding: 5px 12px;
     border-radius: 999px;
@@ -236,8 +254,8 @@ html, body {
 }
 .timeclock-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
 .close-btn {
-    background: var(--bg-3);
-    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
     color: var(--text-1);
     width: 30px; height: 30px;
     border-radius: 8px;
@@ -250,8 +268,8 @@ html, body {
 .body-wrap > .hidden { display: none; }
 
 .home-btn {
-    background: var(--bg-3);
-    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
     color: var(--text-1);
     padding: 5px 12px;
     border-radius: 999px;
@@ -261,11 +279,16 @@ html, body {
 }
 .home-btn:hover { border-color: var(--accent-2); color: var(--text-0); }
 
-/* ---------- Homescreen (Kategorien) + Kategorie-Grid (Apps) ---------- */
+/* ---------- Homescreen (Kategorien) + Kategorie-Grid (Apps) ----------
+   Liegen transparent auf dem Wallpaper (siehe .wallpaper-img) - iPad-Optik:
+   Icon-Kacheln ohne Karten-Rahmen, Label mit Schlagschatten für Lesbarkeit
+   auf beliebigem Hintergrundbild. */
 
 .home-grid, .category-grid {
+    position: relative;
     flex: 1 1 auto;
     overflow-y: auto;
+    background: transparent;
     padding: 28px 32px 40px;
 }
 
@@ -275,68 +298,171 @@ html, body {
     gap: 14px;
     margin-bottom: 22px;
 }
-.category-title { font-size: 18px; font-weight: 700; }
+.category-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.55);
+}
 
 .app-back-btn {
-    background: var(--bg-3);
-    border: 1px solid var(--border);
-    color: var(--text-1);
+    background: rgba(255,255,255,0.12);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.16);
+    color: #fff;
     padding: 6px 14px;
     border-radius: 999px;
     cursor: pointer;
     font-size: 12.5px;
     font-family: inherit;
 }
-.app-back-btn:hover { border-color: var(--accent-2); color: var(--text-0); }
+.app-back-btn:hover { border-color: var(--accent-2); }
 
 .home-grid, .app-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
     align-content: start;
-    gap: 18px;
+    gap: 22px 14px;
 }
 
 .category-tile, .app-tile {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
-    padding: 20px 12px;
-    background: var(--bg-2);
-    border: 1px solid var(--border);
+    gap: 8px;
+    padding: 4px;
+    background: transparent;
+    border: none;
     border-radius: var(--radius-lg);
     cursor: pointer;
     user-select: none;
     text-align: center;
+    transition: transform 0.12s ease;
 }
-.category-tile:hover, .app-tile:hover { background: var(--bg-3); border-color: var(--accent-2); }
+.category-tile:hover, .app-tile:hover { transform: scale(1.05); }
+.category-tile:active, .app-tile:active { transform: scale(0.95); }
 
 .tile-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: var(--radius);
-    background: var(--bg-3);
-    color: var(--accent-2);
+    width: 60px;
+    height: 60px;
+    border-radius: 17px;
+    background: linear-gradient(160deg, var(--bg-3), var(--bg-2));
+    color: #fff;
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.07) inset;
 }
-.tile-icon svg { width: 26px; height: 26px; }
+.tile-icon svg { width: 28px; height: 28px; }
 .app-tile-icon {
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 700;
-    color: var(--text-0);
+    color: #fff;
 }
-.tile-label { font-size: 13px; color: var(--text-1); line-height: 1.3; }
+.tile-label {
+    font-size: 12.5px;
+    color: rgba(255,255,255,0.92);
+    line-height: 1.25;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+}
+
+/* Kategorie-Akzentfarben - je Kategorie ein eigener Icon-Farbverlauf
+   (analog iOS-App-Icons), als Klasse auf .tile-icon gesetzt
+   (categoryIconSvg()/showCategory() in app.js). */
+.cat-auftraege { background: linear-gradient(160deg, #3b82f6, #1d4ed8); }
+.cat-finanzen { background: linear-gradient(160deg, #22c55e, #15803d); }
+.cat-fuhrpark { background: linear-gradient(160deg, #f97316, #c2410c); }
+.cat-mitarbeiter { background: linear-gradient(160deg, #a855f7, #7e22ce); }
+.cat-disposition { background: linear-gradient(160deg, #ef4444, #b91c1c); }
+.cat-geschaeftsfuehrung { background: linear-gradient(160deg, #64748b, #334155); }
+
+/* ---------- Dock (Home-Screen) ----------
+   Fixiert unten auf dem Home-Screen (analog iPad-Dock) - aktuell für
+   Fahrerkarte + Dispositions-Dienst, s. Actions/renderDock() in app.js. */
+
+.dock {
+    position: absolute;
+    left: 50%;
+    bottom: 18px;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 22px;
+    padding: 12px 20px;
+    background: rgba(255,255,255,0.10);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 26px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+    z-index: 2;
+}
+.dock.hidden { display: none; }
+.dock-item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    user-select: none;
+}
+.dock-item .tile-icon { width: 52px; height: 52px; border-radius: 15px; }
+.dock-item .tile-icon svg { width: 24px; height: 24px; }
+.dock-item .tile-label { font-size: 11px; }
+.dock-status-dot {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: var(--gray);
+    border: 2px solid rgba(15, 23, 42, 0.9);
+}
+.dock-status-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
 
 /* ---------- App-Ansicht (Homescreen -> Kategorie -> App geöffnet) ---------- */
 
 .app-view {
+    position: relative;
+    z-index: 1;
+    background: var(--bg-1);
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     min-height: 0;
 }
+
+/* ---------- App-Split (Sektionen-Leiste rechts, iPad-Splitview-Prinzip) ----
+   Für zusammengelegte Apps mit mehreren Abschnitten, s. renderSectionedApp()
+   in app.js (z.B. "Auftragsverwaltung", "Finanzcenter"). */
+
+.app-split { display: flex; flex: 1 1 auto; min-height: 0; }
+.app-split-content { flex: 1 1 auto; overflow-y: auto; padding: 22px 26px 40px; min-width: 0; }
+.app-split-sidebar {
+    flex: 0 0 190px;
+    border-left: 1px solid var(--border);
+    background: var(--bg-2);
+    padding: 14px 10px;
+    overflow-y: auto;
+}
+.app-split-tab {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    border: none;
+    background: transparent;
+    color: var(--text-1);
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    margin-bottom: 4px;
+}
+.app-split-tab:hover { background: var(--bg-3); color: var(--text-0); }
+.app-split-tab.active { background: var(--accent); color: #fff; font-weight: 600; }
 .app-topbar {
     display: flex;
     align-items: center;

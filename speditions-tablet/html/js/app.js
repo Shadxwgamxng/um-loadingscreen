@@ -389,7 +389,7 @@ function renderHome() {
     const grid = document.getElementById('home-grid');
     grid.innerHTML = visibleCategories(currentPermissions()).map((c) => `
         <div class="category-tile" onclick="showCategory('${c.id}')">
-            <div class="tile-icon">${categoryIconSvg(c.icon)}</div>
+            <div class="tile-icon cat-${c.id}">${categoryIconSvg(c.icon)}</div>
             <div class="tile-label">${escapeHtml(c.label)}</div>
         </div>
     `).join('');
@@ -420,7 +420,7 @@ function showCategory(catId) {
         <div class="app-grid">
             ${apps.map((a) => `
                 <div class="app-tile" onclick="showView('${a.id}')">
-                    <div class="tile-icon app-tile-icon">${escapeHtml((a.label || '?').trim().charAt(0).toUpperCase())}</div>
+                    <div class="tile-icon app-tile-icon cat-${catId}">${escapeHtml((a.label || '?').trim().charAt(0).toUpperCase())}</div>
                     <div class="tile-label">${escapeHtml(a.label)}</div>
                 </div>
             `).join('')}
