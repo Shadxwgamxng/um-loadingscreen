@@ -106,6 +106,11 @@ sondern ein klassisches Tablet-Menü:
 5. Die frühere eigenständige "Fahrerakten"-App ist entfallen - ein
    "Fahrerakte"-Button erscheint jetzt direkt in der Zeile eines Fahrers in
    der App **Mitarbeiter** (Kategorie Mitarbeiterverwaltung).
+6. Neu in der Kategorie **Disposition**: die App **"Allgemeine Disposition"**
+   (Berechtigung `dispatch`) bündelt Auftragspool, aktive Aufträge und
+   Fahrerübersicht auf einer Seite als Cockpit für den laufenden
+   Disponenten-Alltag - die einzelnen Ansichten (Auftragspool, Aktive
+   Aufträge, Fahrerübersicht) bleiben als eigene Apps zusätzlich bestehen.
 
 Alle folgenden Abschnitte dieses READMEs sprechen aus historischen Gründen
 weiterhin von "Reitern" - gemeint ist damit jeweils die entsprechende App im

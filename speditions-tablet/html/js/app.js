@@ -328,6 +328,7 @@ const APPS = [
     { id: 'dispatch-active', label: 'Aktive Aufträge', perm: 'dispatch', category: 'auftraege' },
     { id: 'dispatch-completed', label: 'Abgeschlossen', perm: 'dispatch', category: 'auftraege' },
     { id: 'dispatch-revenue', label: 'Unternehmensumsatz', perm: 'dispatch', category: 'finanzen' },
+    { id: 'dispatch-board', label: 'Allgemeine Disposition', perm: 'dispatch', category: 'disposition' },
     { id: 'gf-dashboard', label: 'Dashboard', perm: 'stats_view', category: 'finanzen' },
     { id: 'gf-employees', label: 'Mitarbeiter', perm: 'employees_manage', category: 'mitarbeiter' },
     { id: 'gf-roles', label: 'Rollen', perm: 'roles_manage', category: 'mitarbeiter' },
@@ -786,7 +787,7 @@ VIEWS['driver-orders'] = async (root) => {
         }
         if (CANCELLABLE_STATUSES.includes(o.status)) {
             actions += o.pending_cancel_request_id
-                ? `<span class="pill" style="margin-left:6px;">⏳ Abbruch angefragt</span>`
+                ? `<span class="pill pill-warning" style="margin-left:6px;">Abbruch angefragt</span>`
                 : `<button class="btn btn-sm btn-danger" style="margin-left:6px;" onclick="Actions.requestCancelOrder(${o.id})">Abbrechen</button>`;
         }
         const lieferschein = ['angenommen', 'anfahrt', 'beladen', 'entladen'].includes(o.status) ? `
@@ -922,9 +923,12 @@ VIEWS['driver-messages'] = async (root) => {
 
 // ---------- DISPONENT ----------
 
-VIEWS['dispatch-drivers'] = async (root) => {
-    const d = await call('dispatch:drivers');
-    const rows = d.drivers.map((r) => `<tr>
+// Wiederverwendbare Zeilen-Renderer für Fahrer/Auftragspool/aktive Aufträge -
+// werden sowohl von den einzelnen Ansichten unten als auch vom kombinierten
+// Disponenten-Cockpit (VIEWS['dispatch-board']) verwendet, damit keine
+// Zeilen-/Aktions-Logik doppelt gepflegt werden muss.
+function driversTableRows(drivers) {
+    return drivers.map((r) => `<tr>
         <td>${badge(DRIVER_STATUS_META[r.current_status])}</td>
         <td>${escapeHtml(r.name)}</td>
         <td>${r.vehicle_name ? `${escapeHtml(r.vehicle_name)} (${escapeHtml(r.vehicle_plate)})` : '-'}</td>
@@ -934,18 +938,10 @@ VIEWS['dispatch-drivers'] = async (root) => {
             <button class="btn btn-sm" onclick="Actions.remindDriver(${r.driver_id})">Lenkzeit erinnern</button>
         </td>
     </tr>`);
+}
 
-    root.innerHTML = `
-        <h1 class="view-title">Fahrerübersicht</h1>
-        <p class="view-subtitle">Alle aktiven Fahrer mit Status und aktuellem Fahrzeug.</p>
-        <div class="section">${table(['Status', 'Fahrer', 'Fahrzeug', 'Fahrzeugstatus', ''], rows)}</div>`;
-};
-
-VIEWS['dispatch-pool'] = async (root) => {
-    const [pool, drivers] = await Promise.all([call('dispatch:openOrders'), call('dispatch:drivers')]);
-    window.__availableDrivers = drivers.drivers;
-
-    const rows = pool.orders.map((o) => `<tr>
+function openOrdersTableRows(orders) {
+    return orders.map((o) => `<tr>
         <td>#${o.id}</td>
         <td>${escapeHtml(o.cargo)}${o.requires_permission ? ' <span class="pill pill-warning">Gefahrgut</span>' : ''}</td>
         <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
@@ -953,18 +949,10 @@ VIEWS['dispatch-pool'] = async (root) => {
         <td>${formatMoney(o.value)}</td>
         <td><button class="btn btn-sm btn-primary" onclick="Actions.openDispatchModal(${o.id}, ${escapeHtml(JSON.stringify(o.requires_permission || null))})">Disponieren</button></td>
     </tr>`);
+}
 
-    root.innerHTML = `
-        <h1 class="view-title">Auftragspool</h1>
-        <p class="view-subtitle">Automatisch generierte Aufträge, die noch keinem Fahrer zugewiesen sind.</p>
-        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Distanz', 'Wert', ''], rows)}</div>`;
-};
-
-VIEWS['dispatch-active'] = async (root) => {
-    const [active, drivers] = await Promise.all([call('dispatch:activeOrders'), call('dispatch:drivers')]);
-    window.__availableDrivers = drivers.drivers;
-
-    const rows = active.orders.map((o) => {
+function activeOrdersTableRows(orders) {
+    return orders.map((o) => {
         const cancelActions = o.pending_cancel_request_id ? `
             <button class="btn btn-sm btn-primary" onclick="Actions.resolveCancelRequest(${o.pending_cancel_request_id}, true)">Abbruch genehmigen</button>
             <button class="btn btn-sm" onclick="Actions.resolveCancelRequest(${o.pending_cancel_request_id}, false)">Ablehnen</button>` : '';
@@ -974,7 +962,7 @@ VIEWS['dispatch-active'] = async (root) => {
             <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
             <td>${o.driver_name ? escapeHtml(o.driver_name) : '-'}</td>
             <td>${o.vehicle_name ? `${escapeHtml(o.vehicle_name)} (${escapeHtml(o.vehicle_plate)})` : '-'}</td>
-            <td>${badge(ORDER_STATUS_META[o.status])}${o.pending_cancel_request_id ? ' <span class="pill">⏳ Abbruch angefragt</span>' : ''}</td>
+            <td>${badge(ORDER_STATUS_META[o.status])}${o.pending_cancel_request_id ? ' <span class="pill pill-warning">Abbruch angefragt</span>' : ''}</td>
             <td class="btn-row">
                 ${cancelActions}
                 ${['disponiert', 'angenommen', 'anfahrt', 'beladen'].includes(o.status) ? `<button class="btn btn-sm" onclick="Actions.openReassignModal(${o.id})">Neu zuweisen</button>` : ''}
@@ -982,11 +970,49 @@ VIEWS['dispatch-active'] = async (root) => {
             </td>
         </tr>`;
     });
+}
 
+VIEWS['dispatch-drivers'] = async (root) => {
+    const d = await call('dispatch:drivers');
+    root.innerHTML = `
+        <h1 class="view-title">Fahrerübersicht</h1>
+        <p class="view-subtitle">Alle aktiven Fahrer mit Status und aktuellem Fahrzeug.</p>
+        <div class="section">${table(['Status', 'Fahrer', 'Fahrzeug', 'Fahrzeugstatus', ''], driversTableRows(d.drivers))}</div>`;
+};
+
+VIEWS['dispatch-pool'] = async (root) => {
+    const [pool, drivers] = await Promise.all([call('dispatch:openOrders'), call('dispatch:drivers')]);
+    window.__availableDrivers = drivers.drivers;
+    root.innerHTML = `
+        <h1 class="view-title">Auftragspool</h1>
+        <p class="view-subtitle">Automatisch generierte Aufträge, die noch keinem Fahrer zugewiesen sind.</p>
+        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Distanz', 'Wert', ''], openOrdersTableRows(pool.orders))}</div>`;
+};
+
+VIEWS['dispatch-active'] = async (root) => {
+    const [active, drivers] = await Promise.all([call('dispatch:activeOrders'), call('dispatch:drivers')]);
+    window.__availableDrivers = drivers.drivers;
     root.innerHTML = `
         <h1 class="view-title">Aktive Aufträge</h1>
         <p class="view-subtitle">Live-Überwachung aller disponierten und laufenden Aufträge.</p>
-        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Fahrer', 'Fahrzeug', 'Status', 'Aktion'], rows)}</div>`;
+        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Fahrer', 'Fahrzeug', 'Status', 'Aktion'], activeOrdersTableRows(active.orders))}</div>`;
+};
+
+VIEWS['dispatch-board'] = async (root) => {
+    const [pool, active, drivers] = await Promise.all([call('dispatch:openOrders'), call('dispatch:activeOrders'), call('dispatch:drivers')]);
+    window.__availableDrivers = drivers.drivers;
+    root.innerHTML = `
+        <h1 class="view-title">Allgemeine Disposition</h1>
+        <p class="view-subtitle">Auftragspool, aktive Aufträge und Fahrerübersicht an einem Ort - für den laufenden Disponenten-Alltag.</p>
+
+        <h2 class="view-title" style="font-size:15px;margin-top:18px;">Offener Auftragspool</h2>
+        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Distanz', 'Wert', ''], openOrdersTableRows(pool.orders))}</div>
+
+        <h2 class="view-title" style="font-size:15px;margin-top:22px;">Aktive Aufträge</h2>
+        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Fahrer', 'Fahrzeug', 'Status', 'Aktion'], activeOrdersTableRows(active.orders))}</div>
+
+        <h2 class="view-title" style="font-size:15px;margin-top:22px;">Fahrerübersicht</h2>
+        <div class="section">${table(['Status', 'Fahrer', 'Fahrzeug', 'Fahrzeugstatus', ''], driversTableRows(drivers.drivers))}</div>`;
 };
 
 VIEWS['dispatch-completed'] = async (root) => {
