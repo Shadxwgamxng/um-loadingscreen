@@ -218,6 +218,12 @@ CREATE TABLE IF NOT EXISTS `st_orders` (
     `cargo_unit` VARCHAR(30) NULL,
     `deadline` DATETIME NULL,
     `punctual` TINYINT(1) NULL,
+    -- Eigene Markierung des Fahrers (Orders.SetCustomMarker,
+    -- server/sv_orders.lua) - eine frei am aktuellen Standort gesetzte
+    -- Wegpunkt-/Blip-Position, unabhängig von den festen Be-/Entladepunkten.
+    `custom_marker_x` FLOAT NULL,
+    `custom_marker_y` FLOAT NULL,
+    `custom_marker_z` FLOAT NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `accepted_at` DATETIME NULL,
     `completed_at` DATETIME NULL,

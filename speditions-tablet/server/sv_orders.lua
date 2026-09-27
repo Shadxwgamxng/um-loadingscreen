@@ -787,6 +787,36 @@ function Orders.RequestCancelByDriver(src, orderId, reason)
     return { ok = true, pending = false, penalty = penalty }
 end
 
+--- Setzt eine eigene, frei wählbare Markierung/Wegpunkt für den Fahrer unter
+--- seinem gerade aktiven Auftrag - z.B. um sich einen Treffpunkt oder eine
+--- Zwischenstation selbst zu merken, unabhängig von den festen Be-/
+--- Entladepunkten. Die Position wird exakt wie bei
+--- Locations.GetCurrentPosition (server/sv_locations.lua) ausschließlich
+--- serverseitig über GetEntityCoords ermittelt (kein Client-Trust) - anders
+--- als dort werden die Koordinaten hier aber NIE an die NUI zurückgegeben,
+--- nur eine Erfolgsbestätigung. Erneutes Setzen ersetzt die vorherige
+--- Markierung.
+function Orders.SetCustomMarker(src, orderId)
+    local emp, driver, order = requireOwnOrder(src, orderId)
+    if not Utils.InTable(CANCELLABLE_STATUSES, order.status) then
+        error('order_not_active')
+    end
+
+    local ped = GetPlayerPed(src)
+    if not ped or ped == 0 then error('player_not_found') end
+    local coords = GetEntityCoords(ped)
+
+    MySQL.update.await(
+        'UPDATE st_orders SET custom_marker_x = ?, custom_marker_y = ?, custom_marker_z = ? WHERE id = ?',
+        { coords.x, coords.y, coords.z, orderId }
+    )
+    Logs.Write(emp.id, 'order_marker_set', ('%s hat eine eigene Markierung für Auftrag #%s gesetzt.'):format(emp.name, orderId))
+
+    TriggerClientEvent('speditions-tablet:client:customMarker', src, coords.x, coords.y, coords.z)
+
+    return { ok = true }
+end
+
 --- Disponent/GF genehmigt oder lehnt eine Abbruch-Anfrage eines Fahrers ab.
 function Orders.ResolveCancelRequest(src, requestId, approve)
     local emp = Employees.RequirePermission(src, 'dispatch')
@@ -919,6 +949,12 @@ RPC.Register('driver:requestCancelOrder', function(src, payload)
     local orderId = Utils.SanitizeNumber(payload.orderId, 1)
     if not orderId then error('invalid_payload') end
     return Orders.RequestCancelByDriver(src, orderId, payload.reason)
+end)
+
+RPC.Register('driver:setCustomMarker', function(src, payload)
+    local orderId = Utils.SanitizeNumber(payload.orderId, 1)
+    if not orderId then error('invalid_payload') end
+    return Orders.SetCustomMarker(src, orderId)
 end)
 
 RPC.Register('gf:orders:all', function(src, payload)

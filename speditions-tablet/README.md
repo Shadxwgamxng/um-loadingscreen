@@ -501,6 +501,27 @@ konkrete Meldung an, statt nur des rohen Fehlercodes.
   "Frachtarten"), Gefahrgut-Kennzeichnung, Entfernung, Abhol-/Zielort
   samt GPS-Koordinaten, zugewiesenes Fahrzeug, Ausstellungsdatum,
   disponierender Mitarbeiter und Lieferfrist.
+- **Eigene Markierung**: Unter jedem gerade aktiven Auftrag (angenommen,
+  Anfahrt, beladen, Entladung) kann der Fahrer über "Neue Markierung setzen"
+  einen eigenen Wegpunkt/Blip an seiner aktuellen Position setzen - z.B. um
+  sich einen Treffpunkt oder eine Zwischenstation zu merken, unabhängig von
+  den festen Be-/Entladepunkten. Die Position wird ausschließlich
+  serverseitig ermittelt (`GetEntityCoords`, kein Client-Trust, exakt wie
+  bei "Aktuelle Position übernehmen" im Reiter "Orte") - anders als dort
+  werden die Koordinaten dem Fahrer aber **nie** angezeigt, es gibt nur eine
+  Bestätigung. Erneutes Setzen ersetzt die vorherige Markierung. Siehe
+  `Orders.SetCustomMarker` in `server/sv_orders.lua`.
+
+  **Bestandsinstallationen:** die drei neuen Spalten `custom_marker_x/y/z`
+  auf `st_orders` werden nur bei einer komplett frischen Installation
+  automatisch aus `sql/install.sql` angelegt. Läuft euer Server schon
+  länger, einmalig folgendes SQL gegen eure Datenbank ausführen:
+  ```sql
+  ALTER TABLE `st_orders`
+      ADD COLUMN `custom_marker_x` FLOAT NULL,
+      ADD COLUMN `custom_marker_y` FLOAT NULL,
+      ADD COLUMN `custom_marker_z` FLOAT NULL;
+  ```
 - **Bekannte Einschränkungen**: Die Zeit- und Nähe-Prüfung für das Be-/
   Entladen läuft ausschließlich clientseitig (kein serverseitiger Schutz vor
   Manipulation der lokalen Wartezeit) - für ein PvE-Logistikfeature wie

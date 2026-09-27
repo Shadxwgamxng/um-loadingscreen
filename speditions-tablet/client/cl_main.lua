@@ -6,6 +6,7 @@ local tabletOpen = false
 local pendingRpc = {}
 local rpcCounter = 0
 local tabletPropEntity = nil
+local customMarkerBlip = nil
 
 --- Hängt das konfigurierte Tablet-Prop an die Hand des Spielers, solange
 --- das Tablet geöffnet ist (rein optisch, keine Animation/Bewegungssperre).
@@ -157,4 +158,27 @@ end)
 RegisterNetEvent('speditions-tablet:client:waypoint', function(x, y, label)
     SetNewWaypoint(x + 0.0, y + 0.0)
     TriggerEvent('speditions-tablet:client:notify', ('Wegpunkt gesetzt: %s'):format(label or 'Ziel'), 'info')
+end)
+
+--- Eigene, frei gesetzte Markierung des Fahrers (server:
+--- Orders.SetCustomMarker in server/sv_orders.lua) - ersetzt einen evtl.
+--- vorher gesetzten eigenen Blip, statt ihn zu duplizieren, und setzt
+--- zusätzlich einen normalen GPS-Wegpunkt dorthin.
+RegisterNetEvent('speditions-tablet:client:customMarker', function(x, y, z)
+    if customMarkerBlip and DoesBlipExist(customMarkerBlip) then
+        RemoveBlip(customMarkerBlip)
+        customMarkerBlip = nil
+    end
+
+    customMarkerBlip = AddBlipForCoord(x + 0.0, y + 0.0, z + 0.0)
+    SetBlipSprite(customMarkerBlip, 8)
+    SetBlipColour(customMarkerBlip, 5)
+    SetBlipScale(customMarkerBlip, 0.9)
+    SetBlipAsShortRange(customMarkerBlip, false)
+    BeginTextCommandSetBlipName('STRING')
+    AddTextComponentString('Eigene Markierung')
+    EndTextCommandSetBlipName(customMarkerBlip)
+
+    SetNewWaypoint(x + 0.0, y + 0.0)
+    TriggerEvent('speditions-tablet:client:notify', 'Eigene Markierung gesetzt.', 'info')
 end)

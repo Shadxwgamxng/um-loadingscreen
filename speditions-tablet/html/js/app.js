@@ -76,6 +76,8 @@ const ERROR_MESSAGES = {
     order_not_in_transit: 'Auftrag ist nicht unterwegs.',
     order_not_reassignable: 'Auftrag kann nicht neu zugewiesen werden.',
     order_not_cancellable: 'Auftrag kann in diesem Status nicht abgebrochen werden.',
+    order_not_active: 'Für diesen Auftrag kann aktuell keine Markierung gesetzt werden.',
+    player_not_found: 'Deine Position konnte nicht ermittelt werden - bitte erneut versuchen.',
     cancel_already_requested: 'Für diesen Auftrag läuft bereits eine Abbruch-Anfrage.',
     cancel_request_not_found: 'Abbruch-Anfrage nicht gefunden.',
     cancel_request_already_resolved: 'Diese Abbruch-Anfrage wurde bereits bearbeitet.',
@@ -787,6 +789,7 @@ VIEWS['driver-orders'] = async (root) => {
             actions = `<span class="view-subtitle" style="margin:0;">${cargoHint[o.status]}</span>`;
         }
         if (CANCELLABLE_STATUSES.includes(o.status)) {
+            actions += `<button class="btn btn-sm" style="margin-left:6px;" onclick="Actions.setCustomMarker(${o.id})">Neue Markierung setzen</button>`;
             actions += o.pending_cancel_request_id
                 ? `<span class="pill pill-warning" style="margin-left:6px;">Abbruch angefragt</span>`
                 : `<button class="btn btn-sm btn-danger" style="margin-left:6px;" onclick="Actions.requestCancelOrder(${o.id})">Abbrechen</button>`;
@@ -1617,6 +1620,11 @@ Actions.selfAssignOrder = async (orderId) => {
     await call('driver:selfAssignOrder', { orderId });
     toast('Auftrag übernommen', `Auftrag #${orderId} wurde dir zugewiesen - du kannst ihn jetzt annehmen.`, 'success');
     showView('driver-orders');
+};
+
+Actions.setCustomMarker = async (orderId) => {
+    await call('driver:setCustomMarker', { orderId });
+    toast('Markierung gesetzt', 'Ein Wegpunkt zu deiner aktuellen Position wurde gesetzt.', 'success');
 };
 
 Actions.requestCancelOrder = (orderId) => {
