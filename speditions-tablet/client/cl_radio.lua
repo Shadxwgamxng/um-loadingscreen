@@ -119,18 +119,35 @@ end)
 -- effort, per ServerCall) an den Server, damit die Teilnehmerliste stimmt.
 -- ---------------------------------------------------------
 
--- TEMPORÄRE DIAGNOSE-AUSGABEN (radioJoin) - s. server/sv_radio.lua,
--- nach erfolgreicher Diagnose wieder entfernen.
+--- ServerCall() liefert die Antwort des generischen RPC-Dispatchers
+--- (server/sv_rpc.lua) 1:1 durch: { ok = true, result = <Rückgabe des
+--- Handlers> } bzw. { ok = false, error = <Code> }. Die NUI/app.js
+--- erwartet dagegen die flache Form direkt vom Handler (z.B.
+--- { ok = true, joined = true, members = {...} }). Ohne dieses Auspacken
+--- landet das eigentliche Ergebnis unter res.result statt auf oberster
+--- Ebene - res.ok bleibt zwar true (dadurch wirkt der Aufruf nach außen
+--- "erfolgreich"), aber alle anderen Felder (joined, members, channel, ...)
+--- sind für die NUI unsichtbar/undefined. Das war die eigentliche Ursache
+--- dafür, dass "Funk beitreten" nie sichtbar auf "Funk verlassen"
+--- umgeschaltet hat und die Teilnehmerliste immer leer blieb, obwohl
+--- pma-voice selbst schon korrekt verbunden war.
+local function unwrapServerCall(res)
+    if not (res and res.ok) then
+        return { ok = false, error = res and res.error }
+    end
+    local out = res.result or {}
+    out.ok = true
+    return out
+end
+
 RegisterNUICallback('radioJoin', function(_, cb)
-    print('[FUNK-DEBUG] NUI-Callback radioJoin ausgelöst, rufe ServerCall(radio:join) auf')
     ServerCall('radio:join', {}, function(res)
-        print(('[FUNK-DEBUG] ServerCall(radio:join) Antwort erhalten: %s'):format(json.encode(res or 'NIL')))
-        if res and res.ok then
+        local unwrapped = unwrapServerCall(res)
+        if unwrapped.ok then
             joined = true
             applyState()
         end
-        cb(res or { ok = false })
-        print('[FUNK-DEBUG] cb() an NUI zurückgerufen')
+        cb(unwrapped)
     end)
 end)
 
@@ -138,7 +155,7 @@ RegisterNUICallback('radioLeave', function(_, cb)
     ServerCall('radio:leave', {}, function(res)
         joined = false
         applyState()
-        cb(res or { ok = false })
+        cb(unwrapServerCall(res))
     end)
 end)
 
@@ -163,35 +180,36 @@ RegisterNUICallback('radioSetVolume', function(data, cb)
 end)
 
 RegisterNUICallback('radioSetDisplayName', function(data, cb)
-    ServerCall('radio:setDisplayName', { name = data.name }, function(res) cb(res or { ok = false }) end)
+    ServerCall('radio:setDisplayName', { name = data.name }, function(res) cb(unwrapServerCall(res)) end)
 end)
 
 RegisterNUICallback('radioGetChannelMembers', function(_, cb)
-    ServerCall('radio:channelMembers', {}, function(res) cb(res or { ok = false }) end)
+    ServerCall('radio:channelMembers', {}, function(res) cb(unwrapServerCall(res)) end)
 end)
 
 RegisterNUICallback('radioCallUser', function(data, cb)
-    ServerCall('radio:callUser', { targetSrc = data.targetSrc }, function(res) cb(res or { ok = false }) end)
+    ServerCall('radio:callUser', { targetSrc = data.targetSrc }, function(res) cb(unwrapServerCall(res)) end)
 end)
 
 RegisterNUICallback('radioAnswerCall', function(_, cb)
     ServerCall('radio:answerCall', {}, function(res)
-        if res and res.ok then
-            activeCallChannel = res.channel
-            if pmaVoiceReady() then exports['pma-voice']:setCallChannel(res.channel) end
+        local unwrapped = unwrapServerCall(res)
+        if unwrapped.ok then
+            activeCallChannel = unwrapped.channel
+            if pmaVoiceReady() then exports['pma-voice']:setCallChannel(unwrapped.channel) end
         end
-        cb(res or { ok = false })
+        cb(unwrapped)
     end)
 end)
 
 RegisterNUICallback('radioDeclineCall', function(_, cb)
-    ServerCall('radio:declineCall', {}, function(res) cb(res or { ok = false }) end)
+    ServerCall('radio:declineCall', {}, function(res) cb(unwrapServerCall(res)) end)
 end)
 
 RegisterNUICallback('radioHangup', function(_, cb)
     activeCallChannel = nil
     if pmaVoiceReady() then exports['pma-voice']:setCallChannel(0) end
-    ServerCall('radio:hangup', {}, function(res) cb(res or { ok = false }) end)
+    ServerCall('radio:hangup', {}, function(res) cb(unwrapServerCall(res)) end)
 end)
 
 --- Hält das laufende Gespräch - trennt die eigene pma-voice-Verbindung zum
@@ -200,19 +218,21 @@ end)
 --- selbst zu vergessen (activeCallChannel bleibt gesetzt, für radioResumeCall).
 RegisterNUICallback('radioHoldCall', function(_, cb)
     ServerCall('radio:holdCall', {}, function(res)
-        if res and res.ok and pmaVoiceReady() then
+        local unwrapped = unwrapServerCall(res)
+        if unwrapped.ok and pmaVoiceReady() then
             exports['pma-voice']:setCallChannel(0)
         end
-        cb(res or { ok = false })
+        cb(unwrapped)
     end)
 end)
 
 RegisterNUICallback('radioResumeCall', function(_, cb)
     ServerCall('radio:resumeCall', {}, function(res)
-        if res and res.ok and pmaVoiceReady() and activeCallChannel then
+        local unwrapped = unwrapServerCall(res)
+        if unwrapped.ok and pmaVoiceReady() and activeCallChannel then
             exports['pma-voice']:setCallChannel(activeCallChannel)
         end
-        cb(res or { ok = false })
+        cb(unwrapped)
     end)
 end)
 
