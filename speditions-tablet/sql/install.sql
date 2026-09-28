@@ -399,3 +399,44 @@ CREATE TABLE IF NOT EXISTS `st_activity_logs` (
     PRIMARY KEY (`id`),
     KEY `idx_log_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Warnmeldungen (Verkehrswarn-App, server/sv_warnings.lua): Position wird
+-- EINMALIG beim Erstellen serverseitig aus GetEntityCoords übernommen (nie
+-- vom Client). Kein eigener 'confirmed'-Status - Bestätigen verlängert nur
+-- expires_at + zählt hoch, bleibt 'active'; 'expired' wird periodisch
+-- nachgetragen, die aktive Abfrage filtert zusätzlich IMMER expires_at >
+-- NOW() und ist damit nie von diesem Hintergrund-Tick abhängig.
+CREATE TABLE IF NOT EXISTS `st_warnings` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `category` VARCHAR(20) NOT NULL,
+    `subcategory` VARCHAR(30) NOT NULL,
+    `x` DOUBLE NOT NULL,
+    `y` DOUBLE NOT NULL,
+    `z` DOUBLE NOT NULL,
+    `street_name` VARCHAR(100) NULL,
+    `created_by` INT UNSIGNED NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `expires_at` DATETIME NOT NULL,
+    `status` ENUM('active','removed','expired') NOT NULL DEFAULT 'active',
+    `confirm_count` INT UNSIGNED NOT NULL DEFAULT 0,
+    `removed_by` INT UNSIGNED NULL,
+    `removed_at` DATETIME NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_warnings_status` (`status`),
+    CONSTRAINT `fk_warnings_creator` FOREIGN KEY (`created_by`) REFERENCES `st_employees` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Je ein Eintrag pro Mitarbeiter und Meldung (UNIQUE) - verhindert, dass
+-- eine einzelne Person eine Meldung durch wiederholtes Bestätigen
+-- unbegrenzt am Leben hält. confirm_count auf st_warnings ist COUNT(*)
+-- dieser Tabelle.
+CREATE TABLE IF NOT EXISTS `st_warning_confirmations` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `warning_id` INT UNSIGNED NOT NULL,
+    `employee_id` INT UNSIGNED NOT NULL,
+    `confirmed_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_warning_confirmation` (`warning_id`,`employee_id`),
+    CONSTRAINT `fk_wc_warning` FOREIGN KEY (`warning_id`) REFERENCES `st_warnings` (`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_wc_employee` FOREIGN KEY (`employee_id`) REFERENCES `st_employees` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

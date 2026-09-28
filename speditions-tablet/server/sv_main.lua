@@ -37,6 +37,8 @@ local function sessionPayload(emp)
         cargoTypes = CargoTypes.Names(),
         liveMapBounds = Tracking and Tracking.GetMapBounds() or (Config.LiveMap and Config.LiveMap.bounds),
         radioChannels = Config.Radio,
+        warningCategories = Config.Warnings.categories,
+        warningLifetimeMinutes = Config.Warnings.lifetimeMinutes,
     }
 end
 

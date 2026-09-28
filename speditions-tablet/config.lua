@@ -109,19 +109,20 @@ Config.Permissions = {
     { key = 'activity_log_view', label = 'Aktivitätsprotokoll einsehen', group = 'Sonstiges' },
     { key = 'stats_view',        label = 'Übersicht/Statistik-Dashboard einsehen', group = 'Sonstiges' },
     { key = 'console_view',      label = 'Fehler-Konsole einsehen (RPC-/Datenbankfehler)', group = 'Sonstiges' },
+    { key = 'warnings_manage',   label = 'Warnmeldungen moderieren (fremde Meldungen von überall löschen)', group = 'Sonstiges' },
 }
 
 -- Erstbefüllung der drei mitgelieferten Basisrollen (nur beim allerersten
 -- Anlegen der jeweiligen Rolle in st_roles relevant, siehe oben).
 Config.DefaultRolePermissions = {
     fahrer = { 'driver_actions' },
-    disponent = { 'dispatch', 'live_map_view' },
+    disponent = { 'dispatch', 'live_map_view', 'warnings_manage' },
     -- driver_actions dabei: die Geschäftsführung soll alles können, was ein
     -- LKW-Fahrer auch kann (Fahrerkarte, Aufträge fahren, eigene Statistik,
     -- Nachrichten empfangen) - zusätzlich zu den GF-eigenen Funktionen.
     geschaeftsfuehrung = {
         'driver_actions', 'dispatch', 'live_map_view', 'fleet_manage', 'locations_manage', 'cargo_types_manage', 'employees_manage', 'roles_manage',
-        'finance_view', 'finance_payout', 'wages_manage', 'activity_log_view', 'stats_view', 'console_view',
+        'finance_view', 'finance_payout', 'wages_manage', 'activity_log_view', 'stats_view', 'console_view', 'warnings_manage',
     },
 }
 
@@ -163,6 +164,57 @@ Config.Radio = {
     defaultVolume = 100, -- 0-100, s. pma-voice setRadioVolume
     callRingSeconds = 20, -- wie lange ein Anruf klingelt, bevor er automatisch als "verpasst" gilt
     pmaChannelBase = 4100, -- echter pma-voice-Kanal für Tablet-Kanal 1 (s. Erklärung oben)
+}
+
+-- =========================================================
+-- WARNMELDUNGEN (Verkehrswarn-App, server/sv_warnings.lua +
+-- client/cl_warnings.lua, eigenständige App "Warnmeldungen")
+-- =========================================================
+Config.Warnings = {
+    lifetimeMinutes = 120, -- Gültigkeitsdauer ab Erstellen bzw. ab letzter Bestätigung
+    clearOnRestart = true, -- CLEAR_WARNINGS_ON_RESTART: true = alle Meldungen bei jedem Ressourcenstart löschen
+    createCooldownSeconds = 20, -- Mindestabstand zwischen zwei Meldungen desselben Mitarbeiters
+    -- Bestätigen/"Nicht mehr vorhanden" verlangt räumliche Nähe zur Meldung
+    -- (verhindert Bewertung quer über die Karte) - wer warnings_manage hat,
+    -- darf das unabhängig von der Entfernung (Moderation).
+    moderationRadiusMeters = 300,
+    proximity = {
+        checkIntervalMs = 2000,
+        thresholdsMeters = { 1000, 500, 250 }, -- absteigend sortiert
+        -- Vereinfachte Richtungsprüfung ohne Routing-Engine: Peilung vom
+        -- Spieler zur Meldung darf höchstens so weit von GetEntityHeading()
+        -- abweichen (0-180°), damit die Meldung als "vor mir" gilt.
+        approachAngleDegrees = 70,
+    },
+    -- Katalog aller wählbaren Kategorien/Unterkategorien - Whitelist für
+    -- warnings:create (server) UND Quelle für den Auswahl-Dialog (NUI, via
+    -- session:whoami -> State.config.warningCategories, keine zweite Kopie
+    -- im JS). `color` verweist auf die bereits vorhandenen --yellow/--blue/
+    -- --red-Töne (style.css), keine neuen Farben nötig.
+    categories = {
+        {
+            key = 'hazard', label = 'Gefahrenstelle', color = 'yellow',
+            subcategories = {
+                { key = 'traffic_jam', label = 'Stau' },
+                { key = 'accident', label = 'Unfall' },
+                { key = 'hazard', label = 'Gefahrenstelle' },
+            },
+        },
+        {
+            key = 'speed_camera', label = 'Blitzer', color = 'blue',
+            subcategories = {
+                { key = 'mobile_camera', label = 'Mobiler Blitzer' },
+                { key = 'camera_trailer', label = 'Blitzer-Anhänger' },
+            },
+        },
+        {
+            key = 'police', label = 'Polizeipräsenz', color = 'red',
+            subcategories = {
+                { key = 'patrol_car', label = 'Streifenwagen' },
+                { key = 'checkpoint', label = 'Verkehrskontrolle' },
+            },
+        },
+    },
 }
 
 -- =========================================================

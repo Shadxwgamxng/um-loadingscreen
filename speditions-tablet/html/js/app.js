@@ -388,6 +388,11 @@ const APPS = [
     // stillschweigend verschwinden zu lassen.
     { id: 'disposition', label: 'Disposition', perm: null, icon: 'clipboard' },
     { id: 'funk', label: 'Funk', perm: null, icon: 'walkie' },
+    // Warnmeldungen - wie Disposition/Funk perm-los (für jeden angemeldeten
+    // Mitarbeiter, nicht nur Fahrer): Verkehrswarnungen sind ein
+    // Sicherheits-Feature, kein rollenabhängiges Werkzeug, siehe
+    // VIEWS['warnmeldungen'].
+    { id: 'warnmeldungen', label: 'Warnmeldungen', perm: null, icon: 'warning-triangle' },
 ];
 
 // Kleines, selbst gezeichnetes Icon-Set (kein Emoji, keine externen
@@ -433,6 +438,17 @@ const APP_ICON_PATHS = {
     'chevron-left': '<path d="M15 5l-7 7 7 7"/>',
     'chevron-right': '<path d="M9 5l7 7-7 7"/>',
     power: '<path d="M12 3v8"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/>',
+    // Icon-Set für die App "Warnmeldungen" (VIEWS['warnmeldungen']): je ein
+    // eigenes Icon pro Unterkategorie plus ein generisches Warndreieck für
+    // die Home-Kachel/den Melde-Button.
+    'warning-triangle': '<path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4"/><circle cx="12" cy="17" r="1"/>',
+    'traffic-jam': '<rect x="3" y="10" width="7" height="7" rx="1.5"/><rect x="14" y="7" width="7" height="10" rx="1.5"/><path d="M6.5 10V8a2 2 0 0 1 2-2H10"/>',
+    accident: '<path d="m4 17 3-8h10l3 8"/><path d="M4 17h16"/><circle cx="8" cy="17" r="1.4"/><circle cx="16" cy="17" r="1.4"/><path d="m9 9 6 6M15 9l-6 6"/>',
+    camera: '<rect x="3" y="8" width="14" height="11" rx="2"/><path d="M7 8 9 5h4l2 3"/><circle cx="10" cy="13.5" r="3.2"/><path d="M18 11v5"/>',
+    'camera-trailer': '<rect x="2" y="9" width="12" height="9" rx="2"/><circle cx="8" cy="13.5" r="2.6"/><path d="M14 12h4l3 2.5V18h-7"/><circle cx="18.5" cy="19" r="1.3"/>',
+    'police-shield': '<path d="M12 3 5 6v5c0 4.5 3 7.8 7 10 4-2.2 7-5.5 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/>',
+    'police-car': '<path d="M4 16V11l2-5h12l2 5v5"/><path d="M4 16h16"/><circle cx="7.5" cy="17.5" r="1.6"/><circle cx="16.5" cy="17.5" r="1.6"/><path d="M11 6v3"/><path d="M9 9h6"/>',
+    checkpoint: '<path d="M4 20V6l4 2 4-2 4 2 4-2v9l-4 2-4-2-4 2-4-2Z"/><path d="M4 20h16"/>',
 };
 
 function iconSvg(key) {
@@ -497,6 +513,10 @@ function renderHome() {
             <div class="category-tile" onclick="showView('funk')">
                 <div class="tile-icon cat-funk">${iconSvg('walkie')}</div>
                 <div class="tile-label">Funk</div>
+            </div>
+            <div class="category-tile" onclick="showView('warnmeldungen')">
+                <div class="tile-icon cat-warnmeldungen">${iconSvg('warning-triangle')}</div>
+                <div class="tile-label">Warnmeldungen</div>
             </div>
         </div>`;
     updateClockElements();
@@ -1106,6 +1126,7 @@ function handlePush(event, data) {
         // Actions.doLiveMapSync) - eigene Kartengrenzen übernehmen, damit alle
         // gleichzeitig geöffneten Live-Karten-Ansichten in Sync bleiben.
         'dispatch:mapBoundsChanged': () => { if (State.config) State.config.liveMapBounds = data.bounds; },
+        'warnings:changed': () => handleWarningsPush(data),
     };
     if (map[event]) map[event]();
 }
@@ -1187,6 +1208,15 @@ async function renderSectionedApp(root, appId, sections) {
             });
         });
     }
+
+    // Ein Sektionswechsel läuft NICHT über showView() (das würde die Rail
+    // neu aus QUICKSWITCH_VIEWS aufbauen statt sie zu behalten), daher
+    // muss hier - genau wie in showView() - ein evtl. von der vorherigen
+    // Sektion laufender Poll-Intervall (activeViewInterval, z.B. die
+    // Live-Aktualisierung der Warnmeldungen-Karte) selbst gestoppt werden.
+    // Sonst liefe er unsichtbar gegen die inzwischen ersetzte, losgelöste
+    // DOM weiter, bis die App komplett verlassen wird.
+    if (activeViewInterval) { clearInterval(activeViewInterval); activeViewInterval = null; }
 
     root.innerHTML = '<div class="card-hint">Lädt...</div>';
     const active = visible.find((s) => s.key === sectionedAppActiveKey[appId]);
@@ -1991,6 +2021,285 @@ function dispoPointerUp() {
     );
 }
 
+// ---------- WARNMELDUNGEN ----------
+// Verkehrswarn-App: Karte mit zoom-/verschiebbarer Ansicht (Pointer Events
+// - dasselbe zuverlässige Muster wie das Dispositions-Drag&Drop oben, statt
+// natives HTML5-Verhalten, das in FiveM/CEF nicht zuverlässig funktioniert),
+// Melden per GPS in drei Antippschritten, Bestätigen/Verwerfen, "Meine
+// Meldungen", Geräteeinstellungen. Der Katalog (Kategorien/Unterkategorien/
+// Farben) kommt 1:1 aus Config.Warnings.categories (Lua) über
+// State.config.warningCategories - keine zweite, separat gepflegte Kopie.
+// Annäherungsansagen selbst laufen komplett in client/cl_warnings.lua
+// (reine Lua-Logik, unabhängig vom offenen/geschlossenen Tablet) - diese
+// App zeigt nur die Karte/Verwaltung an.
+
+const WARNING_SUBCATEGORY_ICONS = {
+    traffic_jam: 'traffic-jam',
+    accident: 'accident',
+    hazard: 'warning-triangle',
+    mobile_camera: 'camera',
+    camera_trailer: 'camera-trailer',
+    patrol_car: 'police-car',
+    checkpoint: 'checkpoint',
+};
+
+function warningCatalog() {
+    return (State.config && State.config.warningCategories) || [];
+}
+
+function warningLookup(subcategoryKey) {
+    for (const cat of warningCatalog()) {
+        const sub = cat.subcategories.find((s) => s.key === subcategoryKey);
+        if (sub) return { cat, sub };
+    }
+    return null;
+}
+
+function handleWarningsPush(data) {
+    if (data.type === 'created') {
+        toast('Neue Warnmeldung', 'Eine neue Verkehrswarnung wurde gemeldet.', 'warning');
+    }
+    refreshIfViewing(['warnmeldungen']);
+}
+
+VIEWS['warnmeldungen'] = async (root) => {
+    await renderSectionedApp(root, 'warnmeldungen', [
+        { key: 'map', label: 'Karte', render: renderWarningsMap },
+        { key: 'mine', label: 'Meine Meldungen', render: renderWarningsMine },
+        { key: 'settings', label: 'Einstellungen', render: renderWarningsSettings },
+    ]);
+};
+
+// --- Karte: Zoom/Pan-Zustand -------------------------------------------
+// Teilt sich worldToMapPercent()/DEFAULT_MAP_BOUNDS/State.config.
+// liveMapBounds 1:1 mit der Live-Karte (s.o.) - neu ist nur die
+// transformierende Hülle (.warnings-map-stage) darum, Marker bleiben
+// simple links/top-Prozent-Divs und zoomen/verschieben automatisch mit.
+let warningsMapView = null; // { scale, minScale, maxScale, tx, ty, baseWidth, baseHeight }
+let warningsMapLastData = {}; // warningId -> zuletzt geladene Meldung (für Marker-Klick ohne Extra-Request)
+let warningsMapOwnPos = null; // { x, y } letzte bekannte eigene Position
+
+function warningsMapClamp() {
+    const v = warningsMapView;
+    const viewport = document.getElementById('warnings-map-viewport');
+    if (!v || !viewport) return;
+    v.scale = Math.max(v.minScale, Math.min(v.maxScale, v.scale));
+    const stageW = v.baseWidth * v.scale;
+    const stageH = v.baseHeight * v.scale;
+    const minTx = Math.min(0, viewport.clientWidth - stageW);
+    const minTy = Math.min(0, viewport.clientHeight - stageH);
+    v.tx = Math.max(minTx, Math.min(0, v.tx));
+    v.ty = Math.max(minTy, Math.min(0, v.ty));
+}
+
+function warningsMapApplyTransform() {
+    const stage = document.getElementById('warnings-map-stage');
+    if (!stage || !warningsMapView) return;
+    stage.style.transform = `translate(${warningsMapView.tx}px, ${warningsMapView.ty}px) scale(${warningsMapView.scale})`;
+}
+
+function warningsMapInitView() {
+    const viewport = document.getElementById('warnings-map-viewport');
+    const img = document.getElementById('warnings-map-img');
+    if (!viewport || !img) return;
+    const baseWidth = 2400;
+    const baseHeight = (img.naturalWidth && img.naturalHeight) ? baseWidth * (img.naturalHeight / img.naturalWidth) : baseWidth * 0.75;
+    const fitScale = Math.max(0.05, viewport.clientWidth / baseWidth);
+    warningsMapView = { scale: fitScale, minScale: fitScale, maxScale: fitScale * 4, tx: 0, ty: (viewport.clientHeight - baseHeight * fitScale) / 2, baseWidth, baseHeight };
+    warningsMapClamp();
+    warningsMapApplyTransform();
+}
+
+function warningsMapRenderMarkers() {
+    const markersEl = document.getElementById('warnings-map-markers');
+    if (!markersEl) return;
+    const markers = Object.values(warningsMapLastData).map((w) => {
+        const found = warningLookup(w.subcategory);
+        const color = found ? found.cat.color : 'gray';
+        const label = found ? found.sub.label : w.subcategory;
+        const icon = WARNING_SUBCATEGORY_ICONS[w.subcategory] || 'warning-triangle';
+        const [px, py] = worldToMapPercent(w.x, w.y);
+        return `<div class="warning-marker warning-marker-${color}" style="left:${px}%;top:${py}%;" title="${escapeHtml(label)}" onclick="Actions.openWarningDetail(${w.id})">${iconSvg(icon)}</div>`;
+    }).join('');
+    const ownMarker = warningsMapOwnPos ? (() => {
+        const [px, py] = worldToMapPercent(warningsMapOwnPos.x, warningsMapOwnPos.y);
+        return `<div class="warnings-own-marker" style="left:${px}%;top:${py}%;" title="Deine Position"></div>`;
+    })() : '';
+    markersEl.innerHTML = markers + ownMarker;
+}
+
+function warningsMapCenterOn(worldX, worldY) {
+    if (!warningsMapView) return;
+    const viewport = document.getElementById('warnings-map-viewport');
+    if (!viewport) return;
+    const [px, py] = worldToMapPercent(worldX, worldY);
+    const stageX = (px / 100) * warningsMapView.baseWidth;
+    const stageY = (py / 100) * warningsMapView.baseHeight;
+    warningsMapView.tx = viewport.clientWidth / 2 - stageX * warningsMapView.scale;
+    warningsMapView.ty = viewport.clientHeight / 2 - stageY * warningsMapView.scale;
+    warningsMapClamp();
+    warningsMapApplyTransform();
+}
+
+// --- Karte: Pointer-Events fürs Verschieben (1 Zeiger) + Pinch-Zoom (2
+// Zeiger) - dasselbe robuste Pointer-Events-Muster wie beim Dispositions-
+// Drag&Drop, plus Mausrad als Haupt-Zoom-Weg (FiveM-Spieler nutzen Maus,
+// kein echtes Touch) und sichtbare +/-/Reset-Buttons als Redundanz.
+const warningsMapPointers = new Map(); // pointerId -> { x, y }
+let warningsMapPanState = null; // { lastX, lastY }
+let warningsMapPinchState = null; // { startDist, startScale }
+
+function warningsMapPointerDown(ev) {
+    if (ev.target.closest('.warning-marker') || ev.target.closest('button')) return;
+    ev.currentTarget.setPointerCapture(ev.pointerId);
+    warningsMapPointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if (warningsMapPointers.size === 1) {
+        warningsMapPanState = { lastX: ev.clientX, lastY: ev.clientY };
+    } else if (warningsMapPointers.size === 2) {
+        warningsMapPanState = null;
+        const pts = [...warningsMapPointers.values()];
+        warningsMapPinchState = { startDist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y), startScale: warningsMapView ? warningsMapView.scale : 1 };
+    }
+}
+
+function warningsMapPointerMove(ev) {
+    if (!warningsMapPointers.has(ev.pointerId) || !warningsMapView) return;
+    warningsMapPointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if (warningsMapPointers.size === 1 && warningsMapPanState) {
+        warningsMapView.tx += ev.clientX - warningsMapPanState.lastX;
+        warningsMapView.ty += ev.clientY - warningsMapPanState.lastY;
+        warningsMapPanState.lastX = ev.clientX;
+        warningsMapPanState.lastY = ev.clientY;
+        warningsMapClamp();
+        warningsMapApplyTransform();
+    } else if (warningsMapPointers.size === 2 && warningsMapPinchState) {
+        const pts = [...warningsMapPointers.values()];
+        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        warningsMapView.scale = warningsMapPinchState.startScale * (dist / warningsMapPinchState.startDist);
+        warningsMapClamp();
+        warningsMapApplyTransform();
+    }
+}
+
+function warningsMapPointerUp(ev) {
+    warningsMapPointers.delete(ev.pointerId);
+    if (warningsMapPointers.size < 2) warningsMapPinchState = null;
+    if (warningsMapPointers.size === 0) warningsMapPanState = null;
+}
+
+function warningsMapZoomAt(cursorX, cursorY, factor) {
+    if (!warningsMapView) return;
+    const oldScale = warningsMapView.scale;
+    const stageX = (cursorX - warningsMapView.tx) / oldScale;
+    const stageY = (cursorY - warningsMapView.ty) / oldScale;
+    warningsMapView.scale = oldScale * factor;
+    warningsMapView.tx = cursorX - stageX * warningsMapView.scale;
+    warningsMapView.ty = cursorY - stageY * warningsMapView.scale;
+    warningsMapClamp();
+    warningsMapApplyTransform();
+}
+
+function warningsMapWheel(ev) {
+    ev.preventDefault();
+    const rect = ev.currentTarget.getBoundingClientRect();
+    warningsMapZoomAt(ev.clientX - rect.left, ev.clientY - rect.top, ev.deltaY < 0 ? 1.15 : 1 / 1.15);
+}
+
+async function renderWarningsMap(root) {
+    root.innerHTML = `
+        <h1 class="view-title">Warnmeldungen</h1>
+        <p class="view-subtitle">Verkehrs- und Gefahrenmeldungen in Echtzeit - antippen für Details, ziehen zum Verschieben, Mausrad/Buttons zum Zoomen.</p>
+        <div class="warnings-map-viewport" id="warnings-map-viewport">
+            <div class="warnings-map-stage" id="warnings-map-stage">
+                <img id="warnings-map-img" class="warnings-map-img" src="img/map.jpg" alt="Karte" onerror="this.closest('.warnings-map-viewport').classList.add('live-map-img-missing')" />
+                <div class="warnings-map-markers" id="warnings-map-markers"></div>
+            </div>
+            <div class="warnings-zoom-controls">
+                <button class="warnings-zoom-btn" onclick="Actions.warningsMapZoomBtn(1)">+</button>
+                <button class="warnings-zoom-btn" onclick="Actions.warningsMapZoomBtn(-1)">-</button>
+                <button class="warnings-zoom-btn warnings-zoom-btn-reset" onclick="warningsMapInitView()">Reset</button>
+            </div>
+            <button class="warnings-fab" onclick="Actions.openWarningCategoryModal()" title="Neue Warnmeldung">${iconSvg('warning-triangle')}</button>
+        </div>
+        <div class="btn-row" style="margin-top:12px;">
+            <button class="btn btn-sm" onclick="Actions.warningsMapLocateMe()">${iconSvg('pin')}<span>Zu meiner Position</span></button>
+        </div>`;
+
+    const viewport = document.getElementById('warnings-map-viewport');
+    viewport.addEventListener('pointerdown', warningsMapPointerDown);
+    viewport.addEventListener('pointermove', warningsMapPointerMove);
+    viewport.addEventListener('pointerup', warningsMapPointerUp);
+    viewport.addEventListener('pointercancel', warningsMapPointerUp);
+    viewport.addEventListener('wheel', warningsMapWheel, { passive: false });
+
+    const img = document.getElementById('warnings-map-img');
+    if (img.complete && img.naturalWidth) warningsMapInitView();
+    else img.addEventListener('load', warningsMapInitView, { once: true });
+
+    const refresh = async () => {
+        const d = await call('warnings:list');
+        warningsMapLastData = {};
+        (d.warnings || []).forEach((w) => { warningsMapLastData[w.id] = w; });
+        warningsMapRenderMarkers();
+    };
+
+    await refresh();
+    call('warnings:currentPosition').then((pos) => { warningsMapOwnPos = pos; warningsMapRenderMarkers(); }).catch(() => {});
+    activeViewInterval = setInterval(refresh, LIVE_MAP_POLL_MS);
+}
+
+async function renderWarningsMine(root) {
+    root.innerHTML = `
+        <h1 class="view-title">Meine Meldungen</h1>
+        <p class="view-subtitle">Deine zuletzt erstellten Warnmeldungen.</p>
+        <div id="warnings-mine-list" class="grid grid-2"></div>`;
+    const listEl = document.getElementById('warnings-mine-list');
+    const d = await call('warnings:mine');
+    const rows = d.warnings || [];
+    if (!rows.length) {
+        listEl.innerHTML = '<div class="card-hint">Du hast noch keine Warnmeldung erstellt.</div>';
+        return;
+    }
+    const MINE_STATUS_META = {
+        active: { label: 'Aktiv', dot: 'green' },
+        removed: { label: 'Entfernt', dot: 'gray' },
+        expired: { label: 'Abgelaufen', dot: 'gray' },
+    };
+    listEl.innerHTML = rows.map((w) => {
+        const found = warningLookup(w.subcategory);
+        const label = found ? found.sub.label : w.subcategory;
+        return `<div class="card">
+            <div class="card-title">${escapeHtml(label)}</div>
+            <div class="card-hint">Erstellt: ${formatDate(w.created_at, true)}</div>
+            <div class="card-hint">Bestätigt: ${w.confirm_count}×</div>
+            ${badge(MINE_STATUS_META[w.status])}
+        </div>`;
+    }).join('');
+}
+
+async function renderWarningsSettings(root) {
+    root.innerHTML = `
+        <h1 class="view-title">Einstellungen</h1>
+        <p class="view-subtitle">Geräteeinstellung für Annäherungsansagen - nur lokal auf diesem Gerät, nicht für andere sichtbar.</p>
+        <div id="warnings-settings-body"><div class="card-hint">Lädt...</div></div>`;
+    const body = document.getElementById('warnings-settings-body');
+    const settings = (await nuiCall('warningsGetSettings')) || { announcementsEnabled: true, maxThresholdMeters: 1000 };
+    body.innerHTML = `
+        <label style="display:flex;align-items:center;gap:10px;margin:14px 0;">
+            <input type="checkbox" id="warnings-settings-enabled" style="width:auto;" ${settings.announcementsEnabled ? 'checked' : ''} />
+            <span>Annäherungsansagen aktiviert</span>
+        </label>
+        <label>Größte Ansage-Entfernung</label>
+        <select id="warnings-settings-distance">
+            <option value="250" ${settings.maxThresholdMeters === 250 ? 'selected' : ''}>250 m</option>
+            <option value="500" ${settings.maxThresholdMeters === 500 ? 'selected' : ''}>500 m</option>
+            <option value="1000" ${settings.maxThresholdMeters === 1000 ? 'selected' : ''}>1000 m</option>
+        </select>
+        <div class="btn-row" style="margin-top:14px;">
+            <button class="btn btn-primary" onclick="Actions.saveWarningsSettings()">Speichern</button>
+        </div>`;
+}
+
 // ---------- GESCHÄFTSFÜHRUNG ----------
 
 // "Finanzcenter" - zusammengelegte Finanz-App: Übersicht/Umsatz/Finanzen/
@@ -2526,6 +2835,145 @@ Actions.doLiveMapSync = async (percentX, percentY) => {
     State.config.liveMapBounds = res.bounds;
     toast('Karte synchronisiert', '', 'success');
     if (State.currentView === 'dispatch-map') showView('dispatch-map');
+};
+
+// ---------- Warnmeldungen (VIEWS['warnmeldungen'], s.o.) ----------
+
+Actions.warningsMapZoomBtn = (dir) => {
+    const viewport = document.getElementById('warnings-map-viewport');
+    if (!viewport || !warningsMapView) return;
+    warningsMapZoomAt(viewport.clientWidth / 2, viewport.clientHeight / 2, dir > 0 ? 1.3 : 1 / 1.3);
+};
+
+Actions.warningsMapLocateMe = async () => {
+    const pos = await call('warnings:currentPosition');
+    warningsMapOwnPos = pos;
+    warningsMapCenterOn(pos.x, pos.y);
+    warningsMapRenderMarkers();
+};
+
+Actions.openWarningCategoryModal = () => {
+    const cats = warningCatalog();
+    openModal(
+        'Warnmeldung erstellen',
+        'Kategorie wählen',
+        `<div class="warning-tile-grid">
+            ${cats.map((cat) => `
+                <div class="warning-tile warning-tile-${cat.color}" onclick="Actions.openWarningSubcategoryModal('${cat.key}')">
+                    ${iconSvg(WARNING_SUBCATEGORY_ICONS[cat.subcategories[0].key] || 'warning-triangle')}
+                    <span>${escapeHtml(cat.label)}</span>
+                </div>
+            `).join('')}
+        </div>`,
+        `<button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>`
+    );
+};
+
+Actions.openWarningSubcategoryModal = (categoryKey) => {
+    const cat = warningCatalog().find((c) => c.key === categoryKey);
+    if (!cat) return;
+    openModal(
+        escapeHtml(cat.label),
+        'Was genau?',
+        `<div class="warning-tile-grid">
+            ${cat.subcategories.map((sub) => `
+                <div class="warning-tile warning-tile-${cat.color}" onclick="Actions.openWarningPreviewModal('${cat.key}','${sub.key}')">
+                    ${iconSvg(WARNING_SUBCATEGORY_ICONS[sub.key] || 'warning-triangle')}
+                    <span>${escapeHtml(sub.label)}</span>
+                </div>
+            `).join('')}
+        </div>`,
+        `<button class="btn btn-ghost" onclick="Actions.openWarningCategoryModal()">Zurück</button>`
+    );
+};
+
+Actions.openWarningPreviewModal = async (categoryKey, subcategoryKey) => {
+    const found = warningLookup(subcategoryKey);
+    const label = found ? found.sub.label : subcategoryKey;
+    const icon = WARNING_SUBCATEGORY_ICONS[subcategoryKey] || 'warning-triangle';
+    openModal(escapeHtml(label), '', '<div class="card-hint">Position wird ermittelt…</div>', `<button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>`);
+    try {
+        await call('warnings:currentPosition');
+        const minutes = (State.config && State.config.warningLifetimeMinutes) || 120;
+        openModal(
+            `${iconSvg(icon)} ${escapeHtml(label)}`,
+            '',
+            `<div class="card-hint">Position ermittelt ✓</div><div class="card-hint">Meldung wird für ${minutes} Minuten veröffentlicht.</div>`,
+            `<button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button><button class="btn btn-primary" onclick="Actions.confirmCreateWarning('${categoryKey}','${subcategoryKey}')">Meldung erstellen</button>`
+        );
+    } catch (e) {
+        // call() zeigt bei Fehler (z.B. keine Position ermittelbar) bereits
+        // einen Toast - Modal einfach schließen statt zusätzlich zu melden.
+        closeModal();
+    }
+};
+
+Actions.confirmCreateWarning = async (categoryKey, subcategoryKey) => {
+    closeModal();
+    await call('warnings:create', { category: categoryKey, subcategory: subcategoryKey });
+    toast('Warnmeldung erstellt', 'Danke für die Meldung.', 'success');
+};
+
+Actions.openWarningDetail = async (warningId) => {
+    const w = warningsMapLastData[warningId];
+    if (!w) {
+        toast('Nicht mehr verfügbar', 'Diese Meldung ist nicht mehr aktiv.', 'info');
+        return;
+    }
+    const found = warningLookup(w.subcategory);
+    const label = found ? found.sub.label : w.subcategory;
+    const icon = WARNING_SUBCATEGORY_ICONS[w.subcategory] || 'warning-triangle';
+    let distanceHtml = '';
+    try {
+        const pos = warningsMapOwnPos || (await call('warnings:currentPosition'));
+        const dist = Math.round(Math.hypot(pos.x - w.x, pos.y - w.y));
+        distanceHtml = `<div class="card-hint">Entfernung: ${dist} m</div>`;
+    } catch (e) { /* Position nicht ermittelbar - Entfernung einfach weglassen */ }
+    const createdMs = new Date(String(w.created_at).replace(' ', 'T')).getTime();
+    const minutesAgo = Math.max(0, Math.round((Date.now() - createdMs) / 60000));
+    const canModerate = currentPermissions().includes('warnings_manage');
+    openModal(
+        `${iconSvg(icon)} ${escapeHtml(label)}`,
+        '',
+        `
+        <div class="card-hint">Gemeldet vor ${minutesAgo} Minute${minutesAgo === 1 ? '' : 'n'}</div>
+        ${distanceHtml}
+        <div class="card-hint">Gemeldet von: ${escapeHtml(w.created_by_name)}</div>
+        <div class="card-hint">Gültig bis: ${formatDate(w.expires_at, true)}</div>
+        <div class="card-hint">Bestätigt: ${w.confirm_count}×</div>
+        `,
+        `
+        <button class="btn btn-ghost" onclick="closeModal()">Schließen</button>
+        <button class="btn btn-danger" onclick="Actions.rejectWarning(${warningId})">Nicht mehr vorhanden</button>
+        <button class="btn btn-primary" onclick="Actions.confirmWarning(${warningId})">Bestätigen</button>
+        ${canModerate ? `<button class="btn btn-danger" onclick="Actions.moderateRemoveWarning(${warningId})">Löschen (Moderation)</button>` : ''}
+        `
+    );
+};
+
+Actions.confirmWarning = async (warningId) => {
+    closeModal();
+    await call('warnings:confirm', { warningId });
+    toast('Bestätigt', 'Danke für die Rückmeldung - die Meldung bleibt aktiv.', 'success');
+};
+
+Actions.rejectWarning = async (warningId) => {
+    closeModal();
+    await call('warnings:reject', { warningId });
+    toast('Danke', 'Die Meldung wurde entfernt.', 'success');
+};
+
+Actions.moderateRemoveWarning = async (warningId) => {
+    closeModal();
+    await call('warnings:remove', { warningId });
+    toast('Gelöscht', 'Die Meldung wurde entfernt.', 'success');
+};
+
+Actions.saveWarningsSettings = async () => {
+    const announcementsEnabled = document.getElementById('warnings-settings-enabled').checked;
+    const maxThresholdMeters = Number(document.getElementById('warnings-settings-distance').value);
+    await nuiPost('warningsSetSettings', { announcementsEnabled, maxThresholdMeters });
+    toast('Gespeichert', '', 'success');
 };
 
 Actions.login = async () => {

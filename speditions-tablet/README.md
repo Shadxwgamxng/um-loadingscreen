@@ -95,8 +95,9 @@ sondern ein klassisches, an iPad/iOS angelehntes Tablet-Menü:
 1. Nach dem Anmelden landet man immer zuerst auf dem **Startbildschirm** mit
    den Kategorie-Kacheln, für die man mindestens eine Berechtigung hat:
    **Aufträge, Finanzen, Fuhrpark, Mitarbeiterverwaltung, Kommunikation,
-   Geschäftsführung** - sowie den beiden eigenständigen Kacheln
-   **Disposition** und **Funk** (siehe Punkt 7).
+   Geschäftsführung** - sowie den drei eigenständigen Kacheln
+   **Disposition**, **Funk** und **Warnmeldungen** (siehe Punkt 7 bzw.
+   Abschnitt "Warnmeldungen").
 2. Ein Tipp auf eine Kategorie öffnet ein Kachel-Menü mit den einzelnen Apps
    darin. Mehrere eng verwandte frühere Einzel-Apps sind zu jeweils einer App
    mit einer **linken Hover-Leiste** zusammengelegt (unsichtbar bis man mit
@@ -867,6 +868,70 @@ Funk-Teilnehmern.
   Anruf-Kanälen, sondern an pma-voice/Mumble selbst (Serverneustart, ggf.
   pma-voice-Update prüfen).
 
+## Warnmeldungen
+
+Eigenständige App (Home-Kachel neben Disposition/Funk, für jeden
+angemeldeten Mitarbeiter sichtbar, keine Berechtigung nötig) für
+Verkehrs- und Gefahrenmeldungen: Stau, Unfall, Gefahrenstelle, Mobiler
+Blitzer, Blitzer-Anhänger, Streifenwagen, Verkehrskontrolle.
+
+**Melden** (Karte → runder "+"-Button links unten): drei Antipp-Schritte
+(Kategorie → Unterkategorie → Vorschau mit Bestätigen) - die Position wird
+dabei immer automatisch aus der tatsächlichen, serverseitigen
+Spielerposition übernommen (`GetEntityCoords`), nie manuell eingegeben und
+nie vom Client vorgegeben.
+
+**Karte**: zoom-/verschiebbar (Mausrad oder die +/-/Reset-Buttons zum
+Zoomen, Ziehen mit gedrückter Maustaste zum Verschieben - nutzt dasselbe
+Kartenbild wie die Live-Karte). Meldungen sind als farbige Marker
+sichtbar (gelb = Gefahrenstelle, blau = Blitzer, rot = Polizeipräsenz),
+ein Klick auf einen Marker öffnet die Details (Alter, Entfernung,
+Ersteller, Gültig bis, Bestätigungen) mit "Bestätigen"/"Nicht mehr
+vorhanden". "Zu meiner Position" zentriert die Karte auf die eigene,
+live abgefragte Position.
+
+**Ablauf & Bestätigen**: jede Meldung ist standardmäßig 2 Stunden gültig
+(`Config.Warnings.lifetimeMinutes`), serverseitig anhand von `expires_at`
+verwaltet - nie von einem Client-/Browser-Timer abhängig. Ein
+"Bestätigen" verlängert die Gültigkeit um erneut 2 Stunden (je Mitarbeiter
+nur einmal pro Meldung zählbar, verhindert endloses Selbst-Verlängern
+durch eine einzelne Person); "Nicht mehr vorhanden" entfernt die Meldung
+sofort für alle. Beides verlangt räumliche Nähe zur Meldung
+(`Config.Warnings.moderationRadiusMeters`, Standard 300m), damit niemand
+quer über die Karte bestätigt/verwirft, ohne dort zu sein - wer die
+Berechtigung `warnings_manage` hat (Geschäftsführung/Disponent per
+Standard-Zuordnung), darf das unabhängig von der Entfernung (Moderation,
+z.B. Missbrauch entfernen).
+
+**Bei jedem Ressourcenstart** werden alle Warnmeldungen standardmäßig
+gelöscht (`Config.Warnings.clearOnRestart = true`, in `config.lua`
+umstellbar) - auf `false` gesetzt werden stattdessen nur bereits
+abgelaufene Meldungen als abgelaufen markiert, alles andere bleibt
+erhalten.
+
+**Annäherungsansage**: läuft komplett in `client/cl_warnings.lua` (reine
+Client-Lua-Logik, unabhängig davon ob das Tablet gerade geöffnet ist - sie
+muss während der Fahrt auch bei geschlossenem Tablet funktionieren).
+Nutzt die bereits vorhandenen nativen Hinweise
+(`speditions-tablet:client:notify`, GTA-Thefeed-Text +
+`Config.NotificationSound`) statt echter Sprachausgabe. Warnschwellen
+(Standard 1000/500/250m, `Config.Warnings.proximity.thresholdsMeters`)
+werden je Meldung nur einmal angesagt; eine vereinfachte Richtungsprüfung
+(Winkel zwischen Fahrzeug-Blickrichtung und Peilung zur Meldung,
+`Config.Warnings.proximity.approachAngleDegrees`) verhindert Ansagen für
+Meldungen hinter dem Fahrzeug - ohne Routing-Engine, aber als
+austauschbare Einzelfunktion (`isApproaching`) für eine spätere Integration
+vorbereitet. Läuft nur, während tatsächlich gefahren wird (Fahrersitz
+eines Fahrzeugs). Eigene Einstellungen (Ansagen an/aus, größte
+Ansage-Entfernung) sind reine Geräteeinstellungen (FiveM-KVP, kein
+Datenbankeintrag) im Reiter "Einstellungen" der App.
+
+**Mehrspieler-Sync**: jede Aktion (Erstellen/Bestätigen/Entfernen/Ablauf)
+sendet sofort einen Broadcast an alle verbundenen Mitarbeiter
+(`RPC.PushBroadcast('warnings:changed', ...)`) - neue Meldungen, Löschungen
+und Bestätigungen erscheinen ohne Neuladen bei jedem gleichzeitig
+geöffneten Tablet.
+
 ## Datenbankschema
 
 Siehe `sql/install.sql`. Wichtigste Tabellen:
@@ -897,6 +962,8 @@ st_driver_hours         Lenk-/Ruhezeiten je Fahrer (ununterbrochen/täglich, Pau
 st_wage_rates           Stundenlohn je Rolle (von der Geschäftsführung anpassbar)
 st_timeclock_sessions   Stempeluhr-Sessions je Mitarbeiter (ein-/ausgestempelt, bezahlt/offen)
 st_payroll_payouts      Historie der Gehaltsauszahlungen
+st_warnings             Warnmeldungen (Kategorie, Position, Ersteller, Ablaufzeitpunkt, Status, Bestätigungszähler)
+st_warning_confirmations Je ein Eintrag pro Mitarbeiter+Meldung, verhindert Selbst-Verlängern durch eine einzelne Person
 ```
 
 ## Gehälter / Stempeluhr
