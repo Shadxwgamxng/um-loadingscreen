@@ -932,6 +932,51 @@ sendet sofort einen Broadcast an alle verbundenen Mitarbeiter
 und Bestätigungen erscheinen ohne Neuladen bei jedem gleichzeitig
 geöffneten Tablet.
 
+**Bestandsinstallationen:** die beiden neuen Tabellen `st_warnings`/
+`st_warning_confirmations` werden nur bei einer komplett frischen
+Installation automatisch aus `sql/install.sql` angelegt. Läuft euer Server
+schon länger, einmalig folgendes SQL gegen eure Datenbank ausführen, bevor
+ihr die neue Ressourcenversion startet:
+```sql
+CREATE TABLE IF NOT EXISTS `st_warnings` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `category` VARCHAR(20) NOT NULL,
+    `subcategory` VARCHAR(30) NOT NULL,
+    `x` DOUBLE NOT NULL,
+    `y` DOUBLE NOT NULL,
+    `z` DOUBLE NOT NULL,
+    `street_name` VARCHAR(100) NULL,
+    `created_by` INT UNSIGNED NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `expires_at` DATETIME NOT NULL,
+    `status` ENUM('active','removed','expired') NOT NULL DEFAULT 'active',
+    `confirm_count` INT UNSIGNED NOT NULL DEFAULT 0,
+    `removed_by` INT UNSIGNED NULL,
+    `removed_at` DATETIME NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_warnings_status` (`status`),
+    CONSTRAINT `fk_warnings_creator` FOREIGN KEY (`created_by`) REFERENCES `st_employees` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `st_warning_confirmations` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `warning_id` INT UNSIGNED NOT NULL,
+    `employee_id` INT UNSIGNED NOT NULL,
+    `confirmed_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_warning_confirmation` (`warning_id`,`employee_id`),
+    CONSTRAINT `fk_wc_warning` FOREIGN KEY (`warning_id`) REFERENCES `st_warnings` (`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_wc_employee` FOREIGN KEY (`employee_id`) REFERENCES `st_employees` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+Außerdem muss die neue Berechtigung `warnings_manage` (Moderation)
+mindestens einer Rolle zugewiesen werden - im Reiter "Rollen" bei
+Geschäftsführung/Disponent nachtragen, falls ihr die Standard-Zuordnung
+aus `config.lua` (`Config.DefaultRolePermissions`) für eure bestehenden,
+bereits in `st_roles` gespeicherten Rollen nachziehen wollt (die Defaults
+in `config.lua` greifen nämlich nur beim allerersten Anlegen einer Rolle,
+s. Abschnitt "Rollen & Berechtigungen").
+
 ## Datenbankschema
 
 Siehe `sql/install.sql`. Wichtigste Tabellen:
