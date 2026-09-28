@@ -911,20 +911,34 @@ erhalten.
 
 **Annäherungsansage**: läuft komplett in `client/cl_warnings.lua` (reine
 Client-Lua-Logik, unabhängig davon ob das Tablet gerade geöffnet ist - sie
-muss während der Fahrt auch bei geschlossenem Tablet funktionieren).
-Nutzt die bereits vorhandenen nativen Hinweise
-(`speditions-tablet:client:notify`, GTA-Thefeed-Text +
-`Config.NotificationSound`) statt echter Sprachausgabe. Warnschwellen
-(Standard 1000/500/250m, `Config.Warnings.proximity.thresholdsMeters`)
-werden je Meldung nur einmal angesagt; eine vereinfachte Richtungsprüfung
-(Winkel zwischen Fahrzeug-Blickrichtung und Peilung zur Meldung,
+muss während der Fahrt auch bei geschlossenem Tablet funktionieren). Löst
+pro Schwelle zwei Signale gleichzeitig aus:
+- eine tatsächlich **gesprochene** Ansage über die Web-Speech-API der NUI
+  (`SendNUIMessage({type='speak', ...})` -> `speakWarning()` in `app.js`,
+  `window.speechSynthesis`, Sprache `de-DE`) - läuft unabhängig von der
+  Sichtbarkeit des Tablets, da die NUI-Seite im Hintergrund weiterläuft.
+  **Ob das eingebettete FiveM-CEF tatsächlich (deutsche) Stimmen mitbringt,
+  hängt vom jeweiligen FiveM-Build/Betriebssystem des Servers ab** - keine
+  Garantie, aber ohne harte Abhängigkeit (kein Fehler, wenn nicht
+  verfügbar).
+- den bereits vorhandenen nativen Text-/Ton-Hinweis
+  (`speditions-tablet:client:notify`, GTA-Thefeed-Text +
+  `Config.NotificationSound`) als zusätzliches, garantiert funktionierendes
+  Signal (bzw. einziges, falls die Sprachausgabe im jeweiligen CEF-Build
+  nicht verfügbar ist).
+
+Warnschwellen (Standard 1000/500/250m,
+`Config.Warnings.proximity.thresholdsMeters`) werden je Meldung nur einmal
+angesagt; eine vereinfachte Richtungsprüfung (Winkel zwischen Fahrzeug-
+Blickrichtung und Peilung zur Meldung,
 `Config.Warnings.proximity.approachAngleDegrees`) verhindert Ansagen für
 Meldungen hinter dem Fahrzeug - ohne Routing-Engine, aber als
 austauschbare Einzelfunktion (`isApproaching`) für eine spätere Integration
 vorbereitet. Läuft nur, während tatsächlich gefahren wird (Fahrersitz
 eines Fahrzeugs). Eigene Einstellungen (Ansagen an/aus, größte
 Ansage-Entfernung) sind reine Geräteeinstellungen (FiveM-KVP, kein
-Datenbankeintrag) im Reiter "Einstellungen" der App.
+Datenbankeintrag) im Reiter "Einstellungen" der App und gelten für beide
+Signale gemeinsam.
 
 **Mehrspieler-Sync**: jede Aktion (Erstellen/Bestätigen/Entfernen/Ablauf)
 sendet sofort einen Broadcast an alle verbundenen Mitarbeiter

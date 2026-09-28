@@ -918,7 +918,33 @@ window.addEventListener('message', (event) => {
     else if (data.type === 'radioCallEnded') onRadioCallEnded(data.reason);
     else if (data.type === 'radioCallHold') onRadioCallHold();
     else if (data.type === 'radioCallResumed') onRadioCallResumed();
+    else if (data.type === 'speak') speakWarning(data.text);
 });
+
+// Annäherungsansage der Warnmeldungen (client/cl_warnings.lua) als
+// tatsächlich GESPROCHENE Ansage statt nur Text+Ton: nutzt die
+// Web-Speech-API des NUI-eigenen Chromium (CEF) - läuft unabhängig davon,
+// ob das Tablet gerade sichtbar geöffnet ist, da die NUI-Seite im
+// Hintergrund weiterläuft (nur SetNuiFocus/Sichtbarkeit ändern sich beim
+// Schließen, nicht die laufende Seite). Ob das eingebettete FiveM-CEF
+// tatsächlich (deutsche) Stimmen mitbringt, hängt vom jeweiligen
+// FiveM-Build/Betriebssystem des Servers ab - bewusst ohne harte
+// Abhängigkeit: schlägt window.speechSynthesis fehl oder existiert nicht,
+// bleibt der parallel weiterhin ausgelöste native Text-/Ton-Hinweis
+// (client/cl_main.lua) als stiller Fallback bestehen.
+function speakWarning(text) {
+    if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') return;
+    try {
+        window.speechSynthesis.cancel(); // vorherige Ansage sofort ersetzen statt zu stapeln
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'de-DE';
+        utterance.rate = 1.0;
+        window.speechSynthesis.speak(utterance);
+    } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[speditions-tablet] Sprachausgabe fehlgeschlagen', e);
+    }
+}
 
 document.addEventListener('keydown', (e) => {
     if (!document.getElementById('lock-screen').classList.contains('hidden')) { unlockTablet(); return; }

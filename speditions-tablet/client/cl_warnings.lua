@@ -145,6 +145,13 @@ local function announceWarning(w, tier)
     -- (client/cl_main.lua), der automatisch Thefeed-Text + den
     -- konfigurierten Benachrichtigungston auslöst.
     TriggerEvent('speditions-tablet:client:notify', message, 'warning')
+    -- Zusätzlich eine tatsächlich GESPROCHENE Ansage über die Web-Speech-
+    -- API der NUI (app.js, Handler 'speak') - läuft unabhängig davon, ob
+    -- das Tablet gerade sichtbar geöffnet ist (die NUI-Seite bleibt im
+    -- Hintergrund aktiv). Rein bestes Bemühen: bietet das eingebettete
+    -- FiveM-CEF keine Stimmen an, bleibt der Text-/Ton-Hinweis oben als
+    -- einziges, aber weiterhin funktionierendes Signal bestehen.
+    SendNUIMessage({ type = 'speak', text = message })
 end
 
 CreateThread(function()
