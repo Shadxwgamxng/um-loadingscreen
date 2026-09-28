@@ -308,6 +308,51 @@ function Orders.AttachLocationCoords(orders)
     return orders
 end
 
+--- Ermittelt unter den übergebenen, gerade verfügbaren Fahrern denjenigen,
+--- dessen aktuelle Spielerposition dem Abholpunkt am nächsten liegt - nur
+--- ONLINE Fahrer haben überhaupt eine ermittelbare Position, alle anderen
+--- werden übersprungen (kein Fehler, einfach nicht Teil des Vergleichs).
+local function nearestAvailableDriver(startCoords, availableDrivers)
+    if not startCoords then return nil end
+    local best, bestDistSq = nil, nil
+    for _, d in ipairs(availableDrivers) do
+        local src = Utils.FindSrcByEmployeeId(d.employee_id)
+        if src then
+            local ped = GetPlayerPed(src)
+            if ped and ped ~= 0 then
+                local coords = GetEntityCoords(ped)
+                local dx, dy = coords.x - startCoords.x, coords.y - startCoords.y
+                local distSq = dx * dx + dy * dy
+                if not bestDistSq or distSq < bestDistSq then
+                    bestDistSq = distSq
+                    best = { driverId = d.driver_id, name = d.name, distanceKm = Utils.Round2(math.sqrt(distSq) / 1000) }
+                end
+            end
+        end
+    end
+    return best
+end
+
+--- Reichert offene Aufträge um den jeweils nächstgelegenen gerade
+--- verfügbaren (Status "verfügbar", online) Fahrer an - Grundlage für den
+--- "Nächster freier Fahrer"-Hinweis auf den Auftragskarten in der
+--- Disposition. Lädt die Fahrerliste einmal statt pro Auftrag neu
+--- abzufragen.
+function Orders.AttachNearestAvailableDriver(orders)
+    local availableDrivers = MySQL.query.await([[
+        SELECT d.id AS driver_id, d.employee_id, e.name
+        FROM st_drivers d
+        JOIN st_employees e ON e.id = d.employee_id
+        WHERE e.status = 'aktiv' AND d.current_status = 'verfuegbar'
+    ]])
+    if not availableDrivers or #availableDrivers == 0 then return orders end
+    Orders.AttachLocationCoords(orders)
+    for _, o in ipairs(orders) do
+        o.nearestDriver = nearestAvailableDriver(o.start_coords, availableDrivers)
+    end
+    return orders
+end
+
 --- Weist einen offenen (oder neu zu disponierenden) Auftrag einem Fahrer zu.
 function Orders.Dispatch(src, orderId, driverId, vehicleId)
     local emp = Employees.RequirePermission(src, 'dispatch')
@@ -859,7 +904,7 @@ end
 
 RPC.Register('dispatch:openOrders', function(src)
     Employees.RequirePermission(src, 'dispatch')
-    return { orders = Orders.ListOpen() }
+    return { orders = Orders.AttachNearestAvailableDriver(Orders.ListOpen()) }
 end)
 
 RPC.Register('dispatch:activeOrders', function(src)

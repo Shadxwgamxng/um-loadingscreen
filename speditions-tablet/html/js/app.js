@@ -1102,6 +1102,10 @@ function handlePush(event, data) {
         'finance:balanceChanged': () => refreshIfViewing(['gf-finance-hub']),
         'roles:changed': () => refreshAfterRolesChanged(),
         'cargotypes:changed': () => refreshAfterCargoTypesChanged(),
+        // Ein anderer Disponent hat "Position synchronisieren" bestätigt (s.
+        // Actions.doLiveMapSync) - eigene Kartengrenzen übernehmen, damit alle
+        // gleichzeitig geöffneten Live-Karten-Ansichten in Sync bleiben.
+        'dispatch:mapBoundsChanged': () => { if (State.config) State.config.liveMapBounds = data.bounds; },
     };
     if (map[event]) map[event]();
 }
@@ -1652,13 +1656,13 @@ VIEWS['driver-messages'] = async (root) => {
 // Datei unter html/img/map.jpg ab (siehe README "Live-Karte").
 //
 // Die Fahrerposition selbst kommt IMMER direkt und serverseitig von GTA
-// (GetEntityCoords, server/sv_tracking.lua) - kein Client-Trust, keine
-// Kalibrierung nötig. DEFAULT_MAP_BOUNDS ist lediglich die feste
-// Umrechnung Weltkoordinaten→Kartenbild-Prozent für den mitgelieferten
-// Config.LiveMap.bounds-Wert (config.lua). Passt dein eigenes Kartenbild
-// nicht zu diesem Ausschnitt, passe die vier Zahlen dort direkt an
-// (siehe README "Live-Karte") - ein separates Kalibrierungswerkzeug gibt
-// es bewusst nicht mehr, um die App einfach zu halten.
+// (GetEntityCoords, server/sv_tracking.lua) - kein Client-Trust.
+// DEFAULT_MAP_BOUNDS ist der Fallback, falls noch nie synchronisiert wurde
+// und Config.LiveMap.bounds fehlt. Die eigentlichen Kartengrenzen kommen
+// aus State.config.liveMapBounds (server/sv_tracking.lua, Tracking.
+// GetMapBounds()) - per Ein-Klick-Synchronisation direkt in dieser App
+// änderbar (Button "Position synchronisieren" unten), statt die vier
+// Zahlen von Hand in config.lua zu pflegen.
 // ---------------------------------------------------------
 
 const DEFAULT_MAP_BOUNDS = { minX: -4300, maxX: 4700, minY: -4300, maxY: 8200 };
@@ -1675,6 +1679,10 @@ VIEWS['dispatch-map'] = async (root) => {
     root.innerHTML = `
         <h1 class="view-title">Live-Karte</h1>
         <p class="view-subtitle">Zeigt ausschließlich gerade eingestempelte Fahrer (aktualisiert alle ${Math.round(LIVE_MAP_POLL_MS / 1000)}s).</p>
+        <div class="btn-row" style="margin-bottom:12px;align-items:center;">
+            <button class="btn btn-sm" id="live-map-sync-btn" onclick="Actions.armLiveMapSync()">Position synchronisieren</button>
+            <span class="card-hint" id="live-map-sync-hint"></span>
+        </div>
         <div class="live-map-wrap">
             <img id="live-map-img" class="live-map-img" src="img/map.jpg" alt="Karte" onerror="this.closest('.live-map-wrap').classList.add('live-map-img-missing')" />
             <div class="live-map-img-fallback-hint">Kein Kartenbild gefunden - lege eine Datei unter <code>html/img/map.jpg</code> ab (siehe README).</div>
@@ -1684,6 +1692,14 @@ VIEWS['dispatch-map'] = async (root) => {
 
     const markersEl = document.getElementById('live-map-markers');
     const listEl = document.getElementById('live-map-driver-list');
+
+    document.getElementById('live-map-img').addEventListener('click', (ev) => {
+        if (!liveMapSyncArmed) return;
+        const rect = ev.currentTarget.getBoundingClientRect();
+        const percentX = Math.max(0, Math.min(100, ((ev.clientX - rect.left) / rect.width) * 100));
+        const percentY = Math.max(0, Math.min(100, ((ev.clientY - rect.top) / rect.height) * 100));
+        Actions.confirmLiveMapSync(percentX, percentY);
+    });
 
     const refresh = async () => {
         const d = await call('dispatch:liveMap');
@@ -1716,6 +1732,27 @@ VIEWS['dispatch-map'] = async (root) => {
     await refresh();
     activeViewInterval = setInterval(refresh, LIVE_MAP_POLL_MS);
 };
+
+// Ein-Klick-Synchronisation der Live-Karte: statt eines Zwei-Punkt-
+// Kalibrierungsassistenten reicht EIN Referenzpunkt - im Spiel an eine im
+// Kartenbild eindeutig wiederfindbare Stelle stellen, "Position
+// synchronisieren" drücken, auf genau diese Stelle im Kartenbild klicken,
+// bestätigen. Breite/Höhe (Maßstab) der Kartengrenzen bleiben dabei
+// unverändert, nur die Verschiebung wird neu berechnet (server/
+// sv_tracking.lua, dispatch:syncMapPosition) - ein einziger
+// Bestätigungsschritt insgesamt. Die zugehörigen Actions.* stehen weiter
+// unten im ACTIONS-Abschnitt (const Actions wird erst dort deklariert).
+let liveMapSyncArmed = false;
+
+function disarmLiveMapSync() {
+    liveMapSyncArmed = false;
+    const btn = document.getElementById('live-map-sync-btn');
+    const hint = document.getElementById('live-map-sync-hint');
+    const img = document.getElementById('live-map-img');
+    if (btn) btn.classList.remove('btn-primary');
+    if (hint) hint.textContent = '';
+    if (img) img.classList.remove('live-map-sync-active');
+}
 
 // "Disposition" - vereinte Arbeitsfläche statt der früheren getrennten Apps
 // "Auftragsverwaltung" (Pool/Aktiv/Abgeschlossen-Tabs) und "Fahrerübersicht":
@@ -1802,8 +1839,9 @@ function dispoOpenOrderCard(o) {
             <span class="pill">${Number(o.distance_km).toLocaleString('de-DE')} km</span>
             ${o.requires_permission ? '<span class="pill pill-warning">Gefahrgut</span>' : ''}
         </div>
+        ${o.nearestDriver ? `<div class="dispo-card-sub">Nächster freier Fahrer: ${escapeHtml(o.nearestDriver.name)} (${o.nearestDriver.distanceKm} km)</div>` : ''}
         <div class="dispo-card-actions">
-            <button class="btn btn-sm btn-primary" onclick="Actions.openDispatchModal(${o.id}, ${escapeHtml(JSON.stringify(o.requires_permission || null))})">Zuweisen</button>
+            <button class="btn btn-sm btn-primary" onclick="Actions.openDispatchModal(${o.id}, ${escapeHtml(JSON.stringify(o.requires_permission || null))}, ${o.nearestDriver ? o.nearestDriver.driverId : 'null'})">Zuweisen</button>
         </div>
     </div>`;
 }
@@ -2457,6 +2495,36 @@ VIEWS['gf-console'] = async (root) => {
 
 const Actions = {};
 
+// Live-Karte: Ein-Klick-Synchronisation (VIEWS['dispatch-map'],
+// liveMapSyncArmed/disarmLiveMapSync weiter oben).
+Actions.armLiveMapSync = () => {
+    liveMapSyncArmed = true;
+    const btn = document.getElementById('live-map-sync-btn');
+    const hint = document.getElementById('live-map-sync-hint');
+    const img = document.getElementById('live-map-img');
+    if (btn) btn.classList.add('btn-primary');
+    if (hint) hint.textContent = 'Klicke auf der Karte auf deine aktuelle Position im Spiel.';
+    if (img) img.classList.add('live-map-sync-active');
+};
+
+Actions.confirmLiveMapSync = (percentX, percentY) => {
+    disarmLiveMapSync();
+    openConfirmModal(
+        'Position synchronisieren',
+        'Die Kartengrenzen werden so verschoben, dass der angeklickte Punkt exakt deiner aktuellen Spielerposition entspricht - gilt danach für alle.',
+        'Synchronisieren',
+        `Actions.doLiveMapSync(${Math.round(percentX * 100) / 100}, ${Math.round(percentY * 100) / 100})`
+    );
+};
+
+Actions.doLiveMapSync = async (percentX, percentY) => {
+    closeModal();
+    const res = await call('dispatch:syncMapPosition', { percentX, percentY });
+    State.config.liveMapBounds = res.bounds;
+    toast('Karte synchronisiert', '', 'success');
+    if (State.currentView === 'dispatch-map') showView('dispatch-map');
+};
+
 Actions.login = async () => {
     const username = document.getElementById('login-username').value.trim();
     const password = document.getElementById('login-password').value;
@@ -2828,10 +2896,10 @@ Actions.reassignOrderToDriver = async (orderId, driverId) => {
     showView('disposition');
 };
 
-Actions.openDispatchModal = (orderId, requiresPermission) => {
+Actions.openDispatchModal = (orderId, requiresPermission, preferredDriverId) => {
     const hasPerm = (d) => !requiresPermission || (d.permissions || '').split(',').includes(requiresPermission);
     const drivers = (window.__availableDrivers || []).filter((d) => d.current_status === 'verfuegbar' && hasPerm(d));
-    const options = drivers.map((d) => `<option value="${d.driver_id}">${escapeHtml(d.name)}${d.vehicle_name ? ` - ${escapeHtml(d.vehicle_name)} (${escapeHtml(d.vehicle_plate)})` : ' - kein Fahrzeug'}</option>`).join('');
+    const options = drivers.map((d) => `<option value="${d.driver_id}" ${d.driver_id === preferredDriverId ? 'selected' : ''}>${escapeHtml(d.name)}${d.vehicle_name ? ` - ${escapeHtml(d.vehicle_name)} (${escapeHtml(d.vehicle_plate)})` : ' - kein Fahrzeug'}${d.driver_id === preferredDriverId ? ' - nächster freier Fahrer' : ''}</option>`).join('');
     const hint = requiresPermission ? `<p class="card-hint" style="margin:0 0 10px;">Dieser Auftrag erfordert die Berechtigung "${escapeHtml(requiresPermission)}" - nur berechtigte, verfügbare Fahrer werden angezeigt.</p>` : '';
     openModal('Auftrag disponieren', `Auftrag #${orderId}`, `
         ${hint}

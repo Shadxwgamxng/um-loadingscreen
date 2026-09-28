@@ -35,7 +35,7 @@ local function sessionPayload(emp)
         vehicleClasses = Config.VehicleClasses,
         vehicleStatuses = Config.VehicleStatus,
         cargoTypes = CargoTypes.Names(),
-        liveMapBounds = Config.LiveMap and Config.LiveMap.bounds,
+        liveMapBounds = Tracking and Tracking.GetMapBounds() or (Config.LiveMap and Config.LiveMap.bounds),
         radioChannels = Config.Radio,
     }
 end

@@ -146,3 +146,71 @@ RPC.Register('dispatch:liveMap', function(src)
     end
     return { drivers = out }
 end)
+
+-- ---------------------------------------------------------
+-- Kartengrenzen (bounds) - Ein-Klick-Synchronisation statt des früheren
+-- Zwei-Punkt-Kalibrierungswerkzeugs (siehe README/config.lua). Persistiert
+-- als kleine JSON-Datei im Ressourcenordner (SaveResourceFile/
+-- LoadResourceFile) statt in der Datenbank, da es sich um eine einzelne,
+-- globale Einstellung handelt statt um Fachdaten - Config.LiveMap.bounds
+-- bleibt der Startwert, bis einmal synchronisiert wurde; danach überlebt
+-- der gespeicherte Wert auch einen Ressourcen-Neustart.
+-- ---------------------------------------------------------
+
+-- Flacher Dateiname im Ressourcenordner (kein Unterordner) - SaveResourceFile
+-- legt Unterordner nicht zuverlässig automatisch an.
+local BOUNDS_FILE = 'live_map_bounds.json'
+local currentBounds = Config.LiveMap and Config.LiveMap.bounds
+
+do
+    local raw = LoadResourceFile(GetCurrentResourceName(), BOUNDS_FILE)
+    if raw then
+        local ok, decoded = pcall(json.decode, raw)
+        if ok and decoded and decoded.minX and decoded.maxX and decoded.minY and decoded.maxY then
+            currentBounds = decoded
+        end
+    end
+end
+
+--- Aktuelle Kartengrenzen - Grundlage für session:whoami (server/sv_main.lua)
+--- und den Website-Push (WebsiteBridge.PushLiveMapBounds).
+function Tracking.GetMapBounds()
+    return currentBounds
+end
+
+--- Ein-Klick-Synchronisation der Live-Karte: der Disponent steht an einer im
+--- Kartenbild eindeutig wiederfindbaren Stelle im Spiel, klickt dort auf das
+--- Kartenbild (percentX/percentY, 0-100 relativ zum Bild), und die vier
+--- Kartengrenzen werden so verschoben (Breite/Höhe - also der Maßstab -
+--- bleiben unverändert), dass genau diese Bildstelle ab sofort exakt der
+--- eigenen Spielerposition entspricht. Kein zweiter Referenzpunkt nötig,
+--- ein einziger Bestätigungsschritt (siehe VIEWS['dispatch-map'] in app.js).
+RPC.Register('dispatch:syncMapPosition', function(src, payload)
+    Employees.RequirePermission(src, 'live_map_view')
+    local percentX = Utils.SanitizeNumber(payload.percentX, 0, 100)
+    local percentY = Utils.SanitizeNumber(payload.percentY, 0, 100)
+    if not percentX or not percentY then error('invalid_payload') end
+
+    local ped = GetPlayerPed(src)
+    if not ped or ped == 0 then error('player_not_found') end
+    local coords = GetEntityCoords(ped)
+
+    local width = currentBounds.maxX - currentBounds.minX
+    local height = currentBounds.maxY - currentBounds.minY
+    local newMinX = coords.x - (percentX / 100) * width
+    local newMinY = coords.y - (1 - percentY / 100) * height
+    local newBounds = {
+        minX = Utils.Round2(newMinX),
+        maxX = Utils.Round2(newMinX + width),
+        minY = Utils.Round2(newMinY),
+        maxY = Utils.Round2(newMinY + height),
+    }
+
+    currentBounds = newBounds
+    SaveResourceFile(GetCurrentResourceName(), BOUNDS_FILE, json.encode(newBounds), -1)
+
+    RPC.PushToPermission('live_map_view', 'dispatch:mapBoundsChanged', { bounds = newBounds })
+    if WebsiteBridge then WebsiteBridge.PushLiveMapBounds() end
+
+    return { bounds = newBounds }
+end)

@@ -221,7 +221,13 @@ drei gleichzeitig sichtbaren Spalten statt der früheren getrennten Apps
 "Auftragsverwaltung" (Pool/Aktiv/Abgeschlossen-Tabs) und "Fahrerübersicht":
 
 - **Offene Aufträge** (links): automatisch generierte, noch nicht
-  zugewiesene Aufträge mit Strecke, Fracht, Wert und Gefahrgut-Kennzeichnung.
+  zugewiesene Aufträge mit Strecke, Fracht, Wert und Gefahrgut-Kennzeichnung,
+  sowie - sofern mindestens ein Fahrer gerade "verfügbar" und online ist -
+  der Hinweis **"Nächster freier Fahrer"** mit Name und Luftlinien-Distanz
+  zum Abholpunkt (serverseitig aus den echten Spielerpositionen berechnet,
+  `server/sv_orders.lua`, `Orders.AttachNearestAvailableDriver`). Beim
+  Zuweisen (Button oder Drag&Drop) ist dieser Fahrer im Dropdown bereits
+  vorausgewählt.
 - **Fuhrpark** (Mitte): alle aktiven Fahrer mit Status (verfügbar/im
   Einsatz/Pause/offline), zugewiesenem Fahrzeug samt Fahrzeugstatus und -
   sofern gerade im Einsatz - Fracht/Menge und Strecke des laufenden
@@ -424,6 +430,16 @@ anlegen, bearbeiten, löschen. Beim Anlegen/Bearbeiten füllt der Button
 **"Aktuelle Position übernehmen"** die Koordinaten- und Blickrichtungsfelder
 automatisch mit der aktuellen Spielerposition (serverseitig ermittelt, kein
 Hinlaufen zu exakten Zahlen nötig).
+
+**Ein Ort kann gleichzeitig An- und Abliefern:** die beiden Checkbox-Listen
+"Quelle (hier abholbare Frachtarten)" und "Ziel (hier anlieferbare
+Frachtarten)" sind unabhängig voneinander - ein Ort kann für dieselbe (oder
+eine andere) Frachtart in beiden Listen angehakt sein. Die automatische
+Auftragsgenerierung (`Orders.GenerateOne`, `server/sv_orders.lua`) sorgt
+dabei bereits von selbst dafür, dass Start- und Zielort eines Auftrags nie
+identisch sind - fällt die zufällige Wahl auf denselben Ort, wird neu
+gewürfelt (bzw. der Durchlauf übersprungen, falls es für diese Frachtart
+keinen anderen möglichen Zielort gibt).
 
 `Config.SeedLocations` in `config.lua` enthält die mitgelieferten 59
 Standardstandorte (echte Firmenadressen des Servers) und dient **nur** der
@@ -683,19 +699,23 @@ als Marker über einem selbst hinterlegten Kartenbild - alle 3 Sekunden
   überschreibe einfach diese Datei (siehe
   `html/img/KARTENBILD_HIER_ABLEGEN.txt`) - löschst du sie komplett, zeigt
   die Karte stattdessen einen Hinweistext statt eines kaputten Bildes.
-- **Kein Kalibrierungswerkzeug**: Die Fahrerposition kommt immer direkt und
-  serverseitig von GTA (`GetEntityCoords`) - es gibt bewusst kein
-  In-App-Werkzeug mehr, das das erst umständlich ermitteln muss. Passt dein
-  eigenes Kartenbild nicht exakt zu den mitgelieferten Standard-
-  Kartengrenzen `Config.LiveMap.bounds` (die Marker sitzen dann leicht
-  daneben), passe die vier Zahlen (`minX`/`maxX`/`minY`/`maxY`) direkt in
-  `config.lua` an: besuche im Spiel zwei dir bekannte, auf deinem Kartenbild
-  gut identifizierbare Orte, notiere ihre Weltkoordinaten (z.B. über den
-  Reiter "Orte") sowie die jeweilige Bildposition in Prozent, und löse damit
-  die vier Werte linear auf (siehe `worldToMapPercent` in `html/js/app.js`
-  für die exakte Formel). Nach dem Eintragen die Ressource neu starten (und
-  - sofern Website-Sync aktiv - die Website erhält die neuen Grenzen
-  automatisch mit, siehe unten).
+- **Ein-Klick-Synchronisation**: Passt dein eigenes Kartenbild nicht exakt zu
+  den mitgelieferten Standard-Kartengrenzen `Config.LiveMap.bounds` (die
+  Marker sitzen dann leicht daneben), stelle dich im Spiel an eine auf dem
+  Kartenbild eindeutig wiederfindbare Stelle, drücke in der App "Live Karte"
+  auf **"Position synchronisieren"**, klicke auf genau diese Stelle im
+  Kartenbild und bestätige - fertig, ein einziger Bestätigungsschritt. Die
+  vier Kartengrenzen (`minX`/`maxX`/`minY`/`maxY`) werden dabei nur
+  verschoben (der Maßstab bleibt unverändert), sodass der angeklickte Punkt
+  ab sofort exakt der eigenen Spielerposition entspricht - kein zweiter
+  Referenzpunkt, kein manuelles Eintragen von Zahlen in `config.lua`, kein
+  Ressourcen-Neustart nötig. Die synchronisierten Grenzen werden als kleine
+  JSON-Datei im Ressourcenordner gespeichert (`server/sv_tracking.lua`,
+  `Tracking.GetMapBounds()`) und überleben damit auch einen Neustart;
+  `Config.LiveMap.bounds` in `config.lua` bleibt nur der Startwert, bevor
+  zum ersten Mal synchronisiert wurde. Andere gerade geöffnete Live-Karten-
+  Ansichten übernehmen die neuen Grenzen sofort per Push, ohne dass sie neu
+  geöffnet werden müssen.
 - **Serverseitig ermittelt**: Position, Fahrzeug und laufender Auftrag jedes
   getrackten Fahrers werden ausschließlich serverseitig ermittelt
   (`GetEntityCoords`/`GetVehiclePedIsIn`), nie vom Client gemeldet. Rein
@@ -703,9 +723,10 @@ als Marker über einem selbst hinterlegten Kartenbild - alle 3 Sekunden
   Datenbank-Tabelle, keine Historie.
 - **Website-Sync**: Ist `Config.Website.enabled` aktiv, werden Positionen
   live an die Speditions-Website gepusht (`driver_position.update`/
-  `.remove`) und die konfigurierten Kartengrenzen beim Ressourcenstart als
-  `live_map.bounds` mitgeschickt, damit die Website dieselbe
-  Weltkoordinaten→Kartenbild-Umrechnung verwendet wie das Tablet.
+  `.remove`) und die aktuell geltenden Kartengrenzen beim Ressourcenstart
+  UND nach jeder Ein-Klick-Synchronisation als `live_map.bounds`
+  mitgeschickt, damit die Website dieselbe Weltkoordinaten→Kartenbild-
+  Umrechnung verwendet wie das Tablet.
 
 **Bestandsinstallationen:** `live_map_view` ist eine neue Berechtigung -
 bestehende Rollen bekommen sie NICHT automatisch (`Config.DefaultRolePermissions`

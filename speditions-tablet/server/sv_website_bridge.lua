@@ -207,17 +207,18 @@ function WebsiteBridge.PushDriverPositionRemove(tabletEmployeeId)
     WebsiteBridge.PushEvent('driver_position.remove', { tabletEmployeeId = tabletEmployeeId })
 end
 
---- Meldet die aktuell konfigurierten Live-Karten-Kartengrenzen
---- (Config.LiveMap.bounds) an die Website, damit deren eigene Kartenansicht
---- dieselbe Umrechnung Weltkoordinaten→Kartenbild-Prozent verwendet wie das
---- Tablet, statt eine eigene, potenziell veraltete Kopie hart zu
---- hinterlegen. Wird beim Ressourcenstart gepusht - nach einer manuellen
---- Anpassung der vier Zahlen in config.lua reicht ein Ressourcen-Neustart,
---- damit auch die Website die neuen Grenzen erhält.
+--- Meldet die aktuell geltenden Live-Karten-Kartengrenzen
+--- (Tracking.GetMapBounds(), server/sv_tracking.lua) an die Website, damit
+--- deren eigene Kartenansicht dieselbe Umrechnung Weltkoordinaten→
+--- Kartenbild-Prozent verwendet wie das Tablet, statt eine eigene,
+--- potenziell veraltete Kopie hart zu hinterlegen. Wird beim
+--- Ressourcenstart UND nach jeder Ein-Klick-Synchronisation über die App
+--- "Live Karte" gepusht (RPC dispatch:syncMapPosition).
 function WebsiteBridge.PushLiveMapBounds()
     if not websiteConfigured() then return end
-    if not (Config.LiveMap and Config.LiveMap.bounds) then return end
-    WebsiteBridge.PushEvent('live_map.bounds', { bounds = Config.LiveMap.bounds })
+    local bounds = Tracking and Tracking.GetMapBounds()
+    if not bounds then return end
+    WebsiteBridge.PushEvent('live_map.bounds', { bounds = bounds })
 end
 
 --- Meldet eine abgeschlossene Fracht als Fahrtenbuch-Eintrag an die Website -
