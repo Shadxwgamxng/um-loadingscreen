@@ -850,7 +850,7 @@ async function showView(id) {
 // Hover-Leiste am linken Rand von #content, um zwischen den vier
 // zusammengehörigen Disponenten-Apps zu wechseln, ohne jedes Mal über den
 // Startbildschirm zurück in die Disposition navigieren zu müssen (s.
-// .quickswitch-rail in style.css). Nur sichtbar, solange eine dieser Apps
+// .hover-rail in style.css). Nur sichtbar, solange eine dieser Apps
 // gerade offen ist.
 const QUICKSWITCH_VIEWS = [
     { id: 'disposition', label: 'Disposition', icon: 'clipboard', perm: null },
@@ -871,7 +871,7 @@ function renderQuickswitchRail(activeId) {
     const items = QUICKSWITCH_VIEWS.filter((v) => !v.perm || perms.includes(v.perm));
     rail.classList.remove('hidden');
     rail.innerHTML = items.map((v) => `
-        <div class="quickswitch-item ${v.id === activeId ? 'active' : ''}" onclick="showView('${v.id}')">
+        <div class="hover-rail-item ${v.id === activeId ? 'active' : ''}" onclick="showView('${v.id}')">
             ${iconSvg(v.icon)}<span>${escapeHtml(v.label)}</span>
         </div>
     `).join('');
@@ -1143,12 +1143,12 @@ async function refreshAfterCargoTypesChanged() {
 const VIEWS = {};
 
 // ---------------------------------------------------------
-// Split-View-Helper (Sektionen-Leiste rechts, iPad-Splitview-Prinzip) -
-// für Apps, die mehrere frühere Einzel-Apps zu einem Bereich zusammenlegen
-// (z.B. "Finanzcenter", "Fuhrpark-Verwaltung"). Jede Sektion bleibt
-// permission-gated wie zuvor die jeweilige Einzel-App; der zuletzt aktive
-// Tab pro App bleibt gemerkt, damit ein Refresh (refreshIfViewing) nicht
-// auf den ersten Tab zurückspringt.
+// Split-View-Helper (Sektionen als linke Hover-Leiste, s. .hover-rail in
+// style.css) - für Apps, die mehrere frühere Einzel-Apps zu einem Bereich
+// zusammenlegen (z.B. "Finanzcenter", "Fuhrpark-Verwaltung"). Jede Sektion
+// bleibt permission-gated wie zuvor die jeweilige Einzel-App; der zuletzt
+// aktive Tab pro App bleibt gemerkt, damit ein Refresh (refreshIfViewing)
+// nicht auf den ersten Tab zurückspringt.
 // ---------------------------------------------------------
 
 const sectionedAppActiveKey = {};
@@ -1166,15 +1166,15 @@ async function renderSectionedApp(root, appId, sections) {
 
     root.innerHTML = `
         <div class="app-split">
-            <div class="app-split-content" id="app-split-content"><div class="card-hint">Lädt...</div></div>
-            <div class="app-split-sidebar">
+            <div class="hover-rail">
                 ${visible.map((s) => `
-                    <button class="app-split-tab ${s.key === sectionedAppActiveKey[appId] ? 'active' : ''}" data-section="${s.key}">${escapeHtml(s.label)}</button>
+                    <div class="hover-rail-item ${s.key === sectionedAppActiveKey[appId] ? 'active' : ''}" data-section="${s.key}">${escapeHtml(s.label)}</div>
                 `).join('')}
             </div>
+            <div class="app-split-content" id="app-split-content"><div class="card-hint">Lädt...</div></div>
         </div>`;
 
-    root.querySelectorAll('.app-split-tab').forEach((btn) => {
+    root.querySelectorAll('.hover-rail-item').forEach((btn) => {
         btn.addEventListener('click', () => {
             sectionedAppActiveKey[appId] = btn.dataset.section;
             renderSectionedApp(root, appId, sections);

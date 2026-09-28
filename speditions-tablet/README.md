@@ -99,9 +99,10 @@ sondern ein klassisches, an iPad/iOS angelehntes Tablet-Menü:
    **Disposition** und **Funk** (siehe Punkt 7).
 2. Ein Tipp auf eine Kategorie öffnet ein Kachel-Menü mit den einzelnen Apps
    darin. Mehrere eng verwandte frühere Einzel-Apps sind zu jeweils einer App
-   mit einer **Sektionen-Leiste rechts** zusammengelegt (Splitview-Prinzip,
-   z.B. wie die iPad-Einstellungen-App), statt für jede Kleinigkeit eine
-   eigene Kachel zu brauchen:
+   mit einer **linken Hover-Leiste** zusammengelegt (unsichtbar bis man mit
+   der Maus hinüberfährt, dann klappt sie zur Liste der Abschnitte auf -
+   dasselbe `.hover-rail`-Bauteil wie die App-Wechsel-Leiste der Disposition,
+   s. u.), statt für jede Kleinigkeit eine eigene Kachel zu brauchen:
    - **Meine Aufträge** (Fahrer): Aktuell / Historie
    - **Finanzcenter** (Geschäftsführung): Übersicht / Umsatz / Finanzen /
      Gehälter / Ein-Auszahlungen
@@ -109,8 +110,11 @@ sondern ein klassisches, an iPad/iOS angelehntes Tablet-Menü:
    - **Mitarbeiter**: Mitarbeiter / Rollen
 3. Ein Tipp auf eine App öffnet sie wie gewohnt - Inhalte/Funktionen sind
    unverändert, nur der Weg dorthin hat sich geändert. Der Button
-   "‹ Zurück" führt zur Kategorie zurück, der Button "Startbildschirm" oben
-   rechts jederzeit direkt zum Startbildschirm.
+   "‹ Zurück" führt zur Kategorie zurück. Einen "Startbildschirm"-Button gibt
+   es nicht mehr oben in der Kopfzeile - stattdessen sitzt unten am
+   Bildschirmrand eine dezente, vom iPhone/iPad bekannte Leiste (immer
+   sichtbar, nicht erst per Hover), die von überall aus direkt zum
+   Startbildschirm führt.
 4. Welche Kategorien/Apps/Sektionen sichtbar sind, richtet sich weiterhin
    ausschließlich nach den Berechtigungen der eigenen Rolle (siehe
    "Rollen & Berechtigungen" unten) - jede Sektion einer zusammengelegten App

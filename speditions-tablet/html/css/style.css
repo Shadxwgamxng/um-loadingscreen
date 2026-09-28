@@ -288,17 +288,32 @@ html, body {
 .body-wrap { display: flex; flex: 1 1 auto; min-height: 0; }
 .body-wrap > .hidden { display: none; }
 
-.home-btn {
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.12);
-    color: var(--text-1);
-    padding: 5px 12px;
-    border-radius: 999px;
+/* Ersetzt den früheren "Startbildschirm"-Button oben in der Topbar - eine
+   dezente, vom iPhone/iPad bekannte Leiste unten, jederzeit sichtbar
+   (nicht erst per Hover), führt per Klick direkt zum Startbildschirm.
+   Eigene große Klickfläche über der eigentlichen (schmalen) Leiste, damit
+   das Ziel auch ungenau getroffen werden kann. */
+.home-indicator {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 7;
+    height: 26px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 8px;
     cursor: pointer;
-    font-size: 12px;
-    font-family: inherit;
 }
-.home-btn:hover { border-color: var(--accent-2); color: var(--text-0); }
+.home-indicator-bar {
+    width: 120px;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.35);
+    transition: background 0.15s ease, width 0.15s ease;
+}
+.home-indicator:hover .home-indicator-bar { background: rgba(255,255,255,0.7); width: 132px; }
 
 /* ---------- Homescreen (Kategorien) + Kategorie-Grid (Apps) ----------
    Liegen transparent auf dem Wallpaper (siehe .wallpaper-img) - iPad-Optik:
@@ -549,14 +564,19 @@ html, body {
     min-height: 0;
 }
 
-/* Hover-Leiste am linken Rand von #content - schnelles Wechseln zwischen den
-   zusammengehörigen Disponenten-Apps (Disposition/Live-Karte/Nachrichten/
-   Funk), ohne jedes Mal über den Startbildschirm zurück in die Disposition
-   navigieren zu müssen. Liegt über #content (nicht im Layoutfluss), ist im
-   eingeklappten Zustand nur ein schmaler Rand-Hinweis und klappt beim
-   Hinüberhovern zur vollen Liste auf - s. renderQuickswitchRail() in app.js.
-   Nur sichtbar, solange eine der vier Apps offen ist (sonst .hidden). */
-.quickswitch-rail {
+/* ---------- Hover-Leiste (wiederverwendet für zwei Zwecke) ----------
+   1) #quickswitch-rail (direktes Kind von .app-view): schnelles Wechseln
+      zwischen den zusammengehörigen Disponenten-Apps (Disposition/Live-
+      Karte/Nachrichten/Funk), s. renderQuickswitchRail() in app.js.
+   2) Die Sektionen-Leiste zusammengelegter Apps (früher eine dauerhaft
+      sichtbare Leiste rechts, jetzt wie alle anderen Leisten eine Hover-
+      Leiste links), s. renderSectionedApp() in app.js - z.B. "Finanzcenter",
+      "Fuhrpark-Verwaltung", "Mitarbeiter", "Meine Aufträge".
+   Beide liegen über dem Inhalt (nicht im Layoutfluss, position:absolute
+   relativ zum nächsten position:relative-Elternelement), sind im
+   eingeklappten Zustand nur ein schmaler Rand-Hinweis und klappen beim
+   Hinüberhovern zur vollen Liste auf. */
+.hover-rail {
     position: absolute;
     left: 0;
     top: 0;
@@ -571,13 +591,13 @@ html, body {
     background: linear-gradient(90deg, rgba(59,130,246,0.22), transparent);
     transition: width 0.16s ease;
 }
-.quickswitch-rail:hover {
+.hover-rail:hover {
     width: 196px;
     background: var(--bg-2);
     border-right: 1px solid var(--border);
     box-shadow: 8px 0 28px rgba(0,0,0,0.4);
 }
-.quickswitch-item {
+.hover-rail-item {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -587,39 +607,16 @@ html, body {
     cursor: pointer;
     border-radius: 0 var(--radius) var(--radius) 0;
 }
-.quickswitch-item svg { width: 18px; height: 18px; flex-shrink: 0; }
-.quickswitch-item:hover { background: var(--bg-3); color: var(--text-0); }
-.quickswitch-item.active { background: var(--accent); color: #fff; font-weight: 600; }
+.hover-rail-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+.hover-rail-item:hover { background: var(--bg-3); color: var(--text-0); }
+.hover-rail-item.active { background: var(--accent); color: #fff; font-weight: 600; }
 
-/* ---------- App-Split (Sektionen-Leiste rechts, iPad-Splitview-Prinzip) ----
-   Für zusammengelegte Apps mit mehreren Abschnitten, s. renderSectionedApp()
-   in app.js (z.B. "Auftragsverwaltung", "Finanzcenter"). */
+/* ---------- App-Split (Sektionen zusammengelegter Apps, Inhalt + Hover-
+   Leiste, s. renderSectionedApp() in app.js, z.B. "Auftragsverwaltung",
+   "Finanzcenter"). ---------- */
 
-.app-split { display: flex; flex: 1 1 auto; min-height: 0; }
+.app-split { position: relative; display: flex; flex: 1 1 auto; min-height: 0; }
 .app-split-content { flex: 1 1 auto; overflow-y: auto; padding: 22px 26px 40px; min-width: 0; }
-.app-split-sidebar {
-    flex: 0 0 190px;
-    border-left: 1px solid var(--border);
-    background: var(--bg-2);
-    padding: 14px 10px;
-    overflow-y: auto;
-}
-.app-split-tab {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 10px 14px;
-    border-radius: var(--radius);
-    border: none;
-    background: transparent;
-    color: var(--text-1);
-    font-size: 13px;
-    font-family: inherit;
-    cursor: pointer;
-    margin-bottom: 4px;
-}
-.app-split-tab:hover { background: var(--bg-3); color: var(--text-0); }
-.app-split-tab.active { background: var(--accent); color: #fff; font-weight: 600; }
 .app-topbar {
     display: flex;
     align-items: center;

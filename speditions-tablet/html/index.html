@@ -51,7 +51,6 @@
                             <span class="brand-sub">Speditions-Tablet</span>
                         </div>
                         <div class="topbar-right">
-                            <button id="home-btn" class="home-btn" title="Startbildschirm" onclick="showHome()">Startbildschirm</button>
                             <button id="timeclock-btn" class="timeclock-chip" title="Ein-/Ausstempeln">
                                 <span id="timeclock-dot" class="timeclock-dot"></span>
                                 <span id="timeclock-label">Stempeluhr</span>
@@ -74,13 +73,20 @@
                                 <span id="app-topbar-title" class="app-topbar-title"></span>
                             </div>
                             <!-- Überlagert (nicht im Layoutfluss) die linke Kante von #content - erscheint
-                                 nur beim Hinüberhovern, s. .quickswitch-rail in style.css / renderQuickswitchRail() in app.js. -->
-                            <div id="quickswitch-rail" class="quickswitch-rail hidden"></div>
+                                 nur beim Hinüberhovern, s. .hover-rail in style.css / renderQuickswitchRail() in app.js. -->
+                            <div id="quickswitch-rail" class="hover-rail hidden"></div>
                             <main id="content" class="content"></main>
                         </div>
                     </div>
 
                     <div id="dock" class="dock hidden"></div>
+
+                    <!-- Ersetzt den früheren "Startbildschirm"-Button oben: dezente, iOS-
+                         bekannte Leiste unten - anklicken führt von überall direkt zum
+                         Startbildschirm, s. .home-indicator in style.css. -->
+                    <div id="home-indicator" class="home-indicator" title="Startbildschirm" onclick="showHome()">
+                        <span class="home-indicator-bar"></span>
+                    </div>
                 </div>
 
             </div>
