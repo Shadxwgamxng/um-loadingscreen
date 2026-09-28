@@ -837,6 +837,7 @@ async function showView(id) {
     if (titleEl) titleEl.textContent = app ? app.label : (dockItem ? dockItem.label : '');
     const content = document.getElementById('content');
     content.innerHTML = '<div class="card-hint">Lädt...</div>';
+    renderQuickswitchRail(id);
     try {
         const renderer = VIEWS[id];
         if (renderer) await renderer(content);
@@ -844,6 +845,36 @@ async function showView(id) {
         // eslint-disable-next-line no-console
         console.error('[speditions-tablet] Fehler beim Laden der Ansicht', id, e);
     }
+}
+
+// Hover-Leiste am linken Rand von #content, um zwischen den vier
+// zusammengehörigen Disponenten-Apps zu wechseln, ohne jedes Mal über den
+// Startbildschirm zurück in die Disposition navigieren zu müssen (s.
+// .quickswitch-rail in style.css). Nur sichtbar, solange eine dieser Apps
+// gerade offen ist.
+const QUICKSWITCH_VIEWS = [
+    { id: 'disposition', label: 'Disposition', icon: 'clipboard', perm: null },
+    { id: 'dispatch-map', label: 'Live-Karte', icon: 'pin', perm: 'live_map_view' },
+    { id: 'driver-messages', label: 'Nachrichten', icon: 'chat', perm: 'driver_actions' },
+    { id: 'funk', label: 'Funk', icon: 'walkie', perm: null },
+];
+
+function renderQuickswitchRail(activeId) {
+    const rail = document.getElementById('quickswitch-rail');
+    if (!rail) return;
+    if (!QUICKSWITCH_VIEWS.some((v) => v.id === activeId)) {
+        rail.classList.add('hidden');
+        rail.innerHTML = '';
+        return;
+    }
+    const perms = currentPermissions();
+    const items = QUICKSWITCH_VIEWS.filter((v) => !v.perm || perms.includes(v.perm));
+    rail.classList.remove('hidden');
+    rail.innerHTML = items.map((v) => `
+        <div class="quickswitch-item ${v.id === activeId ? 'active' : ''}" onclick="showView('${v.id}')">
+            ${iconSvg(v.icon)}<span>${escapeHtml(v.label)}</span>
+        </div>
+    `).join('');
 }
 
 function refreshIfViewing(ids) {
@@ -1704,7 +1735,6 @@ const DISPO_POLL_MS = 8000;
 let dispoLastOpenOrders = [];
 let dispoLastActiveOrders = [];
 let dispoLastDrivers = [];
-let dispoDragPayload = null; // { orderId, reassign, requiresPermission }
 let dispoDragActive = false; // unterdrückt Re-Render durch Poll/Push während eines laufenden Drags
 
 VIEWS['disposition'] = async (root) => {
@@ -1733,9 +1763,6 @@ async function renderDisposition(root) {
             <span class="dispo-header-title">Disposition</span>
             <div class="dispo-header-right">
                 <div class="dispo-header-links">
-                    <button class="dispo-link-btn" onclick="showView('dispatch-map')">${iconSvg('pin')}Live-Karte</button>
-                    <button class="dispo-link-btn" onclick="showView('driver-messages')">${iconSvg('chat')}Nachrichten</button>
-                    <button class="dispo-link-btn" onclick="showView('funk')">${iconSvg('walkie')}Funk</button>
                     <button class="dispo-link-btn" onclick="Actions.showDispatchHistory()">${iconSvg('clipboard')}Verlauf</button>
                 </div>
                 <div class="dispo-duty">
@@ -1764,7 +1791,7 @@ async function renderDisposition(root) {
 }
 
 function dispoOpenOrderCard(o) {
-    return `<div class="dispo-card" draggable="true" ondragstart="dispoDragStart(event, ${o.id}, false)" ondragend="dispoDragEnd(event)">
+    return `<div class="dispo-card dispo-draggable" onpointerdown="dispoPointerDown(event, ${o.id}, false)">
         <div class="dispo-card-top">
             <span class="dispo-card-id">#${o.id}</span>
             <span class="dispo-card-value">${formatMoney(o.value)}</span>
@@ -1783,11 +1810,11 @@ function dispoOpenOrderCard(o) {
 
 function dispoAssignedOrderCard(o) {
     const reassignable = REASSIGNABLE_ORDER_STATUSES.includes(o.status);
-    const draggableAttr = reassignable ? `draggable="true" ondragstart="dispoDragStart(event, ${o.id}, true)" ondragend="dispoDragEnd(event)"` : '';
+    const dragAttr = reassignable ? `onpointerdown="dispoPointerDown(event, ${o.id}, true)"` : '';
     const cancelActions = o.pending_cancel_request_id ? `
         <button class="btn btn-sm btn-primary" onclick="Actions.resolveCancelRequest(${o.pending_cancel_request_id}, true)">Abbruch genehmigen</button>
         <button class="btn btn-sm" onclick="Actions.resolveCancelRequest(${o.pending_cancel_request_id}, false)">Ablehnen</button>` : '';
-    return `<div class="dispo-card" ${draggableAttr}>
+    return `<div class="dispo-card ${reassignable ? 'dispo-draggable' : ''}" ${dragAttr}>
         <div class="dispo-card-top">
             <span class="dispo-card-id">#${o.id}</span>
             ${badge(ORDER_STATUS_META[o.status])}
@@ -1808,7 +1835,7 @@ function dispoAssignedOrderCard(o) {
 
 function dispoFleetCard(d, activeOrders) {
     const order = activeOrders.find((o) => o.driver_id === d.driver_id);
-    return `<div class="dispo-card dispo-fleet-card" ondragover="dispoDragOver(event, ${d.driver_id})" ondragleave="dispoDragLeave(event)" ondrop="dispoDrop(event, ${d.driver_id})">
+    return `<div class="dispo-card dispo-fleet-card" data-driver-id="${d.driver_id}">
         <div class="dispo-card-top">
             <span class="dispo-fleet-name">${escapeHtml(d.name)}</span>
             ${badge(DRIVER_STATUS_META[d.current_status])}
@@ -1822,58 +1849,104 @@ function dispoFleetCard(d, activeOrders) {
     </div>`;
 }
 
-function dispoFleetCardIsValidTarget(driver) {
-    if (!dispoDragPayload) return false;
-    if (!dispoDragPayload.reassign && driver.current_status !== 'verfuegbar') return false;
-    if (dispoDragPayload.requiresPermission && !(driver.permissions || '').split(',').includes(dispoDragPayload.requiresPermission)) return false;
+function dispoFleetCardIsValidTarget(driver, state) {
+    if (!driver) return false;
+    if (!state.reassign && driver.current_status !== 'verfuegbar') return false;
+    if (state.requiresPermission && !(driver.permissions || '').split(',').includes(state.requiresPermission)) return false;
     return true;
 }
 
-function dispoDragStart(ev, orderId, reassign) {
+// ---------------------------------------------------------
+// Zuweisen per Ziehen - bewusst NICHT über die native HTML5-Drag&Drop-API
+// (draggable/dragstart/dragover/drop): FiveMs NUI ist ein off-screen
+// gerendertes CEF, dessen OSR-Pipeline die native Drag-Interaktion des
+// Betriebssystems nicht abbildet - in der Praxis bleibt dabei dauerhaft der
+// "Verboten"-Cursor stehen und drop() feuert nicht zuverlässig. Pointer-
+// Events (pointerdown/-move/-up) plus ein von Hand mitgeführtes Ghost-
+// Element funktionieren dagegen wie jede normale Mausbewegung.
+// ---------------------------------------------------------
+
+let dispoPointerState = null; // { orderId, reassign, requiresPermission, sourceEl, ghostEl, startX, startY, moved, currentTargetEl }
+const DISPO_DRAG_THRESHOLD_PX = 6; // erst ab dieser Bewegung als Ziehen werten, sonst würde jeder Klick (z.B. auf "Zuweisen") als Drag starten
+
+function dispoPointerDown(ev, orderId, reassign) {
+    if (ev.button !== 0 && ev.pointerType === 'mouse') return; // nur linke Maustaste
+    if (ev.target.closest('button')) return; // Klicks auf die Karten-Buttons dürfen nicht als Drag-Start gewertet werden
     const order = (reassign ? dispoLastActiveOrders : dispoLastOpenOrders).find((o) => o.id === orderId);
-    dispoDragPayload = { orderId, reassign, requiresPermission: order ? order.requires_permission : null };
-    dispoDragActive = true;
-    ev.currentTarget.classList.add('dispo-dragging');
-    ev.dataTransfer.effectAllowed = 'move';
-    ev.dataTransfer.setData('text/plain', String(orderId)); // Firefox verlangt gesetzte Daten, damit dragstart greift
+    dispoPointerState = {
+        orderId,
+        reassign,
+        requiresPermission: order ? order.requires_permission : null,
+        sourceEl: ev.currentTarget,
+        ghostEl: null,
+        startX: ev.clientX,
+        startY: ev.clientY,
+        moved: false,
+        currentTargetEl: null,
+    };
+    document.addEventListener('pointermove', dispoPointerMove);
+    document.addEventListener('pointerup', dispoPointerUp);
+    document.addEventListener('pointercancel', dispoPointerUp);
 }
 
-function dispoDragEnd(ev) {
-    ev.currentTarget.classList.remove('dispo-dragging');
-    dispoDragActive = false;
-    dispoDragPayload = null;
-    document.querySelectorAll('.dispo-drop-valid, .dispo-drop-invalid').forEach((el) => el.classList.remove('dispo-drop-valid', 'dispo-drop-invalid'));
-}
-
-function dispoDragOver(ev, driverId) {
-    if (!dispoDragPayload) return;
-    ev.preventDefault(); // nötig, damit "drop" überhaupt feuert
-    const driver = dispoLastDrivers.find((d) => d.driver_id === driverId);
-    const valid = driver && dispoFleetCardIsValidTarget(driver);
-    ev.currentTarget.classList.toggle('dispo-drop-valid', !!valid);
-    ev.currentTarget.classList.toggle('dispo-drop-invalid', !valid);
-    ev.dataTransfer.dropEffect = valid ? 'move' : 'none';
-}
-
-function dispoDragLeave(ev) {
-    ev.currentTarget.classList.remove('dispo-drop-valid', 'dispo-drop-invalid');
-}
-
-function dispoDrop(ev, driverId) {
+function dispoPointerMove(ev) {
+    const state = dispoPointerState;
+    if (!state) return;
+    if (!state.moved) {
+        if (Math.abs(ev.clientX - state.startX) < DISPO_DRAG_THRESHOLD_PX && Math.abs(ev.clientY - state.startY) < DISPO_DRAG_THRESHOLD_PX) return;
+        state.moved = true;
+        dispoDragActive = true;
+        state.sourceEl.classList.add('dispo-dragging');
+        const order = (state.reassign ? dispoLastActiveOrders : dispoLastOpenOrders).find((o) => o.id === state.orderId);
+        const ghost = document.createElement('div');
+        ghost.className = 'dispo-drag-ghost';
+        ghost.textContent = order ? `#${state.orderId} · ${order.start_location} → ${order.end_location}` : `#${state.orderId}`;
+        document.body.appendChild(ghost);
+        state.ghostEl = ghost;
+    }
     ev.preventDefault();
-    ev.currentTarget.classList.remove('dispo-drop-valid', 'dispo-drop-invalid');
-    if (!dispoDragPayload) return;
-    const driver = dispoLastDrivers.find((d) => d.driver_id === driverId);
-    if (!driver || !dispoFleetCardIsValidTarget(driver)) return;
-    const { orderId, reassign } = dispoDragPayload;
-    const order = (reassign ? dispoLastActiveOrders : dispoLastOpenOrders).find((o) => o.id === orderId);
-    const routeLabel = order ? `${order.start_location} → ${order.end_location}` : `#${orderId}`;
+    state.ghostEl.style.left = `${ev.clientX + 16}px`;
+    state.ghostEl.style.top = `${ev.clientY + 16}px`;
+
+    const hovered = document.elementFromPoint(ev.clientX, ev.clientY);
+    const fleetCard = hovered ? hovered.closest('.dispo-fleet-card') : null;
+    if (fleetCard !== state.currentTargetEl) {
+        if (state.currentTargetEl) state.currentTargetEl.classList.remove('dispo-drop-valid', 'dispo-drop-invalid');
+        state.currentTargetEl = fleetCard;
+        if (fleetCard) {
+            const driver = dispoLastDrivers.find((d) => d.driver_id === Number(fleetCard.dataset.driverId));
+            const valid = dispoFleetCardIsValidTarget(driver, state);
+            fleetCard.classList.toggle('dispo-drop-valid', valid);
+            fleetCard.classList.toggle('dispo-drop-invalid', !valid);
+        }
+    }
+}
+
+function dispoPointerUp() {
+    const state = dispoPointerState;
+    document.removeEventListener('pointermove', dispoPointerMove);
+    document.removeEventListener('pointerup', dispoPointerUp);
+    document.removeEventListener('pointercancel', dispoPointerUp);
+    dispoPointerState = null;
+    if (!state) return;
+    if (state.ghostEl) state.ghostEl.remove();
+    state.sourceEl.classList.remove('dispo-dragging');
+    dispoDragActive = false;
+    const target = state.currentTargetEl;
+    if (target) target.classList.remove('dispo-drop-valid', 'dispo-drop-invalid');
+    if (!state.moved || !target) return; // Klick ohne Ziehen, oder außerhalb einer Fuhrpark-Karte losgelassen
+
+    const driver = dispoLastDrivers.find((d) => d.driver_id === Number(target.dataset.driverId));
+    if (!dispoFleetCardIsValidTarget(driver, state)) return;
+
+    const order = (state.reassign ? dispoLastActiveOrders : dispoLastOpenOrders).find((o) => o.id === state.orderId);
+    const routeLabel = order ? `${order.start_location} → ${order.end_location}` : `#${state.orderId}`;
     const vehicleLabel = driver.vehicle_name ? ` (${driver.vehicle_name})` : '';
     openConfirmModal(
-        reassign ? 'Auftrag neu zuweisen' : 'Auftrag zuweisen',
+        state.reassign ? 'Auftrag neu zuweisen' : 'Auftrag zuweisen',
         `${routeLabel} an ${driver.name}${vehicleLabel} zuweisen?`,
         'Zuweisen',
-        `Actions.${reassign ? 'reassignOrderToDriver' : 'assignOrderToDriver'}(${orderId}, ${driverId})`
+        `Actions.${state.reassign ? 'reassignOrderToDriver' : 'assignOrderToDriver'}(${state.orderId}, ${driver.driver_id})`
     );
 }
 

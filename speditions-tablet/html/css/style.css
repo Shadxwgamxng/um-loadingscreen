@@ -417,9 +417,21 @@ html, body {
 .widget-status { margin-top: 8px; font-size: 12px; color: rgba(255,255,255,0.85); }
 .widget-empty { font-size: 12.5px; color: rgba(255,255,255,0.6); margin-top: 12px; }
 
-.home-tiles, .app-grid {
+.app-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    align-content: start;
+    gap: 22px 14px;
+}
+
+/* Feste 4-Spalten statt auto-fill (anders als .app-grid): die Home-Kacheln
+   sollen immer links, untereinander in maximal 4er-Reihen bleiben und nie
+   bis unter die rechts fest positionierten Widgets (.home-widget-right)
+   reichen, unabhängig von der Bildschirmbreite. */
+.home-tiles {
+    display: grid;
+    grid-template-columns: repeat(4, 96px);
+    max-width: fit-content;
     align-content: start;
     gap: 22px 14px;
 }
@@ -536,6 +548,48 @@ html, body {
     flex-direction: column;
     min-height: 0;
 }
+
+/* Hover-Leiste am linken Rand von #content - schnelles Wechseln zwischen den
+   zusammengehörigen Disponenten-Apps (Disposition/Live-Karte/Nachrichten/
+   Funk), ohne jedes Mal über den Startbildschirm zurück in die Disposition
+   navigieren zu müssen. Liegt über #content (nicht im Layoutfluss), ist im
+   eingeklappten Zustand nur ein schmaler Rand-Hinweis und klappt beim
+   Hinüberhovern zur vollen Liste auf - s. renderQuickswitchRail() in app.js.
+   Nur sichtbar, solange eine der vier Apps offen ist (sonst .hidden). */
+.quickswitch-rail {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 6;
+    width: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 18px 0;
+    gap: 3px;
+    background: linear-gradient(90deg, rgba(59,130,246,0.22), transparent);
+    transition: width 0.16s ease;
+}
+.quickswitch-rail:hover {
+    width: 196px;
+    background: var(--bg-2);
+    border-right: 1px solid var(--border);
+    box-shadow: 8px 0 28px rgba(0,0,0,0.4);
+}
+.quickswitch-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 15px;
+    white-space: nowrap;
+    color: var(--text-1);
+    cursor: pointer;
+    border-radius: 0 var(--radius) var(--radius) 0;
+}
+.quickswitch-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+.quickswitch-item:hover { background: var(--bg-3); color: var(--text-0); }
+.quickswitch-item.active { background: var(--accent); color: #fff; font-weight: 600; }
 
 /* ---------- App-Split (Sektionen-Leiste rechts, iPad-Splitview-Prinzip) ----
    Für zusammengelegte Apps mit mehreren Abschnitten, s. renderSectionedApp()
@@ -701,9 +755,28 @@ html, body {
     padding: 12px 14px;
     transition: outline-color 0.12s ease, opacity 0.12s ease, transform 0.12s ease;
 }
-.dispo-card[draggable="true"] { cursor: grab; }
-.dispo-card[draggable="true"]:active { cursor: grabbing; }
+.dispo-card.dispo-draggable { cursor: grab; touch-action: none; }
+.dispo-card.dispo-draggable:active { cursor: grabbing; }
 .dispo-card.dispo-dragging { opacity: 0.35; }
+
+/* Ghost-Element beim Ziehen (s. dispoPointerMove() in app.js) - folgt dem
+   Cursor per pointermove statt eines nativen Drag-Bilds (FiveMs NUI-CEF
+   unterstützt natives HTML5-Drag&Drop nicht zuverlässig). */
+.dispo-drag-ghost {
+    position: fixed;
+    z-index: 999;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.45);
+}
 .dispo-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .dispo-card-id { font-size: 11px; color: var(--text-2); font-weight: 600; }
 .dispo-card-route { font-size: 13px; font-weight: 600; color: var(--text-0); margin-top: 7px; line-height: 1.35; }

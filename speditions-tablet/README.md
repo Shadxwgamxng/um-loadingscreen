@@ -151,7 +151,11 @@ sondern ein klassisches, an iPad/iOS angelehntes Tablet-Menü:
    die zur jeweiligen App verlinken - unter der Uhrzeit den "Aktuellen
    Auftrag" (Fracht, Strecke, Status, sofern einer läuft), rechts oben die
    "Fahrerkarte" (eingesteckt/nicht eingesteckt) und direkt darunter "Mein
-   Fahrzeug" (Name/Modell, Kennzeichen, Status, Tankstand).
+   Fahrzeug" (Name/Modell, Kennzeichen, Status, Tankstand). Damit sich die
+   Kategorie-/App-Kacheln nie mit diesen rechts positionierten Widgets
+   überschneiden, stehen sie links in einem festen Raster mit maximal 4
+   Kacheln pro Reihe (statt bildschirmfüllend), auch wenn weitere Kategorien
+   dazukommen.
 
 Alle folgenden Abschnitte dieses READMEs sprechen aus historischen Gründen
 teils weiterhin von "Reitern" - gemeint ist damit jeweils die entsprechende
@@ -221,23 +225,36 @@ drei gleichzeitig sichtbaren Spalten statt der früheren getrennten Apps
 - **Zugewiesen / Laufend** (rechts): alle disponierten und laufenden
   Aufträge mit Fahrer, Fahrzeug, Status und offenen Abbruch-Anfragen.
 
-**Zuweisen per Drag & Drop:** eine Auftragskarte aus "Offene Aufträge" (oder
-zum Neu-Zuweisen eine Karte aus "Zugewiesen / Laufend", solange ihr Status
-das erlaubt) wird auf eine Fuhrpark-Karte gezogen. Während des Ziehens hebt
-sich ein gültiges Ziel grün hervor (passende Berechtigung z.B. bei
-Gefahrgut, bei einer Neuzuweisung beliebiger Status, sonst nur "verfügbare"
-Fahrer), ein ungültiges Ziel wird sichtbar abgeblendet und nimmt die Karte
-nicht an. Ein Loslassen auf einem gültigen Ziel öffnet eine kurze
-Bestätigung ("Auftrag XY an Fahrer Z zuweisen?") - erst danach wird
-tatsächlich disponiert, ein versehentliches Fallenlassen löst also nichts
-aus. Wer lieber ohne Drag & Drop arbeitet, findet an jeder Auftragskarte
-weiterhin einen "Zuweisen"/"Neu zuweisen"-Button mit Dropdown-Auswahl.
+**Zuweisen per Ziehen:** eine Auftragskarte aus "Offene Aufträge" (oder zum
+Neu-Zuweisen eine Karte aus "Zugewiesen / Laufend", solange ihr Status das
+erlaubt) wird auf eine Fuhrpark-Karte gezogen. Während des Ziehens hebt sich
+ein gültiges Ziel grün hervor (passende Berechtigung z.B. bei Gefahrgut, bei
+einer Neuzuweisung beliebiger Status, sonst nur "verfügbare" Fahrer), ein
+ungültiges Ziel wird sichtbar abgeblendet und nimmt die Karte nicht an. Ein
+Loslassen auf einem gültigen Ziel öffnet eine kurze Bestätigung ("Auftrag XY
+an Fahrer Z zuweisen?") - erst danach wird tatsächlich disponiert, ein
+versehentliches Fallenlassen löst also nichts aus. Wer lieber ohne Ziehen
+arbeitet, findet an jeder Auftragskarte weiterhin einen "Zuweisen"/"Neu
+zuweisen"-Button mit Dropdown-Auswahl.
 
-Die Kopfzeile der Disposition enthält außerdem den **Dispositions-Dienst-
-Toggle** (früher ein eigenes Dock-Icon) sowie Kurz-Links zu Live-Karte,
-Nachrichten, Funk und dem Auftrags-**Verlauf** (abgeschlossene/abgebrochene/
-abgelehnte Aufträge), damit diese verwandten Werkzeuge erreichbar bleiben,
-ohne den Arbeitskontext der Disposition zu verlassen.
+**Technisch bewusst ohne natives HTML5-Drag&Drop** (`draggable`/`dragstart`/
+`dragover`/`drop`): FiveMs NUI ist ein off-screen gerendertes CEF, dessen
+Pipeline die native Drag-Interaktion des Betriebssystems nicht abbildet - in
+der Praxis bleibt dabei dauerhaft der "Verboten"-Cursor stehen und `drop()`
+feuert nicht zuverlässig. Das Ziehen läuft stattdessen über normale
+Zeigereignisse (`pointerdown`/`pointermove`/`pointerup`) mit einem von Hand
+mitgeführten Ghost-Element - funktioniert wie jede gewöhnliche Mausbewegung
+und damit auch zuverlässig im Spiel-NUI.
+
+**Kurz-Wechsel zwischen den Disponenten-Apps:** an der linken Kante des
+Inhaltsbereichs sitzt eine schmale Hover-Leiste (kaum sichtbar, bis man mit
+der Maus hinüberfährt) - sie klappt dann zu einer Liste mit **Disposition**,
+**Live-Karte**, **Nachrichten** und **Funk** auf. Ein Klick darauf wechselt
+direkt in die jeweilige App, ohne den Umweg über den Startbildschirm. Die
+Leiste erscheint nur, solange eine dieser vier Apps offen ist. Die
+Kopfzeile der Disposition selbst enthält daneben den **Dispositions-Dienst-
+Toggle** (früher ein eigenes Dock-Icon) sowie einen Link zum Auftrags-
+**Verlauf** (abgeschlossene/abgebrochene/abgelehnte Aufträge).
 
 ### Dispositions-Dienst & Auftrags-Selbstzuweisung ohne Disponent
 

@@ -73,6 +73,9 @@
                                 <button id="app-back-btn" class="app-back-btn" onclick="showBackFromApp()">&#8249; Zurück</button>
                                 <span id="app-topbar-title" class="app-topbar-title"></span>
                             </div>
+                            <!-- Überlagert (nicht im Layoutfluss) die linke Kante von #content - erscheint
+                                 nur beim Hinüberhovern, s. .quickswitch-rail in style.css / renderQuickswitchRail() in app.js. -->
+                            <div id="quickswitch-rail" class="quickswitch-rail hidden"></div>
                             <main id="content" class="content"></main>
                         </div>
                     </div>
