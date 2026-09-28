@@ -342,10 +342,10 @@ const CATEGORIES = [
     { id: 'geschaeftsfuehrung', label: 'Geschäftsführung', icon: 'briefcase' },
 ];
 
-// Mehrere frühere Einzel-Apps sind zu je einer App mit rechter Sektionen-
-// Leiste zusammengelegt (renderSectionedApp), damit nicht jede Kleinigkeit
-// eine eigene Kachel braucht - siehe VIEWS['driver-orders']/['dispatch-
-// orders']/['gf-finance-hub']/['gf-fleet-hub']/['gf-employees']. `perm` ist
+// Mehrere frühere Einzel-Apps sind zu je einer App mit linker Hover-Leiste
+// als Sektionen-Umschalter zusammengelegt (renderSectionedApp), damit nicht
+// jede Kleinigkeit eine eigene Kachel braucht - siehe VIEWS['driver-orders']/
+// ['gf-finance-hub']/['gf-fleet-hub']/['gf-employees']. `perm` ist
 // entweder eine einzelne Berechtigung oder (bei zusammengelegten Apps mit
 // unterschiedlich berechtigten Sektionen) ein Array - sichtbar, wenn
 // mindestens eine davon vorhanden ist (siehe appHasPermission()).
@@ -1160,7 +1160,9 @@ const sectionedAppActiveKey = {};
 async function renderSectionedApp(root, appId, sections) {
     const perms = currentPermissions();
     const visible = sections.filter((s) => !s.perm || perms.includes(s.perm));
+    const rail = document.getElementById('quickswitch-rail');
     if (!visible.length) {
+        if (rail) { rail.classList.add('hidden'); rail.innerHTML = ''; }
         root.innerHTML = '<div class="card-hint">Keine Berechtigung für diese App.</div>';
         return;
     }
@@ -1168,26 +1170,27 @@ async function renderSectionedApp(root, appId, sections) {
         sectionedAppActiveKey[appId] = visible[0].key;
     }
 
-    root.innerHTML = `
-        <div class="app-split">
-            <div class="hover-rail">
-                ${visible.map((s) => `
-                    <div class="hover-rail-item ${s.key === sectionedAppActiveKey[appId] ? 'active' : ''}" data-section="${s.key}">${escapeHtml(s.label)}</div>
-                `).join('')}
-            </div>
-            <div class="app-split-content" id="app-split-content"><div class="card-hint">Lädt...</div></div>
-        </div>`;
-
-    root.querySelectorAll('.hover-rail-item').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            sectionedAppActiveKey[appId] = btn.dataset.section;
-            renderSectionedApp(root, appId, sections);
+    // Nutzt statt eines eigenen, in #content verschachtelten Rands die
+    // bereits am echten Bildschirmrand positionierte #quickswitch-rail
+    // (Geschwister von #content in #app-view, s. index.html) - eine
+    // Sektions-Ansicht und die Quickswitch-Apps sind nie gleichzeitig
+    // sichtbar, die Rail kann sich also den einen DOM-Knoten teilen.
+    if (rail) {
+        rail.classList.remove('hidden');
+        rail.innerHTML = visible.map((s) => `
+            <div class="hover-rail-item ${s.key === sectionedAppActiveKey[appId] ? 'active' : ''}" data-section="${s.key}">${escapeHtml(s.label)}</div>
+        `).join('');
+        rail.querySelectorAll('.hover-rail-item').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                sectionedAppActiveKey[appId] = btn.dataset.section;
+                renderSectionedApp(root, appId, sections);
+            });
         });
-    });
+    }
 
+    root.innerHTML = '<div class="card-hint">Lädt...</div>';
     const active = visible.find((s) => s.key === sectionedAppActiveKey[appId]);
-    const content = root.querySelector('#app-split-content');
-    await active.render(content);
+    await active.render(root);
 }
 
 // Springt innerhalb einer zusammengelegten App direkt zu einer bestimmten

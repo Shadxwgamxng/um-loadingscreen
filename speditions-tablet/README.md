@@ -101,8 +101,10 @@ sondern ein klassisches, an iPad/iOS angelehntes Tablet-Menü:
    darin. Mehrere eng verwandte frühere Einzel-Apps sind zu jeweils einer App
    mit einer **linken Hover-Leiste** zusammengelegt (unsichtbar bis man mit
    der Maus hinüberfährt, dann klappt sie zur Liste der Abschnitte auf -
-   dasselbe `.hover-rail`-Bauteil wie die App-Wechsel-Leiste der Disposition,
-   s. u.), statt für jede Kleinigkeit eine eigene Kachel zu brauchen:
+   technisch derselbe DOM-Knoten wie die App-Wechsel-Leiste der Disposition,
+   s. u., nicht nur dieselbe CSS-Klasse, damit die Leiste garantiert exakt am
+   echten Bildschirmrand sitzt statt in einem eingerückten Container),
+   statt für jede Kleinigkeit eine eigene Kachel zu brauchen:
    - **Meine Aufträge** (Fahrer): Aktuell / Historie
    - **Finanzcenter** (Geschäftsführung): Übersicht / Umsatz / Finanzen /
      Gehälter / Ein-Auszahlungen

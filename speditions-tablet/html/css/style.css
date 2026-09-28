@@ -617,12 +617,6 @@ html, body {
 .hover-rail-item:hover { background: var(--bg-3); color: var(--text-0); }
 .hover-rail-item.active { background: var(--accent); color: #fff; font-weight: 600; }
 
-/* ---------- App-Split (Sektionen zusammengelegter Apps, Inhalt + Hover-
-   Leiste, s. renderSectionedApp() in app.js, z.B. "Auftragsverwaltung",
-   "Finanzcenter"). ---------- */
-
-.app-split { position: relative; display: flex; flex: 1 1 auto; min-height: 0; }
-.app-split-content { flex: 1 1 auto; overflow-y: auto; padding: 22px 26px 40px; min-width: 0; }
 .app-topbar {
     display: flex;
     align-items: center;
@@ -663,7 +657,7 @@ html, body {
    Aufträge) statt der früheren getrennten Apps "Auftragsverwaltung"/
    "Fahrerübersicht" - Zuweisung per Drag & Drop einer Auftragskarte auf eine
    Fuhrpark-Karte (oder per Klick-Fallback-Button), s. renderDisposition() in
-   app.js. Folgt der gleichen Panel-/Trennlinien-Sprache wie .app-split. */
+   app.js. Folgt der gleichen Panel-/Trennlinien-Sprache wie .app-topbar. */
 
 .dispo-header {
     display: flex;
