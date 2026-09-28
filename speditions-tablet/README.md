@@ -664,10 +664,13 @@ Funk-Teilnehmern.
 - **Großes LCD-Kanaldisplay** in der Mitte zeigt den aktuell eingestellten
   Kanal jederzeit eindeutig. Links/rechts daneben je ein antippbarer
   Nachbarkanal sowie ein Schrittpfeil (◂/▸) - Kanalwechsel bleibt so immer
-  ein einzelner, gezielter Tap statt einer Kachelwand. Kanäle 1000-1009
-  (`Config.Radio.minChannel`/`maxChannel`), Standardkanal beim
+  ein einzelner, gezielter Tap statt einer Kachelwand. Im Tablet angezeigte
+  Kanäle 1-10 (`Config.Radio.minChannel`/`maxChannel`), Standardkanal beim
   Ressourcenstart `Config.Radio.defaultChannel` - alle drei in `config.lua`
-  frei anpassbar.
+  frei anpassbar. Intern läuft das über pma-voice-Kanäle 4100-4109
+  (`Config.Radio.pmaChannelBase`, s. Kommentar in `config.lua`) - eigener,
+  hoher Kanalbereich, damit es keine Überschneidung mit Funkkanälen anderer
+  Ressourcen/Gruppen auf eurem Server gibt.
 - **Lautstärke-Regler**: echter Slider (kein +/- Tastenpaar) mit
   Prozentanzeige, direkt an `pma-voice`s `setRadioVolume` gekoppelt.
   Standardlautstärke beim Ressourcenstart `Config.Radio.defaultVolume`.
@@ -736,20 +739,33 @@ Funk-Teilnehmern.
   `escrow_ignore_files` in `fxmanifest.lua`) - stammt eure `config.lua` noch
   von vor der Einführung des Funk-Features, fehlt ihr der komplette
   `Config.Radio`-Block. `client/cl_radio.lua` und `server/sv_radio.lua`
-  laufen in dem Fall zwar dank eingebauter Standardwerte (Kanäle 1000-1009)
+  laufen in dem Fall zwar dank eingebauter Standardwerte (Kanäle 1-10)
   weiter, statt abzustürzen, melden das aber deutlich als rote Zeile
   `[speditions-tablet] Funk: Config.Radio fehlt in config.lua ...` in der
   Server- bzw. Client-Konsole (F8). Ergänzt in dem Fall den folgenden Block
   aus der aktuellen `config.lua` in eure eigene (Werte nach Bedarf anpassen):
   ```lua
   Config.Radio = {
-      minChannel = 1000,
-      maxChannel = 1009,
-      defaultChannel = 1000,
+      minChannel = 1,
+      maxChannel = 10,
+      defaultChannel = 1,
       defaultVolume = 100,
       callRingSeconds = 20,
+      pmaChannelBase = 4100,
   }
   ```
+- **Fehlerdiagnose "Anrufpartner hören sich nicht":** Anrufe laufen über
+  pma-voice's eigenen, von den normalen Funkkanälen komplett getrennten
+  Call-Mechanismus (`setCallChannel`) - dafür muss die Konsolenvariable
+  `voice_enableCalls` (in älteren pma-voice-Versionen `voice_enablePhones`)
+  auf `1` stehen (Standardwert von pma-voice selbst, kann aber in `server.cfg`
+  explizit auf `0` gesetzt worden sein, z.B. durch ein Telefon-Script, das
+  diesen Kanal exklusiv für sich beansprucht). Prüft `server.cfg` auf diese
+  Convar. Prüft außerdem die Server-/Client-Konsole (F8) auf rote
+  `[speditions-tablet] Funk: pma-voice-Export "setCallChannel" ist
+  fehlgeschlagen ...`-Zeilen unmittelbar nach dem Annehmen eines Anrufs -
+  die tauchen auf, falls euer pma-voice-Fork diesen Export unter einem
+  anderen Namen bereitstellt.
 
 ## Datenbankschema
 

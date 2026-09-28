@@ -145,14 +145,24 @@ Config.LiveMap = {
 -- Kanal-/Lautstärkewechsel laufen clientseitig gegen pma-voice (das
 -- validiert Kanäle ohnehin selbst serverseitig) - lediglich Beitreten/
 -- Verlassen, der aktuelle Kanal je Mitarbeiter (für die Teilnehmerliste)
--- und Anrufe laufen über den Server. Andere Kanalnummern gewünscht (z.B.
--- 1-9 statt 1000-1009): einfach hier anpassen.
+-- und Anrufe laufen über den Server.
+--
+-- minChannel/maxChannel/defaultChannel sind die KLEINEN Kanalnummern, die
+-- im Tablet angezeigt werden (1-10) - intern spricht pma-voice aber über
+-- pmaChannelBase auf einen eigenen, hohen Kanalbereich (4100-4109), damit
+-- es keine Überschneidung mit Funkkanälen anderer Ressourcen/Gruppen auf
+-- eurem Server gibt (z.B. Polizei/Rettungsdienst, falls die ebenfalls
+-- niedrige Kanalnummern über pma-voice nutzen). Tablet-Kanal N entspricht
+-- also intern immer pmaChannelBase + N - 1 (Kanal 1 -> 4100, Kanal 10 ->
+-- 4109). pmaChannelBase weglassen/auf nil setzen, um wieder 1:1 ohne
+-- Verschiebung zu fahren (Tablet-Kanal = echter pma-voice-Kanal).
 Config.Radio = {
-    minChannel = 1000,
-    maxChannel = 1009,
-    defaultChannel = 1000,
+    minChannel = 1,
+    maxChannel = 10,
+    defaultChannel = 1,
     defaultVolume = 100, -- 0-100, s. pma-voice setRadioVolume
     callRingSeconds = 20, -- wie lange ein Anruf klingelt, bevor er automatisch als "verpasst" gilt
+    pmaChannelBase = 4100, -- echter pma-voice-Kanal für Tablet-Kanal 1 (s. Erklärung oben)
 }
 
 -- =========================================================

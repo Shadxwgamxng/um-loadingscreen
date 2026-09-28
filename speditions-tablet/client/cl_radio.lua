@@ -20,8 +20,8 @@
 -- irgendwo sichtbar würde außer als früher Skriptfehler in der Konsole.
 local RadioConfig = Config.Radio
 if not RadioConfig then
-    RadioConfig = { minChannel = 1000, maxChannel = 1009, defaultChannel = 1000, defaultVolume = 100 }
-    print('^1[speditions-tablet]^7 Funk: Config.Radio fehlt in config.lua (alte/unvollständige Datei?) - Funk läuft vorerst mit Standardwerten (Kanäle 1000-1009). Bitte config.lua aus dem aktuellen Ressourcen-Paket übernehmen, um Config.Radio zu ergänzen.')
+    RadioConfig = { minChannel = 1, maxChannel = 10, defaultChannel = 1, defaultVolume = 100, pmaChannelBase = 4100 }
+    print('^1[speditions-tablet]^7 Funk: Config.Radio fehlt in config.lua (alte/unvollständige Datei?) - Funk läuft vorerst mit Standardwerten (Kanäle 1-10). Bitte config.lua aus dem aktuellen Ressourcen-Paket übernehmen, um Config.Radio zu ergänzen.')
 end
 
 local channel = RadioConfig.defaultChannel
@@ -29,6 +29,16 @@ local volume = RadioConfig.defaultVolume
 local joined = false
 local rxTalkers = {} -- ['local'] oder [serverId] = true, wer gerade auf dem Kanal spricht (nur für die Empfangsanzeige, keine Namen nötig)
 local activeCallChannel = nil -- privater pma-voice-Kanal des laufenden Gesprächs, s. radioJoinCall/radioAnswerCall - wird für Halten/Fortsetzen gebraucht
+
+--- Rechnet den im Tablet angezeigten Kanal (klein, z.B. 1-10) auf den
+--- tatsächlichen pma-voice-Kanal um (hoch, z.B. 4100-4109, s. Config.Radio.
+--- pmaChannelBase in config.lua) - vermeidet Überschneidungen mit
+--- Funkkanälen anderer Ressourcen/Gruppen auf dem Server. Ohne gesetztes
+--- pmaChannelBase bleibt es 1:1 (Tablet-Kanal = echter pma-voice-Kanal).
+local function toPmaChannel(displayChannel)
+    if not RadioConfig.pmaChannelBase then return displayChannel end
+    return RadioConfig.pmaChannelBase + displayChannel - 1
+end
 
 local function pmaVoiceReady()
     return GetResourceState('pma-voice') == 'started'
@@ -73,7 +83,7 @@ local function applyState()
     -- (joined) diese Rolle.
     safePmaVoiceCall('setVoiceProperty', 'radioEnabled', joined)
     if joined then
-        safePmaVoiceCall('setRadioChannel', channel)
+        safePmaVoiceCall('setRadioChannel', toPmaChannel(channel))
         safePmaVoiceCall('setRadioVolume', volume)
     else
         safePmaVoiceCall('setRadioChannel', 0)
@@ -196,7 +206,7 @@ RegisterNUICallback('radioAnswerCall', function(_, cb)
         local unwrapped = unwrapServerCall(res)
         if unwrapped.ok then
             activeCallChannel = unwrapped.channel
-            if pmaVoiceReady() then exports['pma-voice']:setCallChannel(unwrapped.channel) end
+            safePmaVoiceCall('setCallChannel', unwrapped.channel)
         end
         cb(unwrapped)
     end)
@@ -208,7 +218,7 @@ end)
 
 RegisterNUICallback('radioHangup', function(_, cb)
     activeCallChannel = nil
-    if pmaVoiceReady() then exports['pma-voice']:setCallChannel(0) end
+    safePmaVoiceCall('setCallChannel', 0)
     ServerCall('radio:hangup', {}, function(res) cb(unwrapServerCall(res)) end)
 end)
 
@@ -219,8 +229,8 @@ end)
 RegisterNUICallback('radioHoldCall', function(_, cb)
     ServerCall('radio:holdCall', {}, function(res)
         local unwrapped = unwrapServerCall(res)
-        if unwrapped.ok and pmaVoiceReady() then
-            exports['pma-voice']:setCallChannel(0)
+        if unwrapped.ok then
+            safePmaVoiceCall('setCallChannel', 0)
         end
         cb(unwrapped)
     end)
@@ -229,8 +239,8 @@ end)
 RegisterNUICallback('radioResumeCall', function(_, cb)
     ServerCall('radio:resumeCall', {}, function(res)
         local unwrapped = unwrapServerCall(res)
-        if unwrapped.ok and pmaVoiceReady() and activeCallChannel then
-            exports['pma-voice']:setCallChannel(activeCallChannel)
+        if unwrapped.ok and activeCallChannel then
+            safePmaVoiceCall('setCallChannel', activeCallChannel)
         end
         cb(unwrapped)
     end)
@@ -254,13 +264,13 @@ end)
 --- wurde - die anrufende Seite tritt dem privaten Call-Kanal erst jetzt bei.
 RegisterNetEvent('speditions-tablet:client:radioJoinCall', function(callChannel)
     activeCallChannel = callChannel
-    if pmaVoiceReady() then exports['pma-voice']:setCallChannel(callChannel) end
+    safePmaVoiceCall('setCallChannel', callChannel)
     SendNUIMessage({ type = 'radioCallAnswered' })
 end)
 
 RegisterNetEvent('speditions-tablet:client:radioLeaveCall', function(reason)
     activeCallChannel = nil
-    if pmaVoiceReady() then exports['pma-voice']:setCallChannel(0) end
+    safePmaVoiceCall('setCallChannel', 0)
     SendNUIMessage({ type = 'radioCallEnded', reason = reason })
 end)
 
@@ -269,12 +279,12 @@ end)
 --- getrennt/wiederhergestellt, damit während des Haltens niemand ins Leere
 --- spricht.
 RegisterNetEvent('speditions-tablet:client:radioCallHold', function()
-    if pmaVoiceReady() then exports['pma-voice']:setCallChannel(0) end
+    safePmaVoiceCall('setCallChannel', 0)
     SendNUIMessage({ type = 'radioCallHold' })
 end)
 
 RegisterNetEvent('speditions-tablet:client:radioCallResumed', function()
-    if pmaVoiceReady() and activeCallChannel then exports['pma-voice']:setCallChannel(activeCallChannel) end
+    if activeCallChannel then safePmaVoiceCall('setCallChannel', activeCallChannel) end
     SendNUIMessage({ type = 'radioCallResumed' })
 end)
 
@@ -282,7 +292,7 @@ end)
 -- zuletzt bekannten joined-Zustand.
 AddEventHandler('onResourceStop', function(resourceName)
     if resourceName == GetCurrentResourceName() and pmaVoiceReady() then
-        exports['pma-voice']:setRadioChannel(0)
-        exports['pma-voice']:setCallChannel(0)
+        safePmaVoiceCall('setRadioChannel', 0)
+        safePmaVoiceCall('setCallChannel', 0)
     end
 end)

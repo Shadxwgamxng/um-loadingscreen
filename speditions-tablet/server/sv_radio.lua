@@ -22,8 +22,8 @@
 -- außer als serverseitige RPC-Fehlermeldung in der Konsole.
 local RadioConfig = Config.Radio
 if not RadioConfig then
-    RadioConfig = { minChannel = 1000, maxChannel = 1009, defaultChannel = 1000, defaultVolume = 100, callRingSeconds = 20 }
-    print('^1[speditions-tablet]^7 Funk: Config.Radio fehlt in config.lua (alte/unvollständige Datei?) - Funk läuft vorerst mit Standardwerten (Kanäle 1000-1009). Bitte config.lua aus dem aktuellen Ressourcen-Paket übernehmen, um Config.Radio zu ergänzen.')
+    RadioConfig = { minChannel = 1, maxChannel = 10, defaultChannel = 1, defaultVolume = 100, callRingSeconds = 20 }
+    print('^1[speditions-tablet]^7 Funk: Config.Radio fehlt in config.lua (alte/unvollständige Datei?) - Funk läuft vorerst mit Standardwerten (Kanäle 1-10). Bitte config.lua aus dem aktuellen Ressourcen-Paket übernehmen, um Config.Radio zu ergänzen.')
 end
 
 local presence = {} -- [src] = { channel = number, displayName = string }

@@ -663,7 +663,7 @@ async function refreshDockStatus() {
 // zur Laufzeit unabhängig ändern kann, z.B. wenn pma-voice neu startet),
 // tx/rx sowie Anruf-Events kommen als Push von dort.
 const RadioState = {
-    channel: 1000,
+    channel: 1,
     volume: 100,
     connected: false,
     joined: false,
@@ -677,7 +677,7 @@ const RadioState = {
 
 function radioChannelRange() {
     const cfg = (State.config && State.config.radioChannels) || {};
-    return { min: cfg.minChannel || 1000, max: cfg.maxChannel || 1009 };
+    return { min: cfg.minChannel || 1, max: cfg.maxChannel || 10 };
 }
 
 // Spielt einen der drei Funk-Sounds ab (siehe html/sounds/, <audio>-Tags in
@@ -685,10 +685,16 @@ function radioChannelRange() {
 // nicht abgelegt, s. html/sounds/SOUNDS_HIER_ABLEGEN.txt) oder ist der
 // Browser-Autoplay blockiert, bleibt es ein stiller No-Op statt eines
 // Konsolenfehlers. Respektiert die Einstellung "Sounds abspielen".
+// Rohe Lautstärke der mp3-Dateien selbst ist deutlich lauter gemastert als
+// z.B. die Sprachausgabe - fester Dämpfungsfaktor, unabhängig vom
+// Funk-Lautstärkeregler (der regelt nur pma-voice, nicht diese UI-Sounds).
+const RADIO_SOUND_VOLUME = 0.45;
+
 function playRadioSound(id) {
     if (!RadioState.soundsEnabled) return;
     const el = document.getElementById(`snd-radio-${id}`);
     if (!el) return;
+    el.volume = RADIO_SOUND_VOLUME;
     el.currentTime = 0;
     el.play().catch(() => {});
 }
@@ -1273,7 +1279,6 @@ function renderFunkConsole(root) {
 
     root.innerHTML = `
         <h1 class="view-title">Funk</h1>
-        <p class="view-subtitle">Digitale Funkkonsole - Kanal wählen, Lautstärke regeln, mit anderen sprechen.</p>
         <div class="funk-layout">
             <div class="funk-console">
                 <div class="funk-status-row">
@@ -1317,8 +1322,7 @@ function renderFunkConsole(root) {
                     <button class="btn btn-sm btn-primary" onclick="Actions.saveRadioDisplayName()">Speichern</button>
                 </div>
             </div>
-        </div>
-        <p class="card-hint" style="margin-top:14px;">Sprechen läuft über die normale Funk-Taste von pma-voice, sobald ein Kanal eingestellt ist.</p>`;
+        </div>`;
 
     updateFunkConnChip();
     renderFunkToggleChip();
@@ -2583,16 +2587,18 @@ Actions.hangupRadioCall = async () => {
     renderFunkCallBanner();
 };
 
+// Der Halten-Sound (holdingLine) ist Warteschleifenmusik für die WARTENDE
+// Seite - wer selbst auf "Halten" klickt, hört ihn NICHT bei sich (nur die
+// Gegenseite, über onRadioCallHold()/onRadioCallResumed() ausgelöst durch
+// das Push-Event von server/sv_radio.lua).
 Actions.holdRadioCall = async () => {
     if (!RadioState.call || RadioState.call.role !== 'active' || RadioState.call.onHold) return;
     RadioState.call.onHold = true;
-    playRadioSound('holdingLine');
     renderFunkCallBanner();
     const res = await nuiCall('radioHoldCall');
     if (!res || !res.ok) {
         toast('Funk', translateError(res && res.error), 'error');
         RadioState.call.onHold = false;
-        stopRadioSound('holdingLine');
         renderFunkCallBanner();
     }
 };
@@ -2600,13 +2606,11 @@ Actions.holdRadioCall = async () => {
 Actions.resumeRadioCall = async () => {
     if (!RadioState.call || !RadioState.call.onHold) return;
     RadioState.call.onHold = false;
-    stopRadioSound('holdingLine');
     renderFunkCallBanner();
     const res = await nuiCall('radioResumeCall');
     if (!res || !res.ok) {
         toast('Funk', translateError(res && res.error), 'error');
         RadioState.call.onHold = true;
-        playRadioSound('holdingLine');
         renderFunkCallBanner();
     }
 };
