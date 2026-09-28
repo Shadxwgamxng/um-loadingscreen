@@ -350,6 +350,7 @@ function Orders.Dispatch(src, orderId, driverId, vehicleId)
         Utils.NotifyClient(driverSrc, ('Neuer Auftrag #%s: %s -> %s. Oeffne dein Tablet fuer Details.'):format(orderId, order.start_location, order.end_location), 'info')
     end
 
+    RPC.PushToPermission('dispatch', 'orders:activeChanged', { orderId = orderId })
     if WebsiteBridge then WebsiteBridge.PushOrderUpdate(orderId) end
 
     return { ok = true }

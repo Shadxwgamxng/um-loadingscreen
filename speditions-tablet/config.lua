@@ -96,7 +96,7 @@ Config.RoleLabels = {
 -- Bearbeiten einer Rolle wählen kann (Reiter "Rollen").
 Config.Permissions = {
     { key = 'driver_actions',    label = 'Fahrerfunktionen (Aufträge fahren, Fahrerkarte, eigene Statistik, Nachrichten empfangen)', group = 'Fahrer' },
-    { key = 'dispatch',          label = 'Disposition (Fahrerübersicht, Auftragspool disponieren, Fahrer kontaktieren)', group = 'Disposition' },
+    { key = 'dispatch',          label = 'Disposition (Auftragspool disponieren, Fuhrpark/Fahrer-Übersicht, Fahrer kontaktieren)', group = 'Disposition' },
     { key = 'live_map_view',     label = 'Live-Karte einsehen (Position, Fahrzeug, Auftrag jedes eingestempelten Fahrers)', group = 'Disposition' },
     { key = 'fleet_manage',      label = 'Fuhrparkverwaltung (Fahrzeuge anlegen/bearbeiten/löschen/zuweisen)', group = 'Fuhrpark' },
     { key = 'locations_manage',  label = 'Orte verwalten (Be-/Entladepunkte anlegen/bearbeiten/löschen)', group = 'Fuhrpark' },

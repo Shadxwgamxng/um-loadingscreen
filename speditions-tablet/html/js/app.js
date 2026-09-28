@@ -328,12 +328,17 @@ function openConfirmModal(title, message, confirmLabel, actionCall) {
 // Geschäftsführung frei angelegte Rollen mit den passenden Berechtigungen
 // automatisch mit den richtigen Apps auf. Jede App gehört zusätzlich zu
 // genau einer Kategorie (Homescreen-Ordner).
+// "Disposition" ist bewusst KEIN Kategorie-Eintrag mehr (s. u., eigene
+// perm-lose Home-Kachel wie Funk) - die verbliebenen zwei Apps der früheren
+// gleichnamigen Kategorie (Nachrichten, Live-Karte) heißen hier
+// "Kommunikation", damit auf dem Homescreen nicht zwei Kacheln "Disposition"
+// nebeneinander stehen.
 const CATEGORIES = [
     { id: 'auftraege', label: 'Aufträge', icon: 'truck' },
     { id: 'finanzen', label: 'Finanzen', icon: 'cash' },
     { id: 'fuhrpark', label: 'Fuhrpark', icon: 'garage' },
     { id: 'mitarbeiter', label: 'Mitarbeiterverwaltung', icon: 'people' },
-    { id: 'disposition', label: 'Disposition', icon: 'radio' },
+    { id: 'kommunikation', label: 'Nachrichten & Karte', icon: 'radio' },
     { id: 'geschaeftsfuehrung', label: 'Geschäftsführung', icon: 'briefcase' },
 ];
 
@@ -360,25 +365,28 @@ const APPS = [
     { id: 'gf-fleet-hub', label: 'Fuhrpark-Verwaltung', perm: 'fleet_manage', category: 'fuhrpark', icon: 'garage' },
     // Mitarbeiterverwaltung
     { id: 'gf-employees', label: 'Mitarbeiter', perm: ['employees_manage', 'roles_manage'], category: 'mitarbeiter', icon: 'idcard' },
-    { id: 'dispatch-drivers', label: 'Fahrerübersicht', perm: 'dispatch', category: 'mitarbeiter', icon: 'people' },
-    // Disposition - Auftragsverwaltung liegt bewusst HIER (nicht unter
-    // "Aufträge"), damit Disponenten für ihren gesamten Arbeitsalltag
-    // (Aufträge disponieren, Nachrichten, Live-Karte) nicht zwischen
-    // Kategorien wechseln müssen.
-    { id: 'dispatch-orders', label: 'Auftragsverwaltung', perm: 'dispatch', category: 'disposition', icon: 'clipboard' },
-    { id: 'driver-messages', label: 'Nachrichten', perm: 'driver_actions', category: 'disposition', icon: 'chat' },
-    { id: 'dispatch-map', label: 'Live Karte', perm: 'live_map_view', category: 'disposition', icon: 'pin' },
+    // Kommunikation (frühere Kategorie "Disposition") - Nachrichten bleibt
+    // für Fahrer (perm driver_actions), Live-Karte für alle mit Kartenzugriff;
+    // beide auch aus der Disposition-Kopfzeile per Link erreichbar (s.
+    // renderDisposition()).
+    { id: 'driver-messages', label: 'Nachrichten', perm: 'driver_actions', category: 'kommunikation', icon: 'chat' },
+    { id: 'dispatch-map', label: 'Live Karte', perm: 'live_map_view', category: 'kommunikation', icon: 'pin' },
     // Geschäftsführung
     { id: 'gf-locations', label: 'Orte', perm: 'locations_manage', category: 'geschaeftsfuehrung', icon: 'pin' },
     { id: 'gf-log', label: 'Protokoll', perm: 'activity_log_view', category: 'geschaeftsfuehrung', icon: 'clipboard' },
     { id: 'gf-console', label: 'Konsole', perm: 'console_view', category: 'geschaeftsfuehrung', icon: 'terminal' },
-    // Funk - bewusst OHNE `category` (nicht unter Disposition): eine eigene
-    // Bedienoberfläche mit Kanalwahl/Lautstärke/Teilnehmerliste/Anrufen
-    // gehört als eigenständige Kachel auf den Startbildschirm, nicht in ein
-    // Kategorie-Untermenü. `category: undefined` sorgt dafür, dass sie nie
-    // in appsInCategory()/showCategory() auftaucht (s. renderHome(), das
-    // sie separat als eigene Kachel rendert) - APPS.find() bleibt aber
-    // nutzbar, damit showView() den Titel "Funk" im Topbar findet.
+    // Funk und Disposition - bewusst OHNE `category`: beides sind eigene
+    // Vollbild-Arbeitsflächen, die als Kachel direkt auf den Startbildschirm
+    // gehören statt in ein Kategorie-Untermenü. `category: undefined` sorgt
+    // dafür, dass sie nie in appsInCategory()/showCategory() auftauchen (s.
+    // renderHome(), das sie separat als eigene Kacheln rendert) - APPS.find()
+    // bleibt nutzbar, damit showView() den Titel im Topbar findet.
+    // Disposition hat bewusst `perm: null` (für jeden angemeldeten
+    // Mitarbeiter sichtbar) statt anhand von 'dispatch' ausgeblendet zu
+    // werden - fehlt die Berechtigung, zeigt die App selbst den Hinweis
+    // "Keine Berechtigung" (s. VIEWS['disposition']), statt die Kachel
+    // stillschweigend verschwinden zu lassen.
+    { id: 'disposition', label: 'Disposition', perm: null, icon: 'clipboard' },
     { id: 'funk', label: 'Funk', perm: null, icon: 'walkie' },
 ];
 
@@ -482,6 +490,10 @@ function renderHome() {
                     <div class="tile-label">${escapeHtml(c.label)}</div>
                 </div>
             `).join('')}
+            <div class="category-tile" onclick="showView('disposition')">
+                <div class="tile-icon cat-disposition">${iconSvg('clipboard')}</div>
+                <div class="tile-label">Disposition</div>
+            </div>
             <div class="category-tile" onclick="showView('funk')">
                 <div class="tile-icon cat-funk">${iconSvg('walkie')}</div>
                 <div class="tile-label">Funk</div>
@@ -600,19 +612,18 @@ async function renderVehicleWidget() {
         <div class="widget-status"><span class="dot dot-${meta ? meta.dot : 'gray'}"></span>${escapeHtml(meta ? meta.label : v.status)} · Tank ${v.fuel}%</div>`;
 }
 
-// Dock (fixiert unten auf dem Home-Screen, analog iPad) - Fahrerkarte und
-// Dispositions-Dienst liegen bewusst hier statt in einer Kategorie: beides
-// ist ein "bin ich gerade im Dienst"-Schalter, kein eigentlicher
-// Arbeitsbereich. Sichtbar je nach Berechtigung, mit Status-Punkt
-// (im Dienst/eingesteckt = grün), der kurz nach dem Rendern nachgeladen wird.
-// Funk liegt NICHT hier, sondern als eigenständige Kachel direkt auf dem
-// Startbildschirm (s. renderHome()) - eine eigene Bedienoberfläche mit
-// Kanalwahl/Teilnehmerliste/Anrufen gehört ins Vollbild, nicht in ein
-// kleines Dock-Icon, und auch nicht in eine Kategorie (kein Disponenten-
-// Vorrecht, jeder angemeldete Mitarbeiter soll direkt hinkommen).
+// Dock (fixiert unten auf dem Home-Screen, analog iPad) - Fahrerkarte liegt
+// bewusst hier statt in einer Kategorie: ein "bin ich gerade im Dienst"-
+// Schalter, kein eigentlicher Arbeitsbereich. Sichtbar je nach Berechtigung,
+// mit Status-Punkt (eingesteckt = grün), der kurz nach dem Rendern
+// nachgeladen wird. Der frühere Dispositions-Dienst-Dock-Eintrag sitzt jetzt
+// als Toggle in der Kopfzeile der Disposition-App (s. renderDisposition()) -
+// dort ist er im eigentlichen Arbeitskontext sichtbar statt separat auf dem
+// Homescreen. Funk/Disposition liegen NICHT hier, sondern als eigenständige
+// Kacheln direkt auf dem Startbildschirm (s. renderHome()) - eigene
+// Bedienoberflächen gehören ins Vollbild, nicht in ein kleines Dock-Icon.
 const DOCK_ITEMS = [
     { id: 'driver-card', label: 'Fahrerkarte', perm: 'driver_actions', icon: 'idcard', statusRpc: 'driver:card', statusPath: (r) => r && r.driver && r.driver.onShift },
-    { id: 'dispatch-duty', label: 'Dispositions-Dienst', perm: 'dispatch', icon: 'radio', statusRpc: 'dispatch:dutyStatus', statusPath: (r) => r && r.onDuty },
 ];
 
 function renderDock() {
@@ -1042,16 +1053,21 @@ document.getElementById('timeclock-btn').addEventListener('click', async () => {
     refreshTimeclock();
 });
 
+// refreshIfViewing() rendert die Ansicht komplett neu - solange in der
+// Disposition gerade eine Karte gezogen wird (dispoDragActive), würde das
+// dem Nutzer buchstäblich das Ziel unter dem Mauszeiger wegrendern, daher
+// wird ein Refresh der Disposition während eines aktiven Drags übersprungen
+// (das laufende activeViewInterval holt den Stand nach - s. VIEWS['disposition']).
 function handlePush(event, data) {
     const map = {
         'notifications:new': () => { toast(data.title, data.message, 'info'); refreshIfViewing(['driver-messages', 'driver-orders']); },
-        'orders:newOpenOrder': () => { toast('Neuer Auftrag', 'Ein neuer Auftrag ist im Pool verfügbar.', 'info'); refreshIfViewing(['dispatch-orders']); },
-        'orders:activeChanged': () => { refreshIfViewing(['dispatch-orders', 'driver-orders']); if (State.currentScreen === 'home') renderHomeWidgets(); },
-        'orders:cancelRequested': () => { toast('Abbruch-Anfrage', 'Ein Fahrer möchte einen Auftrag abbrechen.', 'warning'); refreshIfViewing(['dispatch-orders']); },
-        'orders:completed': () => { toast('Auftrag abgeschlossen', 'Ein Auftrag wurde erfolgreich abgeschlossen.', 'success'); refreshIfViewing(['dispatch-orders', 'gf-finance-hub']); if (State.currentScreen === 'home') renderHomeWidgets(); },
-        'dispatch:driversChanged': () => refreshIfViewing(['dispatch-drivers']),
-        'dispatch:dutyChanged': () => { refreshIfViewing(['dispatch-orders', 'driver-orders', 'dispatch-duty']); if (State.currentScreen === 'home') refreshDockStatus(); },
-        'fleet:changed': () => refreshIfViewing(['gf-fleet-hub', 'dispatch-drivers']),
+        'orders:newOpenOrder': () => { toast('Neuer Auftrag', 'Ein neuer Auftrag ist im Pool verfügbar.', 'info'); if (!dispoDragActive) refreshIfViewing(['disposition']); },
+        'orders:activeChanged': () => { if (!dispoDragActive) refreshIfViewing(['disposition', 'driver-orders']); if (State.currentScreen === 'home') renderHomeWidgets(); },
+        'orders:cancelRequested': () => { toast('Abbruch-Anfrage', 'Ein Fahrer möchte einen Auftrag abbrechen.', 'warning'); if (!dispoDragActive) refreshIfViewing(['disposition']); },
+        'orders:completed': () => { toast('Auftrag abgeschlossen', 'Ein Auftrag wurde erfolgreich abgeschlossen.', 'success'); if (!dispoDragActive) refreshIfViewing(['disposition', 'gf-finance-hub']); if (State.currentScreen === 'home') renderHomeWidgets(); },
+        'dispatch:driversChanged': () => { if (!dispoDragActive) refreshIfViewing(['disposition']); },
+        'dispatch:dutyChanged': () => { if (!dispoDragActive) refreshIfViewing(['disposition', 'driver-orders']); if (State.currentScreen === 'home') refreshDockStatus(); },
+        'fleet:changed': () => { if (!dispoDragActive) refreshIfViewing(['disposition']); },
         'finance:balanceChanged': () => refreshIfViewing(['gf-finance-hub']),
         'roles:changed': () => refreshAfterRolesChanged(),
         'cargotypes:changed': () => refreshAfterCargoTypesChanged(),
@@ -1098,7 +1114,7 @@ const VIEWS = {};
 // ---------------------------------------------------------
 // Split-View-Helper (Sektionen-Leiste rechts, iPad-Splitview-Prinzip) -
 // für Apps, die mehrere frühere Einzel-Apps zu einem Bereich zusammenlegen
-// (z.B. "Auftragsverwaltung", "Finanzcenter"). Jede Sektion bleibt
+// (z.B. "Finanzcenter", "Fuhrpark-Verwaltung"). Jede Sektion bleibt
 // permission-gated wie zuvor die jeweilige Einzel-App; der zuletzt aktive
 // Tab pro App bleibt gemerkt, damit ein Refresh (refreshIfViewing) nicht
 // auf den ersten Tab zurückspringt.
@@ -1597,55 +1613,6 @@ VIEWS['driver-messages'] = async (root) => {
 
 // ---------- DISPONENT ----------
 
-// Wiederverwendbare Zeilen-Renderer für Fahrer/Auftragspool/aktive Aufträge -
-// werden von den Sektionen der zusammengelegten App "Auftragsverwaltung"
-// (VIEWS['dispatch-orders']) sowie von VIEWS['dispatch-drivers'] verwendet,
-// damit keine Zeilen-/Aktions-Logik doppelt gepflegt werden muss.
-function driversTableRows(drivers) {
-    return drivers.map((r) => `<tr>
-        <td>${badge(DRIVER_STATUS_META[r.current_status])}</td>
-        <td>${escapeHtml(r.name)}</td>
-        <td>${r.vehicle_name ? `${escapeHtml(r.vehicle_name)} (${escapeHtml(r.vehicle_plate)})` : '-'}</td>
-        <td>${r.vehicle_status ? badge(VEHICLE_STATUS_META[r.vehicle_status]) : '-'}</td>
-        <td class="btn-row">
-            <button class="btn btn-sm" onclick="Actions.messageDriver(${r.driver_id}, ${escapeHtml(JSON.stringify(r.name))})">Nachricht</button>
-            <button class="btn btn-sm" onclick="Actions.remindDriver(${r.driver_id})">Lenkzeit erinnern</button>
-        </td>
-    </tr>`);
-}
-
-function openOrdersTableRows(orders) {
-    return orders.map((o) => `<tr>
-        <td>#${o.id}</td>
-        <td>${escapeHtml(o.cargo)}${o.requires_permission ? ' <span class="pill pill-warning">Gefahrgut</span>' : ''}</td>
-        <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
-        <td>${Number(o.distance_km).toLocaleString('de-DE')} km</td>
-        <td>${formatMoney(o.value)}</td>
-        <td><button class="btn btn-sm btn-primary" onclick="Actions.openDispatchModal(${o.id}, ${escapeHtml(JSON.stringify(o.requires_permission || null))})">Disponieren</button></td>
-    </tr>`);
-}
-
-function activeOrdersTableRows(orders) {
-    return orders.map((o) => {
-        const cancelActions = o.pending_cancel_request_id ? `
-            <button class="btn btn-sm btn-primary" onclick="Actions.resolveCancelRequest(${o.pending_cancel_request_id}, true)">Abbruch genehmigen</button>
-            <button class="btn btn-sm" onclick="Actions.resolveCancelRequest(${o.pending_cancel_request_id}, false)">Ablehnen</button>` : '';
-        return `<tr>
-            <td>#${o.id}</td>
-            <td>${escapeHtml(o.cargo)}</td>
-            <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
-            <td>${o.driver_name ? escapeHtml(o.driver_name) : '-'}</td>
-            <td>${o.vehicle_name ? `${escapeHtml(o.vehicle_name)} (${escapeHtml(o.vehicle_plate)})` : '-'}</td>
-            <td>${badge(ORDER_STATUS_META[o.status])}${o.pending_cancel_request_id ? ' <span class="pill pill-warning">Abbruch angefragt</span>' : ''}</td>
-            <td class="btn-row">
-                ${cancelActions}
-                ${['disponiert', 'angenommen', 'anfahrt', 'beladen'].includes(o.status) ? `<button class="btn btn-sm" onclick="Actions.openReassignModal(${o.id})">Neu zuweisen</button>` : ''}
-                <button class="btn btn-sm btn-danger" onclick="Actions.cancelOrder(${o.id})">Abbrechen</button>
-            </td>
-        </tr>`;
-    });
-}
-
 // ---------------------------------------------------------
 // Live-Karte - zeigt AUSSCHLIESSLICH gerade eingestempelte Fahrer als
 // Marker über einem echten Kartenbild (statt eines abstrakten Schemas).
@@ -1719,84 +1686,195 @@ VIEWS['dispatch-map'] = async (root) => {
     activeViewInterval = setInterval(refresh, LIVE_MAP_POLL_MS);
 };
 
-VIEWS['dispatch-drivers'] = async (root) => {
-    const d = await call('dispatch:drivers');
-    root.innerHTML = `
-        <h1 class="view-title">Fahrerübersicht</h1>
-        <p class="view-subtitle">Alle aktiven Fahrer mit Status und aktuellem Fahrzeug.</p>
-        <div class="section">${table(['Status', 'Fahrer', 'Fahrzeug', 'Fahrzeugstatus', ''], driversTableRows(d.drivers))}</div>`;
+// "Disposition" - vereinte Arbeitsfläche statt der früheren getrennten Apps
+// "Auftragsverwaltung" (Pool/Aktiv/Abgeschlossen-Tabs) und "Fahrerübersicht":
+// offene Aufträge, Fuhrpark (Fahrer+Fahrzeug) und zugewiesene/laufende
+// Aufträge sind gleichzeitig in drei Spalten sichtbar. Zuweisen/Neu-Zuweisen
+// geschieht per Drag & Drop einer Auftragskarte auf eine Fuhrpark-Karte
+// (mit Bestätigungs-Modal) oder per Klick-Fallback-Button - beide Wege
+// laufen über dieselben Actions.assignOrderToDriver/reassignOrderToDriver,
+// damit die RPC-Aufrufe nicht doppelt gepflegt werden. Der Dispositions-
+// Dienst-Toggle (früher eigenes Dock-Icon) sitzt in der Kopfzeile.
+
+const REASSIGNABLE_ORDER_STATUSES = ['disponiert', 'angenommen', 'anfahrt', 'beladen'];
+const DISPO_POLL_MS = 8000;
+
+// Zuletzt geladene Daten, für die Drag&Drop-Handler (die aus einem
+// Inline-onclick/ondragstart heraus nur IDs übergeben bekommen, s. u.).
+let dispoLastOpenOrders = [];
+let dispoLastActiveOrders = [];
+let dispoLastDrivers = [];
+let dispoDragPayload = null; // { orderId, reassign, requiresPermission }
+let dispoDragActive = false; // unterdrückt Re-Render durch Poll/Push während eines laufenden Drags
+
+VIEWS['disposition'] = async (root) => {
+    if (!currentPermissions().includes('dispatch')) {
+        root.innerHTML = '<div class="card-hint">Keine Berechtigung für diese App.</div>';
+        return;
+    }
+    await renderDisposition(root);
+    activeViewInterval = setInterval(() => { if (!dispoDragActive) renderDisposition(root); }, DISPO_POLL_MS);
 };
 
-// Dock-App (kein Kategorie-Eintrag, s. DOCK_ITEMS/renderDock()) - der
-// Dispositions-Dienst-Toggle: erst wenn ein Disponent im Dienst ist, gilt
-// die Disposition als aktiv (isDispatcherAvailable() serverseitig), vorher
-// dürfen Fahrer offene Aufträge wieder selbst übernehmen.
-VIEWS['dispatch-duty'] = async (root) => {
-    const duty = await call('dispatch:dutyStatus');
-    root.innerHTML = `
-        <h1 class="view-title">Dispositions-Dienst</h1>
-        <p class="view-subtitle">Erst wenn ein Disponent im Dienst ist, gilt die Disposition als aktiv - vorher können Fahrer offene Aufträge wieder selbst übernehmen.</p>
-        <div class="section" style="display:flex;align-items:center;justify-content:space-between;gap:14px;">
-            <div>
-                <div class="card-title">Status</div>
-                <div class="card-hint">${duty.onDuty
-                    ? `Im Dienst seit ${formatDate(duty.shiftStartedAt, true)} - du bist für Fahrer als verfügbarer Disponent sichtbar, die Selbstzuweisung offener Aufträge ist für sie gesperrt.`
-                    : 'Nicht im Dienst - Fahrer können sich offene Aufträge derzeit selbst zuweisen, solange kein Disponent im Dienst ist.'}</div>
-            </div>
-            ${duty.onDuty
-                ? `<button class="btn btn-danger" onclick="Actions.endDispatchDuty()">Dienst beenden</button>`
-                : `<button class="btn btn-primary" onclick="Actions.startDispatchDuty()">Dienst beginnen</button>`}
-        </div>`;
-};
-
-// "Auftragsverwaltung" - zusammengelegte Disponenten-App: Pool/Aktiv/
-// Abgeschlossen als Sektionen rechts statt drei eigener Kategorie-Kacheln
-// (löst außerdem das frühere "Allgemeine Disposition"-Cockpit ab - die
-// Fahrerübersicht bleibt als eigene App unter Mitarbeiterverwaltung
-// erhalten, statt hier dupliziert zu werden). Der Dispositions-Dienst-
-// Toggle zieht mit dem Home-Dock in Schritt C um.
-VIEWS['dispatch-orders'] = async (root) => {
-    await renderSectionedApp(root, 'dispatch-orders', [
-        { key: 'pool', label: 'Pool', render: renderDispatchOrdersPool },
-        { key: 'active', label: 'Aktiv', render: renderDispatchOrdersActive },
-        { key: 'completed', label: 'Abgeschlossen', render: renderDispatchOrdersCompleted },
+async function renderDisposition(root) {
+    const [pool, active, drivers, duty] = await Promise.all([
+        call('dispatch:openOrders'),
+        call('dispatch:activeOrders'),
+        call('dispatch:drivers'),
+        call('dispatch:dutyStatus'),
     ]);
-};
+    dispoLastOpenOrders = pool.orders;
+    dispoLastActiveOrders = active.orders;
+    dispoLastDrivers = drivers.drivers;
+    window.__availableDrivers = drivers.drivers; // von Actions.openDispatchModal/openReassignModal (Klick-Fallback) genutzt
 
-async function renderDispatchOrdersPool(root) {
-    const [pool, drivers] = await Promise.all([call('dispatch:openOrders'), call('dispatch:drivers')]);
-    window.__availableDrivers = drivers.drivers;
     root.innerHTML = `
-        <h1 class="view-title">Auftragspool</h1>
-        <p class="view-subtitle">Automatisch generierte Aufträge, die noch keinem Fahrer zugewiesen sind.</p>
-        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Distanz', 'Wert', ''], openOrdersTableRows(pool.orders))}</div>`;
+        <div class="dispo-header">
+            <span class="dispo-header-title">Disposition</span>
+            <div class="dispo-header-right">
+                <div class="dispo-header-links">
+                    <button class="dispo-link-btn" onclick="showView('dispatch-map')">${iconSvg('pin')}Live-Karte</button>
+                    <button class="dispo-link-btn" onclick="showView('driver-messages')">${iconSvg('chat')}Nachrichten</button>
+                    <button class="dispo-link-btn" onclick="showView('funk')">${iconSvg('walkie')}Funk</button>
+                    <button class="dispo-link-btn" onclick="Actions.showDispatchHistory()">${iconSvg('clipboard')}Verlauf</button>
+                </div>
+                <div class="dispo-duty">
+                    <span class="dot dot-${duty.onDuty ? 'green' : 'gray'}"></span>
+                    ${duty.onDuty ? 'Im Dienst' : 'Nicht im Dienst'}
+                    ${duty.onDuty
+                        ? `<button class="btn btn-sm btn-danger" onclick="Actions.endDispatchDuty()">Dienst beenden</button>`
+                        : `<button class="btn btn-sm btn-primary" onclick="Actions.startDispatchDuty()">Dienst beginnen</button>`}
+                </div>
+            </div>
+        </div>
+        <div class="dispo-board">
+            <div class="dispo-col">
+                <div class="dispo-col-header"><span>Offene Aufträge</span><span class="dispo-col-count">${pool.orders.length}</span></div>
+                <div class="dispo-col-body">${pool.orders.map(dispoOpenOrderCard).join('') || '<div class="card-hint">Aktuell keine offenen Aufträge.</div>'}</div>
+            </div>
+            <div class="dispo-col">
+                <div class="dispo-col-header"><span>Fuhrpark</span><span class="dispo-col-count">${drivers.drivers.length}</span></div>
+                <div class="dispo-col-body">${drivers.drivers.map((d) => dispoFleetCard(d, active.orders)).join('') || '<div class="card-hint">Keine aktiven Fahrer.</div>'}</div>
+            </div>
+            <div class="dispo-col">
+                <div class="dispo-col-header"><span>Zugewiesen / Laufend</span><span class="dispo-col-count">${active.orders.length}</span></div>
+                <div class="dispo-col-body">${active.orders.map(dispoAssignedOrderCard).join('') || '<div class="card-hint">Aktuell keine laufenden Aufträge.</div>'}</div>
+            </div>
+        </div>`;
 }
 
-async function renderDispatchOrdersActive(root) {
-    const [active, drivers] = await Promise.all([call('dispatch:activeOrders'), call('dispatch:drivers')]);
-    window.__availableDrivers = drivers.drivers;
-    root.innerHTML = `
-        <h1 class="view-title">Aktive Aufträge</h1>
-        <p class="view-subtitle">Live-Überwachung aller disponierten und laufenden Aufträge.</p>
-        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Fahrer', 'Fahrzeug', 'Status', 'Aktion'], activeOrdersTableRows(active.orders))}</div>`;
+function dispoOpenOrderCard(o) {
+    return `<div class="dispo-card" draggable="true" ondragstart="dispoDragStart(event, ${o.id}, false)" ondragend="dispoDragEnd(event)">
+        <div class="dispo-card-top">
+            <span class="dispo-card-id">#${o.id}</span>
+            <span class="dispo-card-value">${formatMoney(o.value)}</span>
+        </div>
+        <div class="dispo-card-route">${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</div>
+        <div class="dispo-card-meta">
+            <span class="pill">${escapeHtml(o.cargo)}</span>
+            <span class="pill">${Number(o.distance_km).toLocaleString('de-DE')} km</span>
+            ${o.requires_permission ? '<span class="pill pill-warning">Gefahrgut</span>' : ''}
+        </div>
+        <div class="dispo-card-actions">
+            <button class="btn btn-sm btn-primary" onclick="Actions.openDispatchModal(${o.id}, ${escapeHtml(JSON.stringify(o.requires_permission || null))})">Zuweisen</button>
+        </div>
+    </div>`;
 }
 
-async function renderDispatchOrdersCompleted(root) {
-    const d = await call('dispatch:completedOrders');
-    const rows = d.orders.map((o) => `<tr>
-        <td>#${o.id}</td>
-        <td>${escapeHtml(o.cargo)}</td>
-        <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
-        <td>${o.driver_name ? escapeHtml(o.driver_name) : '-'}</td>
-        <td>${badge(ORDER_STATUS_META[o.status])}</td>
-        <td>${o.status === 'abgeschlossen' ? formatMoney(o.value) : '-'}</td>
-        <td>${formatDate(o.completed_at, true)}</td>
-    </tr>`);
+function dispoAssignedOrderCard(o) {
+    const reassignable = REASSIGNABLE_ORDER_STATUSES.includes(o.status);
+    const draggableAttr = reassignable ? `draggable="true" ondragstart="dispoDragStart(event, ${o.id}, true)" ondragend="dispoDragEnd(event)"` : '';
+    const cancelActions = o.pending_cancel_request_id ? `
+        <button class="btn btn-sm btn-primary" onclick="Actions.resolveCancelRequest(${o.pending_cancel_request_id}, true)">Abbruch genehmigen</button>
+        <button class="btn btn-sm" onclick="Actions.resolveCancelRequest(${o.pending_cancel_request_id}, false)">Ablehnen</button>` : '';
+    return `<div class="dispo-card" ${draggableAttr}>
+        <div class="dispo-card-top">
+            <span class="dispo-card-id">#${o.id}</span>
+            ${badge(ORDER_STATUS_META[o.status])}
+        </div>
+        <div class="dispo-card-route">${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</div>
+        <div class="dispo-card-sub">${o.driver_name ? escapeHtml(o.driver_name) : '-'}${o.vehicle_name ? ` · ${escapeHtml(o.vehicle_name)} (${escapeHtml(o.vehicle_plate)})` : ''}</div>
+        <div class="dispo-card-meta">
+            <span class="pill">${escapeHtml(o.cargo)}</span>
+            ${o.pending_cancel_request_id ? '<span class="pill pill-warning">Abbruch angefragt</span>' : ''}
+        </div>
+        <div class="dispo-card-actions">
+            ${cancelActions}
+            ${reassignable ? `<button class="btn btn-sm" onclick="Actions.openReassignModal(${o.id})">Neu zuweisen</button>` : ''}
+            <button class="btn btn-sm btn-danger" onclick="Actions.cancelOrder(${o.id})">Abbrechen</button>
+        </div>
+    </div>`;
+}
 
-    root.innerHTML = `
-        <h1 class="view-title">Abgeschlossene Aufträge</h1>
-        <p class="view-subtitle">Historie abgeschlossener, abgebrochener und abgelehnter Aufträge.</p>
-        <div class="section">${table(['#', 'Fracht', 'Strecke', 'Fahrer', 'Status', 'Wert', 'Datum'], rows)}</div>`;
+function dispoFleetCard(d, activeOrders) {
+    const order = activeOrders.find((o) => o.driver_id === d.driver_id);
+    return `<div class="dispo-card dispo-fleet-card" ondragover="dispoDragOver(event, ${d.driver_id})" ondragleave="dispoDragLeave(event)" ondrop="dispoDrop(event, ${d.driver_id})">
+        <div class="dispo-card-top">
+            <span class="dispo-fleet-name">${escapeHtml(d.name)}</span>
+            ${badge(DRIVER_STATUS_META[d.current_status])}
+        </div>
+        <div class="dispo-fleet-vehicle">${d.vehicle_name ? `${escapeHtml(d.vehicle_name)} (${escapeHtml(d.vehicle_plate)}) ${d.vehicle_status ? '· ' + (VEHICLE_STATUS_META[d.vehicle_status] || {}).label : ''}` : 'Kein Fahrzeug zugewiesen'}</div>
+        ${order ? `<div class="dispo-fleet-order">${escapeHtml(order.cargo)}${order.cargo_amount ? ` (${escapeHtml(String(order.cargo_amount))}${order.cargo_unit ? ' ' + escapeHtml(order.cargo_unit) : ''})` : ''}<br>${escapeHtml(order.start_location)} → ${escapeHtml(order.end_location)}</div>` : ''}
+        <div class="dispo-card-actions">
+            <button class="btn btn-sm" onclick="Actions.messageDriver(${d.driver_id}, ${escapeHtml(JSON.stringify(d.name))})">Nachricht</button>
+            <button class="btn btn-sm" onclick="Actions.remindDriver(${d.driver_id})">Lenkzeit erinnern</button>
+        </div>
+    </div>`;
+}
+
+function dispoFleetCardIsValidTarget(driver) {
+    if (!dispoDragPayload) return false;
+    if (!dispoDragPayload.reassign && driver.current_status !== 'verfuegbar') return false;
+    if (dispoDragPayload.requiresPermission && !(driver.permissions || '').split(',').includes(dispoDragPayload.requiresPermission)) return false;
+    return true;
+}
+
+function dispoDragStart(ev, orderId, reassign) {
+    const order = (reassign ? dispoLastActiveOrders : dispoLastOpenOrders).find((o) => o.id === orderId);
+    dispoDragPayload = { orderId, reassign, requiresPermission: order ? order.requires_permission : null };
+    dispoDragActive = true;
+    ev.currentTarget.classList.add('dispo-dragging');
+    ev.dataTransfer.effectAllowed = 'move';
+    ev.dataTransfer.setData('text/plain', String(orderId)); // Firefox verlangt gesetzte Daten, damit dragstart greift
+}
+
+function dispoDragEnd(ev) {
+    ev.currentTarget.classList.remove('dispo-dragging');
+    dispoDragActive = false;
+    dispoDragPayload = null;
+    document.querySelectorAll('.dispo-drop-valid, .dispo-drop-invalid').forEach((el) => el.classList.remove('dispo-drop-valid', 'dispo-drop-invalid'));
+}
+
+function dispoDragOver(ev, driverId) {
+    if (!dispoDragPayload) return;
+    ev.preventDefault(); // nötig, damit "drop" überhaupt feuert
+    const driver = dispoLastDrivers.find((d) => d.driver_id === driverId);
+    const valid = driver && dispoFleetCardIsValidTarget(driver);
+    ev.currentTarget.classList.toggle('dispo-drop-valid', !!valid);
+    ev.currentTarget.classList.toggle('dispo-drop-invalid', !valid);
+    ev.dataTransfer.dropEffect = valid ? 'move' : 'none';
+}
+
+function dispoDragLeave(ev) {
+    ev.currentTarget.classList.remove('dispo-drop-valid', 'dispo-drop-invalid');
+}
+
+function dispoDrop(ev, driverId) {
+    ev.preventDefault();
+    ev.currentTarget.classList.remove('dispo-drop-valid', 'dispo-drop-invalid');
+    if (!dispoDragPayload) return;
+    const driver = dispoLastDrivers.find((d) => d.driver_id === driverId);
+    if (!driver || !dispoFleetCardIsValidTarget(driver)) return;
+    const { orderId, reassign } = dispoDragPayload;
+    const order = (reassign ? dispoLastActiveOrders : dispoLastOpenOrders).find((o) => o.id === orderId);
+    const routeLabel = order ? `${order.start_location} → ${order.end_location}` : `#${orderId}`;
+    const vehicleLabel = driver.vehicle_name ? ` (${driver.vehicle_name})` : '';
+    openConfirmModal(
+        reassign ? 'Auftrag neu zuweisen' : 'Auftrag zuweisen',
+        `${routeLabel} an ${driver.name}${vehicleLabel} zuweisen?`,
+        'Zuweisen',
+        `Actions.${reassign ? 'reassignOrderToDriver' : 'assignOrderToDriver'}(${orderId}, ${driverId})`
+    );
 }
 
 // ---------- GESCHÄFTSFÜHRUNG ----------
@@ -2436,7 +2514,7 @@ Actions.confirmCancelOrderRequest = async (orderId) => {
 Actions.resolveCancelRequest = async (requestId, approve) => {
     await call('dispatch:resolveCancelRequest', { requestId, approve });
     toast(approve ? 'Abbruch genehmigt' : 'Abbruch abgelehnt', '', approve ? 'success' : 'info');
-    showView('dispatch-orders');
+    showView('disposition');
 };
 
 function trailerTypeLabel(trailerTypes, key) {
@@ -2652,12 +2730,29 @@ Actions.remindDriver = async (driverId) => {
 Actions.startDispatchDuty = async () => {
     await call('dispatch:startDuty');
     toast('Dienst begonnen', 'Fahrer können sich offene Aufträge jetzt nicht mehr selbst zuweisen.', 'success');
-    showView('dispatch-duty');
+    showView('disposition');
 };
 Actions.endDispatchDuty = async () => {
     await call('dispatch:endDuty');
     toast('Dienst beendet', '', 'success');
-    showView('dispatch-duty');
+    showView('disposition');
+};
+
+// Gemeinsame Zuweisungs-Funktionen - sowohl vom Drag&Drop-Bestätigungspfad
+// (dispoDrop() in VIEWS['disposition']) als auch vom Dropdown-Klick-
+// Fallback (Actions.confirmDispatch/confirmReassign unten) aufgerufen,
+// damit der RPC-Aufruf nur an einer Stelle steht.
+Actions.assignOrderToDriver = async (orderId, driverId) => {
+    closeModal();
+    await call('dispatch:assignOrder', { orderId, driverId });
+    toast('Auftrag disponiert', '', 'success');
+    showView('disposition');
+};
+Actions.reassignOrderToDriver = async (orderId, driverId) => {
+    closeModal();
+    await call('dispatch:reassignOrder', { orderId, driverId });
+    toast('Auftrag neu zugewiesen', '', 'success');
+    showView('disposition');
 };
 
 Actions.openDispatchModal = (orderId, requiresPermission) => {
@@ -2674,13 +2769,10 @@ Actions.openDispatchModal = (orderId, requiresPermission) => {
         <button class="btn btn-primary" onclick="Actions.confirmDispatch(${orderId})">Zuweisen</button>
     `);
 };
-Actions.confirmDispatch = async (orderId) => {
+Actions.confirmDispatch = (orderId) => {
     const driverId = Number(modalInputValue('dispatch-driver'));
     if (!driverId) return;
-    await call('dispatch:assignOrder', { orderId, driverId });
-    closeModal();
-    toast('Auftrag disponiert', '', 'success');
-    showView('dispatch-orders');
+    Actions.assignOrderToDriver(orderId, driverId);
 };
 
 Actions.openReassignModal = (orderId) => {
@@ -2694,13 +2786,10 @@ Actions.openReassignModal = (orderId) => {
         <button class="btn btn-primary" onclick="Actions.confirmReassign(${orderId})">Zuweisen</button>
     `);
 };
-Actions.confirmReassign = async (orderId) => {
+Actions.confirmReassign = (orderId) => {
     const driverId = Number(modalInputValue('reassign-driver'));
     if (!driverId) return;
-    await call('dispatch:reassignOrder', { orderId, driverId });
-    closeModal();
-    toast('Auftrag neu zugewiesen', '', 'success');
-    showView('dispatch-orders');
+    Actions.reassignOrderToDriver(orderId, driverId);
 };
 
 Actions.cancelOrder = (orderId) => {
@@ -2717,7 +2806,26 @@ Actions.confirmCancelOrder = async (orderId) => {
     await call('dispatch:cancelOrder', { orderId, reason });
     closeModal();
     toast('Auftrag abgebrochen', '', 'success');
-    showView('dispatch-orders');
+    showView('disposition');
+};
+
+// "Verlauf" - Historie abgeschlossener/abgebrochener/abgelehnter Aufträge,
+// aus der Disposition-Kopfzeile als Modal statt eigener Ansicht erreichbar
+// (früher die dritte Sektion "Abgeschlossen" der Auftragsverwaltung).
+Actions.showDispatchHistory = async () => {
+    const d = await call('dispatch:completedOrders');
+    const rows = d.orders.map((o) => `<tr>
+        <td>#${o.id}</td>
+        <td>${escapeHtml(o.cargo)}</td>
+        <td>${escapeHtml(o.start_location)} → ${escapeHtml(o.end_location)}</td>
+        <td>${o.driver_name ? escapeHtml(o.driver_name) : '-'}</td>
+        <td>${badge(ORDER_STATUS_META[o.status])}</td>
+        <td>${o.status === 'abgeschlossen' ? formatMoney(o.value) : '-'}</td>
+        <td>${formatDate(o.completed_at, true)}</td>
+    </tr>`);
+    openModal('Verlauf', 'Abgeschlossene, abgebrochene und abgelehnte Aufträge.', `
+        <div style="max-height:52vh;overflow-y:auto;">${table(['#', 'Fracht', 'Strecke', 'Fahrer', 'Status', 'Wert', 'Datum'], rows)}</div>
+    `, `<button class="btn btn-ghost" onclick="closeModal()">Schließen</button>`);
 };
 
 Actions.openHireModal = async () => {

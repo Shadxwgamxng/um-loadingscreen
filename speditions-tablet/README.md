@@ -94,15 +94,15 @@ sondern ein klassisches, an iPad/iOS angelehntes Tablet-Menü:
 
 1. Nach dem Anmelden landet man immer zuerst auf dem **Startbildschirm** mit
    den Kategorie-Kacheln, für die man mindestens eine Berechtigung hat:
-   **Aufträge, Finanzen, Fuhrpark, Mitarbeiterverwaltung, Disposition,
-   Geschäftsführung**.
+   **Aufträge, Finanzen, Fuhrpark, Mitarbeiterverwaltung, Kommunikation,
+   Geschäftsführung** - sowie den beiden eigenständigen Kacheln
+   **Disposition** und **Funk** (siehe Punkt 7).
 2. Ein Tipp auf eine Kategorie öffnet ein Kachel-Menü mit den einzelnen Apps
    darin. Mehrere eng verwandte frühere Einzel-Apps sind zu jeweils einer App
    mit einer **Sektionen-Leiste rechts** zusammengelegt (Splitview-Prinzip,
    z.B. wie die iPad-Einstellungen-App), statt für jede Kleinigkeit eine
    eigene Kachel zu brauchen:
    - **Meine Aufträge** (Fahrer): Aktuell / Historie
-   - **Auftragsverwaltung** (Disposition): Pool / Aktiv / Abgeschlossen
    - **Finanzcenter** (Geschäftsführung): Übersicht / Umsatz / Finanzen /
      Gehälter / Ein-Auszahlungen
    - **Fuhrpark-Verwaltung**: Fahrzeuge / Anhänger
@@ -114,22 +114,29 @@ sondern ein klassisches, an iPad/iOS angelehntes Tablet-Menü:
 4. Welche Kategorien/Apps/Sektionen sichtbar sind, richtet sich weiterhin
    ausschließlich nach den Berechtigungen der eigenen Rolle (siehe
    "Rollen & Berechtigungen" unten) - jede Sektion einer zusammengelegten App
-   behält ihre bisherige Einzel-Berechtigung.
+   behält ihre bisherige Einzel-Berechtigung. Die Kachel **Disposition**
+   (Punkt 7) ist die einzige Ausnahme: sie ist für jeden angemeldeten
+   Mitarbeiter antippbar, prüft die Berechtigung `dispatch` aber erst beim
+   Öffnen und zeigt ohne sie den Hinweis "Keine Berechtigung für diese App."
+   statt die Kachel unsichtbar zu machen.
 5. Die frühere eigenständige "Fahrerakten"-App ist entfallen - ein
    "Fahrerakte"-Button erscheint jetzt direkt in der Zeile eines Fahrers in
    der App **Mitarbeiter** (Kategorie Mitarbeiterverwaltung).
-6. **Dock**: Die Fahrerkarte (Fahrer) und der Dispositions-Dienst-Toggle
-   (Disposition, siehe unten) liegen als eigene Icons in einem Dock unten
-   auf dem Startbildschirm (analog zum iPad-Dock), statt als Kategorie-App -
-   beides ein "bin ich gerade im Dienst"-Schalter mit Status-Punkt (grün =
-   eingesteckt/im Dienst), kein eigentlicher Arbeitsbereich.
-7. In der Kategorie **Disposition**: die App **"Live Karte"** (Berechtigung
-   `live_map_view`) - siehe eigener Abschnitt "Live-Karte" weiter unten.
-   Die App **"Funk"** (für jeden angemeldeten Mitarbeiter, siehe eigener
-   Abschnitt "Funk" weiter unten) liegt dagegen weder im Dock noch in einer
-   Kategorie, sondern als eigene Kachel direkt auf dem Startbildschirm -
-   eine eigene Bedienoberfläche mit Kanalwahl, Lautstärkeregler,
-   Teilnehmerliste und Anrufen braucht Platz für sich.
+6. **Dock**: Die Fahrerkarte (Fahrer) liegt als eigenes Icon in einem Dock
+   unten auf dem Startbildschirm (analog zum iPad-Dock), statt als
+   Kategorie-App - ein "bin ich gerade im Dienst"-Schalter mit Status-Punkt
+   (grün = eingesteckt), kein eigentlicher Arbeitsbereich. Der frühere
+   Dispositions-Dienst-Dock-Eintrag sitzt jetzt als Toggle direkt in der
+   Kopfzeile der App **Disposition** (siehe Punkt 7) statt separat im Dock.
+7. **Disposition** (eigene Kachel, kein Kategorie-Untermenü) ist die
+   zentrale Arbeitsfläche für Disponenten/Geschäftsführung - siehe eigener
+   Abschnitt "Disposition" weiter unten. **Live Karte** und **Nachrichten**
+   bleiben eigene Vollbild-Apps in der Kategorie **Kommunikation**, sind aber
+   auch direkt aus der Disposition-Kopfzeile per Link erreichbar. Die App
+   **"Funk"** (für jeden angemeldeten Mitarbeiter, siehe eigener Abschnitt
+   "Funk" weiter unten) liegt ebenfalls als eigene Kachel direkt auf dem
+   Startbildschirm - eine eigene Bedienoberfläche mit Kanalwahl,
+   Lautstärkeregler, Teilnehmerliste und Anrufen braucht Platz für sich.
 8. **Wallpaper + Logo inklusive**: Homescreen, Kategorie-Bildschirm sowie
    Lock- und Login-Screen zeigen ein Hintergrundbild
    (`html/img/wallpaper.jpg`) und das Firmenlogo (`html/img/logo.png`,
@@ -198,13 +205,47 @@ zugewiesen, muss er zuerst Tankstand und ggf. Mängel/Besonderheiten melden
 automatisch auf "Wartung"). Ohne zugewiesenes Fahrzeug meldet er sich direkt
 ab. Siehe `Vehicles.ReportCondition` in `server/sv_vehicles.lua`.
 
+### Disposition (zentrale Arbeitsfläche)
+
+Die Kachel **"Disposition"** (Startbildschirm, kein Kategorie-Untermenü -
+siehe "Navigation" oben) ist eine einzige, zusammenhängende Arbeitsfläche mit
+drei gleichzeitig sichtbaren Spalten statt der früheren getrennten Apps
+"Auftragsverwaltung" (Pool/Aktiv/Abgeschlossen-Tabs) und "Fahrerübersicht":
+
+- **Offene Aufträge** (links): automatisch generierte, noch nicht
+  zugewiesene Aufträge mit Strecke, Fracht, Wert und Gefahrgut-Kennzeichnung.
+- **Fuhrpark** (Mitte): alle aktiven Fahrer mit Status (verfügbar/im
+  Einsatz/Pause/offline), zugewiesenem Fahrzeug samt Fahrzeugstatus und -
+  sofern gerade im Einsatz - Fracht/Menge und Strecke des laufenden
+  Auftrags.
+- **Zugewiesen / Laufend** (rechts): alle disponierten und laufenden
+  Aufträge mit Fahrer, Fahrzeug, Status und offenen Abbruch-Anfragen.
+
+**Zuweisen per Drag & Drop:** eine Auftragskarte aus "Offene Aufträge" (oder
+zum Neu-Zuweisen eine Karte aus "Zugewiesen / Laufend", solange ihr Status
+das erlaubt) wird auf eine Fuhrpark-Karte gezogen. Während des Ziehens hebt
+sich ein gültiges Ziel grün hervor (passende Berechtigung z.B. bei
+Gefahrgut, bei einer Neuzuweisung beliebiger Status, sonst nur "verfügbare"
+Fahrer), ein ungültiges Ziel wird sichtbar abgeblendet und nimmt die Karte
+nicht an. Ein Loslassen auf einem gültigen Ziel öffnet eine kurze
+Bestätigung ("Auftrag XY an Fahrer Z zuweisen?") - erst danach wird
+tatsächlich disponiert, ein versehentliches Fallenlassen löst also nichts
+aus. Wer lieber ohne Drag & Drop arbeitet, findet an jeder Auftragskarte
+weiterhin einen "Zuweisen"/"Neu zuweisen"-Button mit Dropdown-Auswahl.
+
+Die Kopfzeile der Disposition enthält außerdem den **Dispositions-Dienst-
+Toggle** (früher ein eigenes Dock-Icon) sowie Kurz-Links zu Live-Karte,
+Nachrichten, Funk und dem Auftrags-**Verlauf** (abgeschlossene/abgebrochene/
+abgelehnte Aufträge), damit diese verwandten Werkzeuge erreichbar bleiben,
+ohne den Arbeitskontext der Disposition zu verlassen.
+
 ### Dispositions-Dienst & Auftrags-Selbstzuweisung ohne Disponent
 
 Ein bloß am Tablet angemeldeter Disponent/Geschäftsführung reicht **nicht**
 aus, um die Selbstzuweisung zu sperren - der Dispositions-Dienst muss dafür
-über das **Dock-Icon "Dispositions-Dienst"** auf dem Startbildschirm über den
+über den **Dienst-Toggle in der Kopfzeile der App "Disposition"** über den
 Button "Dienst beginnen" aktiv eingeschaltet sein (analog zur Fahrerkarte
-bei Fahrern, die ebenfalls im Dock liegt). Solange niemand im Dienst ist, können Fahrer sich einen
+bei Fahrern, die im Dock liegt). Solange niemand im Dienst ist, können Fahrer sich einen
 offenen Auftrag im "Offener Auftragspool"-Bereich unter "Aufträge" selbst
 zuweisen ("Übernehmen"). Sobald mindestens ein Disponent "Dienst beginnen"
 gedrückt hat, wird der Button gesperrt und die normale Disposition greift
@@ -240,7 +281,7 @@ serverseitig durchgesetzt in `server/sv_roles.lua`):
 | Berechtigung | Bedeutung |
 |---|---|
 | `driver_actions` | Fahrerfunktionen (Aufträge fahren, Fahrerkarte, eigene Statistik, Nachrichten empfangen) |
-| `dispatch` | Disposition (Fahrerübersicht, Auftragspool disponieren, Fahrer kontaktieren, Umsatzübersicht) |
+| `dispatch` | Disposition (zentrale Arbeitsfläche: Auftragspool disponieren, Fuhrpark/Fahrer-Übersicht, Fahrer kontaktieren, Umsatzübersicht) |
 | `fleet_manage` | Fuhrparkverwaltung (Fahrzeuge anlegen/bearbeiten/löschen/zuweisen) UND Anhängerverwaltung (Reiter "Anhänger": anlegen/bearbeiten/löschen/an-/umkuppeln) |
 | `locations_manage` | Orte verwalten (Reiter "Orte": Be-/Entladepunkte anlegen/bearbeiten/löschen) |
 | `employees_manage` | Mitarbeiterverwaltung (einstellen, Rolle/Status ändern, Passwörter zurücksetzen, Fahrerakten) |
@@ -325,7 +366,7 @@ Framework-Anbindung in diesem Standalone-Setup).
   Warnvorlauf) stehen in `Config.DrivingRules`. Bei Überschreitung erhält der
   Fahrer eine native In-Game-Benachrichtigung (funktioniert auch bei
   geschlossenem Tablet); der Disponent kann Fahrer zusätzlich aktiv über den
-  Button **"Lenkzeit erinnern"** in der Fahrerübersicht erinnern.
+  Button **"Lenkzeit erinnern"** an einer Fuhrpark-Karte in der Disposition erinnern.
   **Zwei Voraussetzungen, ohne die sich die Lenkzeit NICHT ändert:** (1) die
   Fahrerkarte muss im Reiter "Fahrerkarte" eingesteckt sein (`on_shift` in
   `st_drivers`) - nur das Sitzen im richtigen Fahrzeug reicht seit diesem
@@ -611,7 +652,7 @@ Im Reiter "Aufträge" hat ein Fahrer bei jedem laufenden Auftrag
 
 ## Live-Karte
 
-Die App **"Live Karte"** (Kategorie Disposition, Berechtigung `live_map_view`)
+Die App **"Live Karte"** (Kategorie Kommunikation, Berechtigung `live_map_view`)
 zeigt ausschließlich gerade eingestempelte Fahrer (`st_drivers.on_shift = 1`)
 als Marker über einem selbst hinterlegten Kartenbild - alle 3 Sekunden
 (`Config.LiveMap.trackingIntervalMs`) aktualisiert.
