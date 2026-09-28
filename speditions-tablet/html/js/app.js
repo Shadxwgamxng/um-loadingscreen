@@ -425,6 +425,7 @@ function renderHome() {
             <div class="home-clock-time" id="home-clock-time"></div>
             <div class="home-clock-date" id="home-clock-date"></div>
         </div>
+        <div class="home-widgets" id="home-widgets"></div>
         <div class="home-tiles">
             ${visibleCategories(currentPermissions()).map((c) => `
                 <div class="category-tile" onclick="showCategory('${c.id}')">
@@ -435,6 +436,46 @@ function renderHome() {
         </div>`;
     updateClockElements();
     renderDock();
+    renderHomeWidgets();
+}
+
+// Homescreen-Widget "Aktueller Auftrag" (Fahrer) - bewusst knapp gehalten
+// (Fracht, Strecke, Status), damit der Inhalt in die feste Widget-Größe
+// passt, statt zu überlaufen. Tippen öffnet die volle App "Meine Aufträge".
+// Best-effort wie der Dock-Status: rohes rpc() statt call(), damit ein
+// Fehler hier keinen Fehler-Toast auf dem Homescreen auslöst.
+const ACTIVE_ORDER_STATUSES = ['angenommen', 'anfahrt', 'beladen', 'entladen'];
+
+async function renderHomeWidgets() {
+    const el = document.getElementById('home-widgets');
+    if (!el) return;
+    if (!currentPermissions().includes('driver_actions')) {
+        el.innerHTML = '';
+        return;
+    }
+    el.innerHTML = `
+        <div class="widget" onclick="showView('driver-orders')">
+            <div class="widget-header">${iconSvg('list')}<span>Aktueller Auftrag</span></div>
+            <div id="widget-order-body"><div class="widget-empty">Lädt…</div></div>
+        </div>`;
+
+    const res = await rpc('driver:myOrders');
+    const body = document.getElementById('widget-order-body');
+    if (!body) return; // Homescreen inzwischen verlassen
+    if (!res || !res.ok) {
+        body.innerHTML = '<div class="widget-empty">Keine Daten verfügbar.</div>';
+        return;
+    }
+    const active = (res.result.orders || []).find((o) => ACTIVE_ORDER_STATUSES.includes(o.status));
+    if (!active) {
+        body.innerHTML = '<div class="widget-empty">Kein aktiver Auftrag.</div>';
+        return;
+    }
+    const meta = ORDER_STATUS_META[active.status];
+    body.innerHTML = `
+        <div class="widget-title">${escapeHtml(active.cargo)}</div>
+        <div class="widget-sub">${escapeHtml(active.start_location)} → ${escapeHtml(active.end_location)}</div>
+        <div class="widget-status"><span class="dot dot-${meta ? meta.dot : 'gray'}"></span>${escapeHtml(meta ? meta.label : active.status)}</div>`;
 }
 
 // Dock (fixiert unten auf dem Home-Screen, analog iPad) - Fahrerkarte und
@@ -758,9 +799,9 @@ function handlePush(event, data) {
     const map = {
         'notifications:new': () => { toast(data.title, data.message, 'info'); refreshIfViewing(['driver-messages', 'driver-orders']); },
         'orders:newOpenOrder': () => { toast('Neuer Auftrag', 'Ein neuer Auftrag ist im Pool verfügbar.', 'info'); refreshIfViewing(['dispatch-orders']); },
-        'orders:activeChanged': () => refreshIfViewing(['dispatch-orders', 'driver-orders']),
+        'orders:activeChanged': () => { refreshIfViewing(['dispatch-orders', 'driver-orders']); if (State.currentScreen === 'home') renderHomeWidgets(); },
         'orders:cancelRequested': () => { toast('Abbruch-Anfrage', 'Ein Fahrer möchte einen Auftrag abbrechen.', 'warning'); refreshIfViewing(['dispatch-orders']); },
-        'orders:completed': () => { toast('Auftrag abgeschlossen', 'Ein Auftrag wurde erfolgreich abgeschlossen.', 'success'); refreshIfViewing(['dispatch-orders', 'gf-finance-hub']); },
+        'orders:completed': () => { toast('Auftrag abgeschlossen', 'Ein Auftrag wurde erfolgreich abgeschlossen.', 'success'); refreshIfViewing(['dispatch-orders', 'gf-finance-hub']); if (State.currentScreen === 'home') renderHomeWidgets(); },
         'dispatch:driversChanged': () => refreshIfViewing(['dispatch-drivers']),
         'dispatch:dutyChanged': () => { refreshIfViewing(['dispatch-orders', 'driver-orders', 'dispatch-duty']); if (State.currentScreen === 'home') refreshDockStatus(); },
         'fleet:changed': () => refreshIfViewing(['gf-fleet-hub', 'dispatch-drivers']),

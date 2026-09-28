@@ -137,21 +137,41 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: center;
+    /* Liegt über dem Wallpaper (.wallpaper-img, z-index:0) - Verlauf ist
+       bewusst nur ein Scrim (kein Volltonhintergrund) statt eines
+       Volltonhintergrunds, damit das Bild durchscheint; ohne Wallpaper
+       greift automatisch derselbe dunkle Verlauf wie bisher. */
     background:
-        radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.1), transparent 55%),
-        var(--bg-1);
+        radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.16), transparent 55%),
+        linear-gradient(175deg, rgba(6,10,19,0.72), rgba(6,10,19,0.88) 70%);
 }
 .login-screen.hidden { display: none; }
 .login-box {
-    width: min(300px, 82%);
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 26px 24px;
+    width: min(320px, 84%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(255,255,255,0.08);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 26px;
+    padding: 30px 26px 26px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
 }
-.login-title { font-size: 18px; font-weight: 700; text-align: center; }
-.login-subtitle { color: var(--text-2); font-size: 12.5px; text-align: center; margin: 4px 0 18px; }
-.login-error { color: var(--red); font-size: 12.5px; text-align: center; margin-top: 10px; }
+.login-box label,
+.login-box input { width: 100%; }
+.login-logo { width: 56px; height: auto; margin-bottom: 14px; filter: drop-shadow(0 4px 14px rgba(59,130,246,0.3)); }
+.login-title { font-size: 19px; font-weight: 700; text-align: center; color: #fff; }
+.login-subtitle { color: rgba(255,255,255,0.65); font-size: 12.5px; text-align: center; margin: 4px 0 20px; }
+.login-box input {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.16);
+    color: #fff;
+}
+.login-box input:focus { border-color: var(--accent-2); }
+.login-box label { color: rgba(255,255,255,0.6); }
+.login-error { color: #fca5a5; font-size: 12.5px; text-align: center; margin-top: 10px; }
 .login-error.hidden { display: none; }
 
 /* ---------- Lock screen ---------- */
@@ -165,9 +185,10 @@ html, body {
     align-items: center;
     justify-content: space-between;
     padding: 40px 0 56px;
+    /* Scrim über dem Wallpaper statt Volltonhintergrund, s. .login-screen. */
     background:
-        radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.14), transparent 55%),
-        linear-gradient(175deg, #0c1526, #060a13 70%);
+        radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.18), transparent 55%),
+        linear-gradient(175deg, rgba(8,14,26,0.68), rgba(4,7,13,0.85) 70%);
     cursor: pointer;
     user-select: none;
 }
@@ -336,6 +357,61 @@ html, body {
     text-shadow: 0 1px 4px rgba(0,0,0,0.55);
     text-transform: capitalize;
 }
+
+/* Homescreen-Widget "Aktueller Auftrag" (iOS-Widget-Optik: kompakte
+   Glaskarte, feste Größe, Inhalt bewusst knapp gehalten, damit er
+   hineinpasst) - s. renderHomeWidgets() in app.js. Nur für Fahrer, direkt
+   unter der großen Uhr, vor dem Kategorie-Grid. */
+.home-widgets { margin-bottom: 8px; }
+.widget {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    width: 264px;
+    min-height: 118px;
+    padding: 14px 16px;
+    border-radius: 22px;
+    background: rgba(255,255,255,0.10);
+    backdrop-filter: blur(26px);
+    -webkit-backdrop-filter: blur(26px);
+    border: 1px solid rgba(255,255,255,0.16);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.35);
+    cursor: pointer;
+    color: #fff;
+    transition: transform 0.12s ease;
+}
+.widget:hover { transform: scale(1.02); }
+.widget:active { transform: scale(0.98); }
+.widget-header {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255,255,255,0.62);
+}
+.widget-header svg { width: 13px; height: 13px; }
+.widget-title {
+    font-size: 14.5px;
+    font-weight: 700;
+    margin-top: 10px;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.widget-sub {
+    font-size: 12px;
+    color: rgba(255,255,255,0.75);
+    margin-top: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.widget-status { margin-top: 8px; font-size: 12px; color: rgba(255,255,255,0.85); }
+.widget-empty { font-size: 12.5px; color: rgba(255,255,255,0.6); margin-top: 12px; }
 
 .home-tiles, .app-grid {
     display: grid;

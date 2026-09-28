@@ -123,11 +123,17 @@ sondern ein klassisches, an iPad/iOS angelehntes Tablet-Menü:
    Arbeitsbereich.
 7. In der Kategorie **Disposition**: die App **"Live Karte"** (Berechtigung
    `live_map_view`) - siehe eigener Abschnitt "Live-Karte" weiter unten.
-8. **Wallpaper**: Home- und Kategorie-Bildschirm zeigen optional ein eigenes
-   Hintergrundbild, das du selbst unter `html/img/wallpaper.jpg` ablegst
-   (siehe `html/img/WALLPAPER_HIER_ABLEGEN.txt`, empfohlenes Format ca.
+8. **Wallpaper**: Homescreen, Kategorie-Bildschirm sowie Lock- und Login-
+   Screen zeigen optional ein eigenes Hintergrundbild, das du selbst unter
+   `html/img/wallpaper.jpg` ablegst (siehe
+   `html/img/WALLPAPER_HIER_ABLEGEN.txt`, empfohlenes Format ca.
    2048×1330px, Seitenverhältnis 3:2) - ohne Datei bleibt der bisherige
-   dunkle Verlaufshintergrund sichtbar.
+   dunkle Verlaufshintergrund sichtbar. Der Login-Bildschirm (Name +
+   Passwort) ist dazu als transluzente Glas-Karte gestaltet.
+9. **Widget "Aktueller Auftrag"**: Fahrer sehen auf dem Startbildschirm
+   unter der Uhrzeit ein kompaktes Widget (Fracht, Strecke, Status) ihres
+   gerade aktiven Auftrags, sofern einer läuft - ein Tipp darauf öffnet
+   direkt die App "Meine Aufträge".
 
 Alle folgenden Abschnitte dieses READMEs sprechen aus historischen Gründen
 teils weiterhin von "Reitern" - gemeint ist damit jeweils die entsprechende
