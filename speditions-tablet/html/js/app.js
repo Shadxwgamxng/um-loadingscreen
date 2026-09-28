@@ -71,6 +71,7 @@ const ERROR_MESSAGES = {
     radio_no_incoming_call: 'Es gibt gerade keinen eingehenden Anruf.',
     radio_no_active_call: 'Es gibt gerade kein laufendes Gespräch.',
     radio_call_not_on_hold: 'Das Gespräch wird gerade nicht gehalten.',
+    radio_call_channels_full: 'Gerade laufen zu viele Gespräche gleichzeitig - versuch es kurz später nochmal.',
     insufficient_player_cash: 'Du hast nicht genug Bargeld dabei, um diesen Betrag einzuzahlen.',
     employee_inactive: 'Dieses Mitarbeiterkonto ist deaktiviert.',
     forbidden_role: 'Keine Berechtigung für diese Aktion.',

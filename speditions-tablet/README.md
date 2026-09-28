@@ -765,7 +765,22 @@ Funk-Teilnehmern.
   `[speditions-tablet] Funk: pma-voice-Export "setCallChannel" ist
   fehlgeschlagen ...`-Zeilen unmittelbar nach dem Annehmen eines Anrufs -
   die tauchen auf, falls euer pma-voice-Fork diesen Export unter einem
-  anderen Namen bereitstellt.
+  anderen Namen bereitstellt. Erscheint stattdessen in der Server-Konsole
+  wiederholt `[mumble] MUMBLE_ADD_VOICE_CHANNEL_LISTEN: Tried to call native
+  on a channel that didn't exist`: das ist ein bekannter, von den
+  pma-voice-Maintainern nicht behobener Bug (Race Condition zwischen dem
+  Anlegen eines neuen Mumble-Kanals und dem ersten Zuhören darauf, s.
+  [pma-voice#555](https://github.com/AvarianKnight/pma-voice/issues/555)) -
+  betrifft praktisch nur BRANDNEUE Kanalnummern. Anruf-Kanäle laufen daher
+  über einen festen, wiederverwendeten Pool (`server/sv_radio.lua`,
+  `CALL_CHANNEL_POOL_START`/`CALL_CHANNEL_POOL_SIZE`, Standard 90001-90020,
+  bis zu 20 gleichzeitige Gespräche) statt ständig neuer Nummern - jeder
+  Pool-Kanal wird dadurch nur beim jeweils ersten Gespräch nach einem
+  Serverneustart neu angelegt, danach bereits vorhanden. Tritt die Meldung
+  trotzdem dauerhaft auf, testet zur Kontrolle den normalen Funkkanal
+  (nicht Anrufe) - bleibt der ebenfalls stumm, liegt es nicht an den
+  Anruf-Kanälen, sondern an pma-voice/Mumble selbst (Serverneustart, ggf.
+  pma-voice-Update prüfen).
 
 ## Datenbankschema
 

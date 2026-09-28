@@ -30,7 +30,32 @@ local presence = {} -- [src] = { channel = number, displayName = string }
 local calls = {}      -- [callId] = { callerSrc, targetSrc, channel, state = 'ringing'|'active' }
 local srcToCall = {}  -- [src] = callId
 local nextCallId = 1
-local nextCallChannel = 90001 -- eigener Wertebereich, getrennt von den normalen Funkkanälen 1000-1009
+
+-- Anruf-Kanäle kommen aus einem FESTEN Pool (statt fortlaufend hochzuzählen)
+-- und werden nach jedem Gespräch wieder freigegeben - pma-voice/Mumble legt
+-- einen Kanal beim allerersten Gebrauch neu an, und genau dabei tritt ein
+-- bekannter, von den pma-voice-Maintainern nicht behobener Bug auf
+-- ("MUMBLE_ADD_VOICE_CHANNEL_LISTEN: Tried to call native on a channel
+-- that didn't exist" - Race Condition zwischen Kanal-Erstellung und dem
+-- ersten Zuhören darauf, s. github.com/AvarianKnight/pma-voice/issues/555),
+-- der sich als "Gesprächspartner hören sich nicht" zeigt. Mit einer stets
+-- NEUEN Kanalnummer pro Anruf würde JEDES Gespräch diesen Bug auslösen -
+-- mit einem wiederverwendeten Pool wird jeder Kanal nur beim allerersten
+-- Anruf nach einem Serverneustart neu angelegt, danach längst existent.
+local CALL_CHANNEL_POOL_START = 90001
+local CALL_CHANNEL_POOL_SIZE = 20 -- max. gleichzeitige Gespräche
+local callChannelInUse = {} -- [channel] = true
+
+local function allocateCallChannel()
+    for i = 0, CALL_CHANNEL_POOL_SIZE - 1 do
+        local ch = CALL_CHANNEL_POOL_START + i
+        if not callChannelInUse[ch] then
+            callChannelInUse[ch] = true
+            return ch
+        end
+    end
+    return nil
+end
 
 local function endCall(callId, reason)
     local call = calls[callId]
@@ -39,6 +64,7 @@ local function endCall(callId, reason)
     calls[callId] = nil
     srcToCall[call.callerSrc] = nil
     srcToCall[call.targetSrc] = nil
+    callChannelInUse[call.channel] = nil
 
     -- Direkte Client-Events statt RPC.Push, damit das auch ankommt, wenn
     -- die NUI gerade nicht auf eine Antwort wartet.
@@ -120,10 +146,11 @@ RPC.Register('radio:callUser', function(src, payload)
     local targetEmp = Employees.GetLoggedIn(targetSrc)
     if not targetEmp then error('radio_target_not_joined') end
 
+    local callChannel = allocateCallChannel()
+    if not callChannel then error('radio_call_channels_full') end
+
     local callId = nextCallId
     nextCallId = nextCallId + 1
-    local callChannel = nextCallChannel
-    nextCallChannel = nextCallChannel + 1
 
     calls[callId] = { callerSrc = src, targetSrc = targetSrc, channel = callChannel, state = 'ringing' }
     srcToCall[src] = callId
