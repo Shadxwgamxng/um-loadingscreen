@@ -259,11 +259,18 @@ mitgeführten Ghost-Element - funktioniert wie jede gewöhnliche Mausbewegung
 und damit auch zuverlässig im Spiel-NUI.
 
 **Kurz-Wechsel zwischen den Disponenten-Apps:** an der linken Kante des
-Inhaltsbereichs sitzt eine schmale Hover-Leiste (kaum sichtbar, bis man mit
-der Maus hinüberfährt) - sie klappt dann zu einer Liste mit **Disposition**,
-**Live-Karte**, **Nachrichten** und **Funk** auf. Ein Klick darauf wechselt
-direkt in die jeweilige App, ohne den Umweg über den Startbildschirm. Die
-Leiste erscheint nur, solange eine dieser vier Apps offen ist. Die
+Inhaltsbereichs sitzt eine schmale Hover-Leiste (kaum sichtbar, bis man
+kurz mit der Maus dort verweilt) - sie klappt dann zu einer Liste mit
+**Disposition**, **Live-Karte**, **Nachrichten** und **Funk** auf. Ein
+Klick darauf wechselt direkt in die jeweilige App, ohne den Umweg über den
+Startbildschirm. Die Leiste erscheint nur, solange eine dieser vier Apps
+offen ist. **Klappt bewusst nicht bei reinem Vorbeifahren mit der Maus
+auf** (`setupHoverRailIntent()` in app.js, ~220ms Verweildauer statt
+reinem CSS-`:hover`) - sonst würde jeder Mausweg zu einem Button, der
+zufällig hinter der Leiste liegt (z.B. in der Funk-Konsole oder Spalte 1
+der Disposition, beide beginnen nahe am linken Rand), die Leiste
+aufklappen und den Klick stattdessen auf deren ersten Eintrag
+("Disposition") umlenken. Die
 Kopfzeile der Disposition selbst enthält daneben den **Dispositions-Dienst-
 Toggle** (früher ein eigenes Dock-Icon) sowie einen Link zum Auftrags-
 **Verlauf** (abgeschlossene/abgebrochene/abgelehnte Aufträge).

@@ -597,7 +597,14 @@ html, body {
    klickbar statt nur den 4 vorgesehenen, mit zwei sichtbaren Leisten
    übereinander und versehentlichen Klicks auf "Disposition" als Folge. */
 .hover-rail.hidden { display: none; }
-.hover-rail:hover {
+/* Klappt bewusst NICHT per reinem CSS :hover auf (das fing jeden
+   Mausdurchgang über den linken Rand ab, auch wenn man nur unterwegs zu
+   einem Button war, der dahinter liegt, z.B. der Funk-Konsole - Klick
+   landete dann auf dem falschen, jetzt aufgeklappten Leisten-Eintrag,
+   meist "Disposition" als erstem Eintrag). Stattdessen setzt app.js
+   (setupHoverRailIntent) die Klasse `.expanded` erst nach einer kurzen
+   Verweildauer - ein bloßes Durchqueren löst das nicht mehr aus. */
+.hover-rail.expanded {
     width: 196px;
     background: var(--bg-2);
     border-right: 1px solid var(--border);

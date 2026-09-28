@@ -864,6 +864,7 @@ function renderQuickswitchRail(activeId) {
     if (!rail) return;
     if (!QUICKSWITCH_VIEWS.some((v) => v.id === activeId)) {
         rail.classList.add('hidden');
+        rail.classList.remove('expanded');
         rail.innerHTML = '';
         return;
     }
@@ -876,6 +877,32 @@ function renderQuickswitchRail(activeId) {
         </div>
     `).join('');
 }
+
+// Öffnet die Hover-Leiste erst nach kurzer, bewusster Verweildauer am
+// linken Rand (statt bei reinem CSS :hover sofort) - verhindert, dass ein
+// bloßes Durchqueren des Randes (z.B. auf dem Weg zu einem Button in der
+// Funk-Konsole oder Spalte 1 der Disposition, die beide bei ~26px vom Rand
+// beginnen, also innerhalb der 196px-Aufklapp-Zone liegen) die Leiste
+// aufklappt und den Klick auf den dann dort liegenden Eintrag (meist
+// "Disposition", der erste Eintrag) abfängt statt auf das eigentliche Ziel.
+// #quickswitch-rail ist ein einziges, dauerhaftes DOM-Element (nur
+// innerHTML/Klassen wechseln, s. renderQuickswitchRail/renderSectionedApp),
+// die Listener müssen daher nur einmal beim Laden registriert werden.
+function setupHoverRailIntent() {
+    const rail = document.getElementById('quickswitch-rail');
+    if (!rail) return;
+    const OPEN_DELAY_MS = 220;
+    let openTimer = null;
+    rail.addEventListener('mouseenter', () => {
+        if (openTimer) clearTimeout(openTimer);
+        openTimer = setTimeout(() => { rail.classList.add('expanded'); }, OPEN_DELAY_MS);
+    });
+    rail.addEventListener('mouseleave', () => {
+        if (openTimer) { clearTimeout(openTimer); openTimer = null; }
+        rail.classList.remove('expanded');
+    });
+}
+setupHoverRailIntent();
 
 function refreshIfViewing(ids) {
     if (ids.includes(State.currentView)) showView(State.currentView);
