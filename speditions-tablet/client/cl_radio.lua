@@ -10,8 +10,22 @@
 -- Skript nichts Eigenes.
 -- =========================================================
 
-local channel = Config.Radio.defaultChannel
-local volume = Config.Radio.defaultVolume
+-- Absicherung gegen eine ältere/unvollständige config.lua (config.lua ist
+-- die einzige Datei, die bei einem Update bewusst NICHT überschrieben wird,
+-- s. escrow_ignore_files in fxmanifest.lua) - fehlt Config.Radio komplett
+-- (z.B. weil das Update nur teilweise eingespielt wurde), würde das
+-- gesamte Skript sonst bereits hier mit einem Lua-Fehler abbrechen, BEVOR
+-- auch nur einer der RegisterNUICallback-Aufrufe weiter unten läuft - dann
+-- wäre die komplette Funk-App wirkungslos (auch Beitreten), ohne dass das
+-- irgendwo sichtbar würde außer als früher Skriptfehler in der Konsole.
+local RadioConfig = Config.Radio
+if not RadioConfig then
+    RadioConfig = { minChannel = 1000, maxChannel = 1009, defaultChannel = 1000, defaultVolume = 100 }
+    print('^1[speditions-tablet]^7 Funk: Config.Radio fehlt in config.lua (alte/unvollständige Datei?) - Funk läuft vorerst mit Standardwerten (Kanäle 1000-1009). Bitte config.lua aus dem aktuellen Ressourcen-Paket übernehmen, um Config.Radio zu ergänzen.')
+end
+
+local channel = RadioConfig.defaultChannel
+local volume = RadioConfig.defaultVolume
 local joined = false
 local rxTalkers = {} -- ['local'] oder [serverId] = true, wer gerade auf dem Kanal spricht (nur für die Empfangsanzeige, keine Namen nötig)
 local activeCallChannel = nil -- privater pma-voice-Kanal des laufenden Gesprächs, s. radioJoinCall/radioAnswerCall - wird für Halten/Fortsetzen gebraucht
@@ -126,7 +140,7 @@ end)
 RegisterNUICallback('radioSetChannel', function(data, cb)
     local ch = tonumber(data.channel)
     if ch then
-        ch = math.max(Config.Radio.minChannel, math.min(Config.Radio.maxChannel, math.floor(ch)))
+        ch = math.max(RadioConfig.minChannel, math.min(RadioConfig.maxChannel, math.floor(ch)))
         channel = ch
         applyState()
         if joined then ServerCall('radio:setChannel', { channel = ch }, function() end) end

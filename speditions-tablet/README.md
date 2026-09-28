@@ -731,6 +731,25 @@ Funk-Teilnehmern.
   z.B. weil die Konsolenvariable `voice_enableRadios` auf `0` steht),
   erscheint zusätzlich ein In-Game-Warnhinweis. Prüfe in dem Fall
   `ensure pma-voice` in `server.cfg` und die genannte Convar.
+- **Fehlerdiagnose "Beitreten-Button springt sofort wieder zurück":** `config.lua`
+  wird bei einem Update bewusst NICHT automatisch überschrieben (s.
+  `escrow_ignore_files` in `fxmanifest.lua`) - stammt eure `config.lua` noch
+  von vor der Einführung des Funk-Features, fehlt ihr der komplette
+  `Config.Radio`-Block. `client/cl_radio.lua` und `server/sv_radio.lua`
+  laufen in dem Fall zwar dank eingebauter Standardwerte (Kanäle 1000-1009)
+  weiter, statt abzustürzen, melden das aber deutlich als rote Zeile
+  `[speditions-tablet] Funk: Config.Radio fehlt in config.lua ...` in der
+  Server- bzw. Client-Konsole (F8). Ergänzt in dem Fall den folgenden Block
+  aus der aktuellen `config.lua` in eure eigene (Werte nach Bedarf anpassen):
+  ```lua
+  Config.Radio = {
+      minChannel = 1000,
+      maxChannel = 1009,
+      defaultChannel = 1000,
+      defaultVolume = 100,
+      callRingSeconds = 20,
+  }
+  ```
 
 ## Datenbankschema
 

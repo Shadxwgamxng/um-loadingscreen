@@ -12,6 +12,20 @@
 -- eingestellten Kanal wird durch einen Anruf nicht gestört.
 -- =========================================================
 
+-- Absicherung gegen eine ältere/unvollständige config.lua (config.lua ist
+-- die einzige Datei, die bei einem Update bewusst NICHT überschrieben wird,
+-- s. escrow_ignore_files in fxmanifest.lua) - fehlt Config.Radio komplett,
+-- würde z.B. radio:join sonst bei jedem Beitreten-Versuch mit einem
+-- Lua-Laufzeitfehler abbrechen (RPC-Antwort {ok=false, error=<Lua-Fehler>}),
+-- was sich als "Beitreten-Button springt sofort wieder zurück" zeigt, ohne
+-- dass der eigentliche Grund (fehlende Config.Radio) irgendwo sichtbar wäre
+-- außer als serverseitige RPC-Fehlermeldung in der Konsole.
+local RadioConfig = Config.Radio
+if not RadioConfig then
+    RadioConfig = { minChannel = 1000, maxChannel = 1009, defaultChannel = 1000, defaultVolume = 100, callRingSeconds = 20 }
+    print('^1[speditions-tablet]^7 Funk: Config.Radio fehlt in config.lua (alte/unvollständige Datei?) - Funk läuft vorerst mit Standardwerten (Kanäle 1000-1009). Bitte config.lua aus dem aktuellen Ressourcen-Paket übernehmen, um Config.Radio zu ergänzen.')
+end
+
 local presence = {} -- [src] = { channel = number, displayName = string }
 local calls = {}      -- [callId] = { callerSrc, targetSrc, channel, state = 'ringing'|'active' }
 local srcToCall = {}  -- [src] = callId
@@ -35,7 +49,7 @@ end
 RPC.Register('radio:join', function(src)
     local emp = Employees.RequireRole(src)
     presence[src] = presence[src] or {}
-    presence[src].channel = Config.Radio.defaultChannel
+    presence[src].channel = RadioConfig.defaultChannel
     presence[src].displayName = presence[src].displayName or emp.name
     Logs.Write(emp.id, 'radio_join', ('%s hat den Funk betreten.'):format(emp.name))
     return { ok = true, displayName = presence[src].displayName }
@@ -54,7 +68,7 @@ end)
 --- pma-voice passiert unabhängig davon direkt im Client (cl_radio.lua).
 RPC.Register('radio:setChannel', function(src, payload)
     Employees.RequireRole(src)
-    local ch = Utils.SanitizeNumber(payload.channel, Config.Radio.minChannel, Config.Radio.maxChannel)
+    local ch = Utils.SanitizeNumber(payload.channel, RadioConfig.minChannel, RadioConfig.maxChannel)
     if not ch then error('invalid_payload') end
     if not presence[src] then error('radio_not_joined') end
     presence[src].channel = math.floor(ch)
@@ -118,7 +132,7 @@ RPC.Register('radio:callUser', function(src, payload)
     TriggerClientEvent('speditions-tablet:client:radioIncomingCall', targetSrc, presence[src].displayName or emp.name, callChannel)
 
     CreateThread(function()
-        Wait((Config.Radio.callRingSeconds or 20) * 1000)
+        Wait((RadioConfig.callRingSeconds or 20) * 1000)
         local call = calls[callId]
         if call and call.state == 'ringing' then
             endCall(callId, 'missed')
