@@ -70,6 +70,7 @@ const ERROR_MESSAGES = {
     radio_busy: 'Diese Person telefoniert gerade oder du bist bereits in einem Gespräch.',
     radio_no_incoming_call: 'Es gibt gerade keinen eingehenden Anruf.',
     radio_no_active_call: 'Es gibt gerade kein laufendes Gespräch.',
+    radio_call_not_on_hold: 'Das Gespräch wird gerade nicht gehalten.',
     insufficient_player_cash: 'Du hast nicht genug Bargeld dabei, um diesen Betrag einzuzahlen.',
     employee_inactive: 'Dieses Mitarbeiterkonto ist deaktiviert.',
     forbidden_role: 'Keine Berechtigung für diese Aktion.',
@@ -701,8 +702,10 @@ function stopRadioSound(id) {
 // Aktualisiert nur das Sende-/Empfangs-Chip, ohne die Ansicht neu zu
 // rendern - reine Push-Events aus cl_radio.lua, wirkungslos wenn die
 // Funk-App gerade gar nicht offen ist (Element existiert dann nicht).
+// Sound erst beim LOSLASSEN der Sendetaste (fallende Flanke), nicht beim
+// Drücken - so wurde es für ptt_end.mp3 gewünscht.
 function onRadioTx(talking) {
-    if (talking && !RadioState.tx) playRadioSound('ptt');
+    if (!talking && RadioState.tx) playRadioSound('pttEnd');
     RadioState.tx = talking;
     const el = document.getElementById('funk-tx-chip');
     if (el) el.classList.toggle('active', talking);
@@ -718,13 +721,16 @@ function onRadioRx(talking) {
 // Element zum Aktualisieren vorhanden) - ein Anruf kommt dadurch nur an,
 // wenn das Tablet mit geöffneter Funk-App sichtbar ist (s. README).
 function onRadioIncomingCall(callerName) {
-    RadioState.call = { role: 'incoming', otherName: callerName };
+    RadioState.call = { role: 'incoming', otherName: callerName, onHold: false };
     playRadioSound('incomingCall');
     renderFunkCallBanner();
 }
+// Nur der Anrufer bekommt dieses Push-Event (die Gegenseite hat gerade
+// selbst per Actions.answerRadioCall() angenommen) - beendet den
+// Rufton call_number.mp3.
 function onRadioCallAnswered() {
     if (RadioState.call) RadioState.call.role = 'active';
-    stopRadioSound('incomingCall');
+    stopRadioSound('callNumber');
     renderFunkCallBanner();
 }
 function onRadioCallEnded(reason) {
@@ -732,6 +738,21 @@ function onRadioCallEnded(reason) {
     if (RadioState.call) toast('Funk', labels[reason] || 'Anruf beendet.', 'info');
     RadioState.call = null;
     stopRadioSound('incomingCall');
+    stopRadioSound('callNumber');
+    stopRadioSound('holdingLine');
+    renderFunkCallBanner();
+}
+// Push-Events der Gegenseite, wenn DORT Halten/Fortsetzen gedrückt wurde
+// (Actions.holdRadioCall()/resumeRadioCall() lösen das lokal direkt aus,
+// ohne auf dieses Event zu warten - s. dort).
+function onRadioCallHold() {
+    if (RadioState.call) RadioState.call.onHold = true;
+    playRadioSound('holdingLine');
+    renderFunkCallBanner();
+}
+function onRadioCallResumed() {
+    if (RadioState.call) RadioState.call.onHold = false;
+    stopRadioSound('holdingLine');
     renderFunkCallBanner();
 }
 
@@ -825,6 +846,8 @@ window.addEventListener('message', (event) => {
     else if (data.type === 'radioIncomingCall') onRadioIncomingCall(data.callerName);
     else if (data.type === 'radioCallAnswered') onRadioCallAnswered();
     else if (data.type === 'radioCallEnded') onRadioCallEnded(data.reason);
+    else if (data.type === 'radioCallHold') onRadioCallHold();
+    else if (data.type === 'radioCallResumed') onRadioCallResumed();
 });
 
 document.addEventListener('keydown', (e) => {
@@ -1176,12 +1199,22 @@ function renderFunkCallBanner() {
                     <button class="btn btn-sm btn-danger" onclick="Actions.hangupRadioCall()">Abbrechen</button>
                 </div>
             </div>`;
+    } else if (call.onHold) {
+        el.innerHTML = `
+            <div class="funk-call-banner hold">
+                <span>${iconSvg('mic')}Gehalten: Gespräch mit <strong>${escapeHtml(call.otherName)}</strong></span>
+                <div class="funk-call-actions">
+                    <button class="btn btn-sm btn-danger" onclick="Actions.hangupRadioCall()">Auflegen</button>
+                    <button class="btn btn-sm btn-primary" onclick="Actions.resumeRadioCall()">Fortsetzen</button>
+                </div>
+            </div>`;
     } else {
         el.innerHTML = `
             <div class="funk-call-banner active">
                 <span>${iconSvg('mic')}Im Gespräch mit <strong>${escapeHtml(call.otherName)}</strong></span>
                 <div class="funk-call-actions">
                     <button class="btn btn-sm btn-danger" onclick="Actions.hangupRadioCall()">Auflegen</button>
+                    <button class="btn btn-sm btn-ghost" onclick="Actions.holdRadioCall()">Halten</button>
                 </div>
             </div>`;
     }
@@ -2510,17 +2543,20 @@ Actions.saveRadioDisplayName = async () => {
 
 Actions.callRadioUser = async (targetSrc, targetName) => {
     if (RadioState.call) return; // schon in einem Anruf/am Klingeln
-    RadioState.call = { role: 'outgoing', otherName: targetName, targetSrc };
+    RadioState.call = { role: 'outgoing', otherName: targetName, targetSrc, onHold: false };
+    playRadioSound('callNumber');
     renderFunkCallBanner();
     const res = await nuiCall('radioCallUser', { targetSrc });
     if (!res || !res.ok) {
         toast('Funk', translateError(res && res.error), 'error');
         RadioState.call = null;
+        stopRadioSound('callNumber');
         renderFunkCallBanner();
     }
 };
 
 Actions.answerRadioCall = async () => {
+    stopRadioSound('incomingCall'); // sofort, nicht erst nach der Server-Antwort
     const res = await nuiCall('radioAnswerCall');
     if (res && res.ok) {
         if (RadioState.call) RadioState.call.role = 'active';
@@ -2533,15 +2569,46 @@ Actions.answerRadioCall = async () => {
 };
 
 Actions.declineRadioCall = async () => {
+    stopRadioSound('incomingCall');
     await nuiCall('radioDeclineCall');
     RadioState.call = null;
     renderFunkCallBanner();
 };
 
 Actions.hangupRadioCall = async () => {
+    stopRadioSound('callNumber');
+    stopRadioSound('holdingLine');
     await nuiCall('radioHangup');
     RadioState.call = null;
     renderFunkCallBanner();
+};
+
+Actions.holdRadioCall = async () => {
+    if (!RadioState.call || RadioState.call.role !== 'active' || RadioState.call.onHold) return;
+    RadioState.call.onHold = true;
+    playRadioSound('holdingLine');
+    renderFunkCallBanner();
+    const res = await nuiCall('radioHoldCall');
+    if (!res || !res.ok) {
+        toast('Funk', translateError(res && res.error), 'error');
+        RadioState.call.onHold = false;
+        stopRadioSound('holdingLine');
+        renderFunkCallBanner();
+    }
+};
+
+Actions.resumeRadioCall = async () => {
+    if (!RadioState.call || !RadioState.call.onHold) return;
+    RadioState.call.onHold = false;
+    stopRadioSound('holdingLine');
+    renderFunkCallBanner();
+    const res = await nuiCall('radioResumeCall');
+    if (!res || !res.ok) {
+        toast('Funk', translateError(res && res.error), 'error');
+        RadioState.call.onHold = true;
+        playRadioSound('holdingLine');
+        renderFunkCallBanner();
+    }
 };
 
 Actions.markRead = async (id) => {

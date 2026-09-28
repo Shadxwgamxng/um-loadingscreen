@@ -157,6 +157,30 @@ RPC.Register('radio:hangup', function(src)
     return { ok = true }
 end)
 
+--- Hält ein laufendes Gespräch - beide Seiten trennen währenddessen ihre
+--- pma-voice-Verbindung zum privaten Call-Kanal (s. cl_radio.lua), damit
+--- niemand ins Leere spricht/hört. Kann von beiden Seiten ausgelöst und
+--- von beiden Seiten wieder fortgesetzt werden.
+RPC.Register('radio:holdCall', function(src)
+    local callId = srcToCall[src]
+    local call = callId and calls[callId]
+    if not call or call.state ~= 'active' then error('radio_no_active_call') end
+    call.state = 'hold'
+    local otherSrc = call.callerSrc == src and call.targetSrc or call.callerSrc
+    TriggerClientEvent('speditions-tablet:client:radioCallHold', otherSrc)
+    return { ok = true }
+end)
+
+RPC.Register('radio:resumeCall', function(src)
+    local callId = srcToCall[src]
+    local call = callId and calls[callId]
+    if not call or call.state ~= 'hold' then error('radio_call_not_on_hold') end
+    call.state = 'active'
+    local otherSrc = call.callerSrc == src and call.targetSrc or call.callerSrc
+    TriggerClientEvent('speditions-tablet:client:radioCallResumed', otherSrc)
+    return { ok = true }
+end)
+
 AddEventHandler('playerDropped', function()
     local src = source
     presence[src] = nil

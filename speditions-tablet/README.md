@@ -691,16 +691,25 @@ Funk-Teilnehmern.
   Funk-App auf dem Tablet des Angerufenen tatsächlich geöffnet ist** - bei
   geschlossenem Tablet oder auf einer anderen App/Kategorie verpufft ein
   eingehender Anruf momentan wirkungslos.
+- **Anruf halten**: während eines laufenden Gesprächs lässt sich über
+  "Halten" die Verbindung pausieren - beide Seiten trennen währenddessen
+  ihren privaten Call-Kanal (niemand spricht ins Leere), "Fortsetzen"
+  (von beiden Seiten auslösbar) verbindet wieder. RPCs `radio:holdCall`/
+  `radio:resumeCall`.
 - **Eigener Name im Funk**: im Einstellungsbereich unter der Konsole lässt
   sich ein eigener Anzeigename für die Teilnehmerliste hinterlegen (Standard:
   Mitarbeitername) - rein transient, RPC `radio:setDisplayName`.
-- **Sounds**: Kanalwechsel, eigenes Senden (PTT) und ein Klingelton bei
-  eingehendem Anruf - über den Schalter "Sounds abspielen" im
-  Einstellungsbereich jederzeit stummschaltbar. **Diese Ressource liefert
-  standardmäßig KEINE Audiodateien mit** - lege sie selbst unter
-  `html/sounds/` ab (siehe `html/sounds/SOUNDS_HIER_ABLEGEN.txt` für die
-  genauen Dateinamen); ohne sie bleibt die App voll bedienbar, nur die
-  akustische Rückmeldung fehlt.
+- **Sounds**: liegen fertig bei (`html/sounds/`) - über den Schalter
+  "Sounds abspielen" im Einstellungsbereich jederzeit stummschaltbar,
+  eigene Dateien lassen sich einfach überschreiben (siehe
+  `html/sounds/SOUNDS_HIER_ABLEGEN.txt`).
+  | Datei | Wann |
+  |---|---|
+  | `channel_switch.mp3` | Kanal gewechselt |
+  | `ptt_end.mp3` | eigenes Senden (PTT) losgelassen |
+  | `call_number.mp3` (Schleife) | während man selbst jemanden anruft - bricht ab, sobald angenommen wird |
+  | `incoming_call.mp3` (Schleife) | eingehender Anruf - bricht ab bei Annehmen/Ablehnen |
+  | `holding_line.mp3` (Schleife) | Gespräch wird gehalten - bricht ab, sobald fortgesetzt (oder aufgelegt) wird |
 - **Funkstatus auf einen Blick**: ein Chip zeigt, ob die Verbindung zu
   pma-voice aktiv ist ("Verbunden"/"Nicht verbunden", wird alle paar
   Sekunden nachgeprüft), zwei weitere blenden sich farbig ein, sobald man

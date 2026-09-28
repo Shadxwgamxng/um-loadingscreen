@@ -87,14 +87,18 @@
     <div id="toast-stack" class="toast-stack"></div>
     <div id="modal-root" class="modal-root hidden"></div>
 
-    <!-- Funk-Sounds (App "Funk", playRadioSound() in js/app.js) - Dateien
-         fehlen standardmäßig, siehe html/sounds/SOUNDS_HIER_ABLEGEN.txt.
-         preload="auto" lädt sie vorab, damit sie beim Auslösen sofort
-         starten; ein fehlendes/leeres src wird von play().catch() in
-         playRadioSound() stillschweigend abgefangen. -->
-    <audio id="snd-radio-channelSwitch" src="sounds/channel_switch.m4a" preload="auto"></audio>
-    <audio id="snd-radio-ptt" src="sounds/ptt.m4a" preload="auto"></audio>
-    <audio id="snd-radio-incomingCall" src="sounds/incoming_call.m4a" preload="auto" loop></audio>
+    <!-- Funk-Sounds (App "Funk", playRadioSound()/stopRadioSound() in
+         js/app.js) - preload="auto" lädt sie vorab, damit sie beim Auslösen
+         sofort starten; ein fehlendes/leeres src wird von play().catch() in
+         playRadioSound() stillschweigend abgefangen (falls die Dateien mal
+         entfernt werden, siehe html/sounds/SOUNDS_HIER_ABLEGEN.txt). Die
+         drei Endlos-Sounds (loop) laufen, bis der jeweils passende Zustand
+         endet (Anruf angenommen/abgelehnt/beendet, Halten aufgehoben). -->
+    <audio id="snd-radio-channelSwitch" src="sounds/channel_switch.mp3" preload="auto"></audio>
+    <audio id="snd-radio-pttEnd" src="sounds/ptt_end.mp3" preload="auto"></audio>
+    <audio id="snd-radio-callNumber" src="sounds/call_number.mp3" preload="auto" loop></audio>
+    <audio id="snd-radio-incomingCall" src="sounds/incoming_call.mp3" preload="auto" loop></audio>
+    <audio id="snd-radio-holdingLine" src="sounds/holding_line.mp3" preload="auto" loop></audio>
 
     <script src="js/app.js"></script>
 </body>

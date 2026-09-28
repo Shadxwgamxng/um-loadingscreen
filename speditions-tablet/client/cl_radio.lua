@@ -14,6 +14,7 @@ local channel = Config.Radio.defaultChannel
 local volume = Config.Radio.defaultVolume
 local joined = false
 local rxTalkers = {} -- ['local'] oder [serverId] = true, wer gerade auf dem Kanal spricht (nur für die Empfangsanzeige, keine Namen nötig)
+local activeCallChannel = nil -- privater pma-voice-Kanal des laufenden Gesprächs, s. radioJoinCall/radioAnswerCall - wird für Halten/Fortsetzen gebraucht
 
 local function pmaVoiceReady()
     return GetResourceState('pma-voice') == 'started'
@@ -156,8 +157,9 @@ end)
 
 RegisterNUICallback('radioAnswerCall', function(_, cb)
     ServerCall('radio:answerCall', {}, function(res)
-        if res and res.ok and pmaVoiceReady() then
-            exports['pma-voice']:setCallChannel(res.channel)
+        if res and res.ok then
+            activeCallChannel = res.channel
+            if pmaVoiceReady() then exports['pma-voice']:setCallChannel(res.channel) end
         end
         cb(res or { ok = false })
     end)
@@ -168,8 +170,31 @@ RegisterNUICallback('radioDeclineCall', function(_, cb)
 end)
 
 RegisterNUICallback('radioHangup', function(_, cb)
+    activeCallChannel = nil
     if pmaVoiceReady() then exports['pma-voice']:setCallChannel(0) end
     ServerCall('radio:hangup', {}, function(res) cb(res or { ok = false }) end)
+end)
+
+--- Hält das laufende Gespräch - trennt die eigene pma-voice-Verbindung zum
+--- privaten Call-Kanal (der Server benachrichtigt die Gegenseite, die das
+--- bei sich ebenso tut, s. radioCallHold-Netevent unten), OHNE den Kanal
+--- selbst zu vergessen (activeCallChannel bleibt gesetzt, für radioResumeCall).
+RegisterNUICallback('radioHoldCall', function(_, cb)
+    ServerCall('radio:holdCall', {}, function(res)
+        if res and res.ok and pmaVoiceReady() then
+            exports['pma-voice']:setCallChannel(0)
+        end
+        cb(res or { ok = false })
+    end)
+end)
+
+RegisterNUICallback('radioResumeCall', function(_, cb)
+    ServerCall('radio:resumeCall', {}, function(res)
+        if res and res.ok and pmaVoiceReady() and activeCallChannel then
+            exports['pma-voice']:setCallChannel(activeCallChannel)
+        end
+        cb(res or { ok = false })
+    end)
 end)
 
 RegisterNUICallback('radioGetStatus', function(_, cb)
@@ -189,13 +214,29 @@ end)
 --- Wird an BEIDE Gesprächsseiten geschickt, sobald der Anruf angenommen
 --- wurde - die anrufende Seite tritt dem privaten Call-Kanal erst jetzt bei.
 RegisterNetEvent('speditions-tablet:client:radioJoinCall', function(callChannel)
+    activeCallChannel = callChannel
     if pmaVoiceReady() then exports['pma-voice']:setCallChannel(callChannel) end
     SendNUIMessage({ type = 'radioCallAnswered' })
 end)
 
 RegisterNetEvent('speditions-tablet:client:radioLeaveCall', function(reason)
+    activeCallChannel = nil
     if pmaVoiceReady() then exports['pma-voice']:setCallChannel(0) end
     SendNUIMessage({ type = 'radioCallEnded', reason = reason })
+end)
+
+--- Push-Events der Gegenseite, wenn DORT Halten/Fortsetzen gedrückt wurde -
+--- die eigene pma-voice-Verbindung zum Call-Kanal wird spiegelbildlich
+--- getrennt/wiederhergestellt, damit während des Haltens niemand ins Leere
+--- spricht.
+RegisterNetEvent('speditions-tablet:client:radioCallHold', function()
+    if pmaVoiceReady() then exports['pma-voice']:setCallChannel(0) end
+    SendNUIMessage({ type = 'radioCallHold' })
+end)
+
+RegisterNetEvent('speditions-tablet:client:radioCallResumed', function()
+    if pmaVoiceReady() and activeCallChannel then exports['pma-voice']:setCallChannel(activeCallChannel) end
+    SendNUIMessage({ type = 'radioCallResumed' })
 end)
 
 -- Ressource endet -> pma-voice sauber zurücksetzen, unabhängig vom
