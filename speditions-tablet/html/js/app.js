@@ -416,12 +416,24 @@ function renderHome() {
     document.getElementById('category-grid').classList.add('hidden');
     document.getElementById('app-view').classList.add('hidden');
     const grid = document.getElementById('home-grid');
-    grid.innerHTML = visibleCategories(currentPermissions()).map((c) => `
-        <div class="category-tile" onclick="showCategory('${c.id}')">
-            <div class="tile-icon cat-${c.id}">${categoryIconSvg(c.icon)}</div>
-            <div class="tile-label">${escapeHtml(c.label)}</div>
+    // Große Uhrzeit/Datum oben links (iPadOS-Homescreen-Optik) - über eine
+    // .home-tiles-Kachelfläche statt direkt im .home-grid-Scrollcontainer,
+    // damit sie nicht Teil des Grids ist. startClock() hält beide Felder
+    // aktuell, solange das Tablet offen ist.
+    grid.innerHTML = `
+        <div class="home-clock">
+            <div class="home-clock-time" id="home-clock-time"></div>
+            <div class="home-clock-date" id="home-clock-date"></div>
         </div>
-    `).join('');
+        <div class="home-tiles">
+            ${visibleCategories(currentPermissions()).map((c) => `
+                <div class="category-tile" onclick="showCategory('${c.id}')">
+                    <div class="tile-icon cat-${c.id}">${categoryIconSvg(c.icon)}</div>
+                    <div class="tile-label">${escapeHtml(c.label)}</div>
+                </div>
+            `).join('')}
+        </div>`;
+    updateClockElements();
     renderDock();
 }
 
@@ -446,13 +458,14 @@ function renderDock() {
         return;
     }
     dock.classList.remove('hidden');
+    // Icon-only, ohne Beschriftung darunter - wie das echte iPad-Dock (Name
+    // steht als Tooltip/Titel zur Verfügung, nicht permanent im Bild).
     dock.innerHTML = items.map((it) => `
-        <div class="dock-item" onclick="showView('${it.id}')">
+        <div class="dock-item" title="${escapeHtml(it.label)}" onclick="showView('${it.id}')">
             <div class="tile-icon">
                 ${iconSvg(it.icon)}
                 <span class="dock-status-dot" id="dock-status-${it.id}"></span>
             </div>
-            <div class="dock-item-label tile-label">${escapeHtml(it.label)}</div>
         </div>
     `).join('');
     refreshDockStatus();
@@ -656,21 +669,30 @@ function handleClose() {
     if (timeclockInterval) { clearInterval(timeclockInterval); timeclockInterval = null; }
 }
 
+// Aktualisiert alle Uhrzeit-/Datumsanzeigen im Tablet (Topbar, Lock-Screen,
+// die große Homescreen-Uhr im iPadOS-Stil) - einzeln aufrufbar, damit
+// renderHome() die große Uhr sofort korrekt zeigt, statt bis zum nächsten
+// Intervall-Tick zu warten.
+function updateClockElements() {
+    const now = new Date();
+    const time = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    const dateLong = now.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long' });
+    const setText = (id, text) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+    };
+    setText('clock', time);
+    setText('lock-time', time);
+    setText('lock-date', dateLong);
+    setText('home-clock-time', time);
+    setText('home-clock-date', dateLong);
+}
+
 let clockInterval = null;
 function startClock() {
     if (clockInterval) clearInterval(clockInterval);
-    const update = () => {
-        const now = new Date();
-        const time = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-        const clockEl = document.getElementById('clock');
-        if (clockEl) clockEl.textContent = time;
-        const lockTimeEl = document.getElementById('lock-time');
-        if (lockTimeEl) lockTimeEl.textContent = time;
-        const lockDateEl = document.getElementById('lock-date');
-        if (lockDateEl) lockDateEl.textContent = now.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long' });
-    };
-    update();
-    clockInterval = setInterval(update, 15000);
+    updateClockElements();
+    clockInterval = setInterval(updateClockElements, 15000);
 }
 
 function boot(data) {
