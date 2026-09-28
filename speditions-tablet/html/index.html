@@ -87,6 +87,15 @@
     <div id="toast-stack" class="toast-stack"></div>
     <div id="modal-root" class="modal-root hidden"></div>
 
+    <!-- Funk-Sounds (App "Funk", playRadioSound() in js/app.js) - Dateien
+         fehlen standardmäßig, siehe html/sounds/SOUNDS_HIER_ABLEGEN.txt.
+         preload="auto" lädt sie vorab, damit sie beim Auslösen sofort
+         starten; ein fehlendes/leeres src wird von play().catch() in
+         playRadioSound() stillschweigend abgefangen. -->
+    <audio id="snd-radio-channelSwitch" src="sounds/channel_switch.m4a" preload="auto"></audio>
+    <audio id="snd-radio-ptt" src="sounds/ptt.m4a" preload="auto"></audio>
+    <audio id="snd-radio-incomingCall" src="sounds/incoming_call.m4a" preload="auto" loop></audio>
+
     <script src="js/app.js"></script>
 </body>
 </html>

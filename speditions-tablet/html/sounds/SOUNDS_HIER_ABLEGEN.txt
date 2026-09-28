@@ -1,0 +1,27 @@
+Funk: eigene Sounds ablegen
+============================
+
+Diese Ressource liefert standardmäßig KEINE Audiodateien für die App
+"Funk" mit - die drei unten genannten Dateien fehlen hier bewusst und
+müssen selbst ergänzt werden. Ohne sie bleibt die App voll bedienbar
+(Kanalwahl, Lautstärke, Teilnehmerliste, Anrufe funktionieren normal),
+nur die akustische Rückmeldung fehlt.
+
+Lege dafür einfach diese drei Dateien in diesen Ordner (html/sounds/):
+
+    channel_switch.m4a   - kurzer Ton beim Kanalwechsel
+    ptt.m4a               - kurzer Ton, wenn du selbst zu senden beginnst
+    incoming_call.m4a     - Klingelton bei eingehendem Anruf (läuft in
+                            einer Schleife, bis der Anruf angenommen/
+                            abgelehnt wird oder von selbst verpasst ist)
+
+Fertig - beim nächsten Öffnen des Tablets werden sie automatisch
+geladen. Andere Dateiformate (z.B. .mp3, .ogg, .wav) funktionieren
+ebenso, wenn du zusätzlich die src-Pfade in html/index.html
+(die drei <audio>-Tags am Ende der Datei) entsprechend anpasst.
+
+Über den Schalter "Sounds abspielen" im Einstellungsbereich der Funk-App
+lassen sich alle drei jederzeit stummschalten, ohne die Dateien zu
+entfernen.
+
+Diese Datei selbst hat keine Funktion.

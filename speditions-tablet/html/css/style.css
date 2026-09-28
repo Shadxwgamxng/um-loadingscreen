@@ -475,6 +475,7 @@ html, body {
 .cat-mitarbeiter { background: linear-gradient(160deg, #a855f7, #7e22ce); }
 .cat-disposition { background: linear-gradient(160deg, #ef4444, #b91c1c); }
 .cat-geschaeftsfuehrung { background: linear-gradient(160deg, #64748b, #334155); }
+.cat-funk { background: linear-gradient(160deg, #06b6d4, #0e7490); }
 
 /* ---------- Dock (Home-Screen) ----------
    Fixiert unten auf dem Home-Screen (analog iPad-Dock) - aktuell für
@@ -596,14 +597,23 @@ html, body {
 .grid-3 { grid-template-columns: repeat(3, 1fr); }
 .grid-4 { grid-template-columns: repeat(4, 1fr); }
 
-/* ---------- Funk (App "Funk", Kategorie Disposition, VIEWS['funk']) ----------
+/* ---------- Funk (eigenständige App, VIEWS['funk']) ----------
    Digitale Funkkonsole statt Kanal-Buttonliste: ein Leitstellen-/Bordcomputer-
    artiges Panel mit Status-Chips, großem LCD-Kanaldisplay (Schrittpfeile +
-   antippbare Nachbarkanäle statt zehn gleichwertiger Kacheln) und einem
-   echten Lautstärke-Slider. */
+   antippbare Nachbarkanäle statt zehn gleichwertiger Kacheln), echtem
+   Lautstärke-Slider, Teilnehmerliste daneben und einem Einstellungsbereich
+   darunter. */
+.funk-layout {
+    display: flex;
+    align-items: flex-start;
+    gap: 22px;
+    flex-wrap: wrap;
+}
+
 .funk-console {
-    max-width: 560px;
-    margin: 0 auto;
+    flex: 0 0 auto;
+    width: 520px;
+    max-width: 100%;
     padding: 28px 30px 30px;
     background: linear-gradient(165deg, var(--bg-2), var(--bg-1));
     border: 1px solid var(--border);
@@ -611,7 +621,95 @@ html, body {
     box-shadow: 0 18px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.03) inset;
 }
 
-.funk-status-row { display: flex; justify-content: center; gap: 10px; margin-bottom: 26px; flex-wrap: wrap; }
+.funk-participants {
+    flex: 1 1 260px;
+    min-width: 240px;
+    max-width: 360px;
+    padding: 18px 18px 20px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+}
+.funk-participants-header {
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-2);
+    margin-bottom: 12px;
+}
+.funk-participants-list { display: flex; flex-direction: column; gap: 6px; }
+.funk-participant-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: var(--bg-3);
+}
+.funk-participant-name { font-size: 13px; color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.funk-call-btn {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    color: var(--green);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 8px;
+}
+.funk-call-btn svg { width: 14px; height: 14px; }
+.funk-call-btn:hover:not(:disabled) { border-color: var(--green); background: rgba(34,197,94,0.14); }
+.funk-call-btn:disabled { opacity: 0.3; cursor: default; color: var(--text-2); }
+
+/* Anruf-Banner - eingeblendet zwischen Status-Zeile und Kanal-Display,
+   solange RadioState.call gesetzt ist (eingehend/ausgehend/aktiv). */
+.funk-call-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    margin-bottom: 18px;
+    border-radius: 14px;
+    background: rgba(239,68,68,0.14);
+    border: 1px solid var(--red);
+    color: var(--text-0);
+    font-size: 13px;
+}
+.funk-call-banner.active { background: rgba(34,197,94,0.14); border-color: var(--green); }
+.funk-call-banner svg { width: 15px; height: 15px; margin-right: 6px; vertical-align: -2px; }
+.funk-call-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+
+/* Einstellungen (Sounds ein/aus, Name im Funk) - eigener Bereich unter der
+   Konsole/Teilnehmerliste. */
+.funk-settings {
+    margin-top: 20px;
+    padding: 18px 20px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+}
+.funk-settings-header {
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-2);
+    margin-bottom: 14px;
+}
+.funk-toggle-label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-1); cursor: pointer; }
+.funk-toggle-label input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+.funk-name-row { margin-top: 16px; }
+.funk-name-row label { display: block; font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+.funk-name-edit { display: flex; gap: 8px; max-width: 340px; }
+.funk-name-edit input { flex: 1 1 auto; }
+
+.funk-status-row { display: flex; justify-content: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
 .funk-chip {
     display: inline-flex;
     align-items: center;
@@ -639,6 +737,14 @@ html, body {
     0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.55); }
     50% { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
 }
+
+/* Beitreten/Verlassen-Schalter (weißer Kasten im Mockup) - eigener,
+   klickbarer Chip statt Status-Anzeige: einladend grün, solange man noch
+   nicht im Funk ist, neutral (mit rotem Hover) danach. */
+.funk-chip-toggle { cursor: pointer; font-family: inherit; }
+.funk-chip-toggle:not(.joined) { color: var(--green); border-color: var(--green); }
+.funk-chip-toggle:not(.joined):hover { background: rgba(34,197,94,0.14); }
+.funk-chip-toggle.joined:hover { color: var(--red); border-color: var(--red); }
 
 .funk-display { display: flex; align-items: center; justify-content: center; gap: 14px; }
 .funk-step {

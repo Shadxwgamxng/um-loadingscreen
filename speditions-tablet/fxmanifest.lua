@@ -5,7 +5,7 @@ lua54 'yes'
 name 'speditions-tablet'
 author 'shadxwgamxng'
 description 'Standalone FiveM Speditions-Tablet - Fahrer-, Disponenten- und Fuhrparkmanagement'
-version '1.23.0'
+version '1.24.0'
 
 dependency 'oxmysql'
 
@@ -48,6 +48,7 @@ server_scripts {
     'server/sv_website_bridge.lua',
     'server/sv_employees.lua',
     'server/sv_notifications.lua',
+    'server/sv_radio.lua',
     'server/sv_main.lua'
 }
 
@@ -69,5 +70,11 @@ files {
     'html/img/*.jpg',
     'html/img/*.jpeg',
     'html/img/*.png',
-    'html/img/*.webp'
+    'html/img/*.webp',
+    -- Funk-Sounds (siehe html/sounds/SOUNDS_HIER_ABLEGEN.txt) - fehlen
+    -- standardmäßig, Glob greift automatisch sobald welche abgelegt werden.
+    'html/sounds/*.m4a',
+    'html/sounds/*.mp3',
+    'html/sounds/*.ogg',
+    'html/sounds/*.wav'
 }

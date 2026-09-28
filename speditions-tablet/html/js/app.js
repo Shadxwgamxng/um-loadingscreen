@@ -65,6 +65,11 @@ const ERROR_MESSAGES = {
     employee_not_online: 'Dieser Mitarbeiter ist gerade nicht online/am Tablet eingeloggt - Gehalt kann nur als echtes Bargeld an den anwesenden Charakter ausgezahlt werden.',
     dispatcher_available: 'Ein Disponent ist gerade online - Aufträge werden von ihm zugewiesen.',
     driver_not_online: 'Dieser Fahrer ist gerade nicht online.',
+    radio_not_joined: 'Du bist gerade nicht im Funk - erst beitreten.',
+    radio_target_not_joined: 'Diese Person ist gerade nicht im Funk.',
+    radio_busy: 'Diese Person telefoniert gerade oder du bist bereits in einem Gespräch.',
+    radio_no_incoming_call: 'Es gibt gerade keinen eingehenden Anruf.',
+    radio_no_active_call: 'Es gibt gerade kein laufendes Gespräch.',
     insufficient_player_cash: 'Du hast nicht genug Bargeld dabei, um diesen Betrag einzuzahlen.',
     employee_inactive: 'Dieses Mitarbeiterkonto ist deaktiviert.',
     forbidden_role: 'Keine Berechtigung für diese Aktion.',
@@ -360,13 +365,18 @@ const APPS = [
     { id: 'dispatch-orders', label: 'Auftragsverwaltung', perm: 'dispatch', category: 'disposition', icon: 'clipboard' },
     { id: 'driver-messages', label: 'Nachrichten', perm: 'driver_actions', category: 'disposition', icon: 'chat' },
     { id: 'dispatch-map', label: 'Live Karte', perm: 'live_map_view', category: 'disposition', icon: 'pin' },
-    // kein `perm` = für jeden angemeldeten Mitarbeiter sichtbar (s.
-    // appHasPermission()) - der Funk ist kein Disponenten-Vorrecht.
-    { id: 'funk', label: 'Funk', perm: null, category: 'disposition', icon: 'walkie' },
     // Geschäftsführung
     { id: 'gf-locations', label: 'Orte', perm: 'locations_manage', category: 'geschaeftsfuehrung', icon: 'pin' },
     { id: 'gf-log', label: 'Protokoll', perm: 'activity_log_view', category: 'geschaeftsfuehrung', icon: 'clipboard' },
     { id: 'gf-console', label: 'Konsole', perm: 'console_view', category: 'geschaeftsfuehrung', icon: 'terminal' },
+    // Funk - bewusst OHNE `category` (nicht unter Disposition): eine eigene
+    // Bedienoberfläche mit Kanalwahl/Lautstärke/Teilnehmerliste/Anrufen
+    // gehört als eigenständige Kachel auf den Startbildschirm, nicht in ein
+    // Kategorie-Untermenü. `category: undefined` sorgt dafür, dass sie nie
+    // in appsInCategory()/showCategory() auftaucht (s. renderHome(), das
+    // sie separat als eigene Kachel rendert) - APPS.find() bleibt aber
+    // nutzbar, damit showView() den Titel "Funk" im Topbar findet.
+    { id: 'funk', label: 'Funk', perm: null, icon: 'walkie' },
 ];
 
 // Kleines, selbst gezeichnetes Icon-Set (kein Emoji, keine externen
@@ -411,6 +421,7 @@ const APP_ICON_PATHS = {
     speaker: '<path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8 8 0 0 1 0 12"/>',
     'chevron-left': '<path d="M15 5l-7 7 7 7"/>',
     'chevron-right': '<path d="M9 5l7 7-7 7"/>',
+    power: '<path d="M12 3v8"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/>',
 };
 
 function iconSvg(key) {
@@ -468,6 +479,10 @@ function renderHome() {
                     <div class="tile-label">${escapeHtml(c.label)}</div>
                 </div>
             `).join('')}
+            <div class="category-tile" onclick="showView('funk')">
+                <div class="tile-icon cat-funk">${iconSvg('walkie')}</div>
+                <div class="tile-label">Funk</div>
+            </div>
         </div>`;
     updateClockElements();
     renderDock();
@@ -587,9 +602,11 @@ async function renderVehicleWidget() {
 // ist ein "bin ich gerade im Dienst"-Schalter, kein eigentlicher
 // Arbeitsbereich. Sichtbar je nach Berechtigung, mit Status-Punkt
 // (im Dienst/eingesteckt = grün), der kurz nach dem Rendern nachgeladen wird.
-// Funk liegt NICHT hier, sondern als normale App in der Kategorie
-// Disposition (s. APPS) - eine eigene Bedienoberfläche wie ein Funkgerät
-// gehört ins Vollbild, nicht in ein kleines Dock-Icon.
+// Funk liegt NICHT hier, sondern als eigenständige Kachel direkt auf dem
+// Startbildschirm (s. renderHome()) - eine eigene Bedienoberfläche mit
+// Kanalwahl/Teilnehmerliste/Anrufen gehört ins Vollbild, nicht in ein
+// kleines Dock-Icon, und auch nicht in eine Kategorie (kein Disponenten-
+// Vorrecht, jeder angemeldete Mitarbeiter soll direkt hinkommen).
 const DOCK_ITEMS = [
     { id: 'driver-card', label: 'Fahrerkarte', perm: 'driver_actions', icon: 'idcard', statusRpc: 'driver:card', statusPath: (r) => r && r.driver && r.driver.onShift },
     { id: 'dispatch-duty', label: 'Dispositions-Dienst', perm: 'dispatch', icon: 'radio', statusRpc: 'dispatch:dutyStatus', statusPath: (r) => r && r.onDuty },
@@ -632,28 +649,60 @@ async function refreshDockStatus() {
 }
 
 // ---------------------------------------------------------
-// Funk (App in Kategorie Disposition, VIEWS['funk'] weiter unten) - bindet
-// an pma-voice an (client/cl_radio.lua). Läuft bewusst komplett
-// clientseitig, ohne Server-RPC: pma-voice validiert Kanäle/Lautstärke
-// bereits selbst serverseitig, ein Umweg über die normale RPC-Bridge
-// (rpc()/call()) wäre hier nur unnötige Latenz bei jeder Bedienung.
-// RadioState ist die alleinige Quelle der Wahrheit für die NUI-Anzeige:
-// channel/volume werden bei jeder Aktion optimistisch gesetzt, "connected"
-// kommt per radioGetStatus-Abfrage direkt von cl_radio.lua - das einzige,
-// was sich zur Laufzeit unabhängig ändern kann (z.B. wenn pma-voice neu
-// startet), tx/rx kommen als Push von dort (pma-voice:radioActive/
-// setTalkingOnRadio).
-const RadioState = { channel: 1000, volume: 100, connected: false, tx: false, rx: false };
+// Funk (eigenständige Kachel auf dem Startbildschirm, VIEWS['funk'] weiter
+// unten) - bindet an pma-voice an (client/cl_radio.lua) und an
+// server/sv_radio.lua für Präsenz/Teilnehmerliste/Anrufe. Kanal-/
+// Lautstärkewechsel bleiben primär clientseitig gegen pma-voice (das
+// validiert Kanäle ohnehin selbst serverseitig); Beitreten/Verlassen, der
+// Kanalabgleich für die Teilnehmerliste sowie Anrufe gehen über
+// ServerCall in cl_radio.lua zum Server. RadioState ist die alleinige
+// Quelle der Wahrheit für die NUI-Anzeige: channel/volume/joined werden
+// bei jeder Aktion optimistisch gesetzt, "connected" kommt per
+// radioGetStatus-Abfrage direkt von cl_radio.lua (das einzige, was sich
+// zur Laufzeit unabhängig ändern kann, z.B. wenn pma-voice neu startet),
+// tx/rx sowie Anruf-Events kommen als Push von dort.
+const RadioState = {
+    channel: 1000,
+    volume: 100,
+    connected: false,
+    joined: false,
+    tx: false,
+    rx: false,
+    soundsEnabled: true,
+    members: [],
+    // call: null oder { role: 'outgoing'|'incoming'|'active', otherName, targetSrc }
+    call: null,
+};
 
 function radioChannelRange() {
     const cfg = (State.config && State.config.radioChannels) || {};
     return { min: cfg.minChannel || 1000, max: cfg.maxChannel || 1009 };
 }
 
+// Spielt einen der drei Funk-Sounds ab (siehe html/sounds/, <audio>-Tags in
+// index.html) - best-effort und geschützt: fehlt die Audiodatei (z.B. noch
+// nicht abgelegt, s. html/sounds/SOUNDS_HIER_ABLEGEN.txt) oder ist der
+// Browser-Autoplay blockiert, bleibt es ein stiller No-Op statt eines
+// Konsolenfehlers. Respektiert die Einstellung "Sounds abspielen".
+function playRadioSound(id) {
+    if (!RadioState.soundsEnabled) return;
+    const el = document.getElementById(`snd-radio-${id}`);
+    if (!el) return;
+    el.currentTime = 0;
+    el.play().catch(() => {});
+}
+function stopRadioSound(id) {
+    const el = document.getElementById(`snd-radio-${id}`);
+    if (!el) return;
+    el.pause();
+    el.currentTime = 0;
+}
+
 // Aktualisiert nur das Sende-/Empfangs-Chip, ohne die Ansicht neu zu
 // rendern - reine Push-Events aus cl_radio.lua, wirkungslos wenn die
 // Funk-App gerade gar nicht offen ist (Element existiert dann nicht).
 function onRadioTx(talking) {
+    if (talking && !RadioState.tx) playRadioSound('ptt');
     RadioState.tx = talking;
     const el = document.getElementById('funk-tx-chip');
     if (el) el.classList.toggle('active', talking);
@@ -662,6 +711,28 @@ function onRadioRx(talking) {
     RadioState.rx = talking;
     const el = document.getElementById('funk-rx-chip');
     if (el) el.classList.toggle('active', talking);
+}
+
+// ---- Anrufe: Push-Events aus cl_radio.lua (server/sv_radio.lua) ----
+// Verpuffen wirkungslos, solange die Funk-App nicht offen ist (kein NUI-
+// Element zum Aktualisieren vorhanden) - ein Anruf kommt dadurch nur an,
+// wenn das Tablet mit geöffneter Funk-App sichtbar ist (s. README).
+function onRadioIncomingCall(callerName) {
+    RadioState.call = { role: 'incoming', otherName: callerName };
+    playRadioSound('incomingCall');
+    renderFunkCallBanner();
+}
+function onRadioCallAnswered() {
+    if (RadioState.call) RadioState.call.role = 'active';
+    stopRadioSound('incomingCall');
+    renderFunkCallBanner();
+}
+function onRadioCallEnded(reason) {
+    const labels = { declined: 'Anruf abgelehnt.', missed: 'Anruf nicht angenommen.', hangup: 'Gespräch beendet.', radio_off: 'Anruf beendet (Funk verlassen).', disconnected: 'Verbindung getrennt.' };
+    if (RadioState.call) toast('Funk', labels[reason] || 'Anruf beendet.', 'info');
+    RadioState.call = null;
+    stopRadioSound('incomingCall');
+    renderFunkCallBanner();
 }
 
 function showHome() {
@@ -751,6 +822,9 @@ window.addEventListener('message', (event) => {
     else if (data.type === 'push') handlePush(data.event, data.data);
     else if (data.type === 'radioTx') onRadioTx(!!data.talking);
     else if (data.type === 'radioRx') onRadioRx(!!data.talking);
+    else if (data.type === 'radioIncomingCall') onRadioIncomingCall(data.callerName);
+    else if (data.type === 'radioCallAnswered') onRadioCallAnswered();
+    else if (data.type === 'radioCallEnded') onRadioCallEnded(data.reason);
 });
 
 document.addEventListener('keydown', (e) => {
@@ -1048,12 +1122,15 @@ function jumpToSection(appId, key) {
 // eindeutiger Tap, ohne dass zehn gleichwertige Kacheln nebeneinander
 // stehen. Lautstärke über einen echten Slider (kein +/- Button-Paar).
 
+const FUNK_POLL_MS = 3000;
+
 async function renderFunkStatus() {
     const status = await nuiCall('radioGetStatus');
     if (status && status.ok) {
         RadioState.channel = status.channel;
         RadioState.volume = status.volume;
         RadioState.connected = status.connected;
+        RadioState.joined = status.joined;
     }
 }
 
@@ -1065,40 +1142,155 @@ function updateFunkConnChip() {
     label.textContent = RadioState.connected ? 'Verbunden' : 'Nicht verbunden';
 }
 
+function renderFunkToggleChip() {
+    const chip = document.getElementById('funk-toggle-chip');
+    if (!chip) return;
+    chip.classList.toggle('joined', RadioState.joined);
+    chip.innerHTML = `${iconSvg('power')}${RadioState.joined ? 'Funk verlassen' : 'Funk beitreten'}`;
+}
+
+// Anruf-Banner (weißer Kasten im Mockup) - eingehender Anruf (Annehmen/
+// Ablehnen), laufendes Gespräch (Auflegen) oder gar nichts. Gezielter
+// DOM-Patch statt Re-Render der ganzen Konsole, da Push-Events (Anruf
+// kommt rein/wird beendet) jederzeit eintreffen können.
+function renderFunkCallBanner() {
+    const el = document.getElementById('funk-call-banner');
+    if (!el) return;
+    const call = RadioState.call;
+    if (!call) { el.innerHTML = ''; return; }
+
+    if (call.role === 'incoming') {
+        el.innerHTML = `
+            <div class="funk-call-banner">
+                <span>${iconSvg('mic')}Anruf von <strong>${escapeHtml(call.otherName)}</strong></span>
+                <div class="funk-call-actions">
+                    <button class="btn btn-sm btn-danger" onclick="Actions.declineRadioCall()">Ablehnen</button>
+                    <button class="btn btn-sm btn-primary" onclick="Actions.answerRadioCall()">Annehmen</button>
+                </div>
+            </div>`;
+    } else if (call.role === 'outgoing') {
+        el.innerHTML = `
+            <div class="funk-call-banner">
+                <span>${iconSvg('mic')}Rufe <strong>${escapeHtml(call.otherName)}</strong> an…</span>
+                <div class="funk-call-actions">
+                    <button class="btn btn-sm btn-danger" onclick="Actions.hangupRadioCall()">Abbrechen</button>
+                </div>
+            </div>`;
+    } else {
+        el.innerHTML = `
+            <div class="funk-call-banner active">
+                <span>${iconSvg('mic')}Im Gespräch mit <strong>${escapeHtml(call.otherName)}</strong></span>
+                <div class="funk-call-actions">
+                    <button class="btn btn-sm btn-danger" onclick="Actions.hangupRadioCall()">Auflegen</button>
+                </div>
+            </div>`;
+    }
+}
+
+function renderFunkParticipants() {
+    const countEl = document.getElementById('funk-participants-count');
+    const listEl = document.getElementById('funk-participants-list');
+    if (!listEl) return;
+
+    if (countEl) countEl.textContent = String(RadioState.members.length);
+
+    if (!RadioState.joined) {
+        listEl.innerHTML = '<div class="card-hint">Erst dem Funk beitreten, um andere Teilnehmer auf dem Kanal zu sehen.</div>';
+        return;
+    }
+    if (!RadioState.members.length) {
+        listEl.innerHTML = '<div class="card-hint">Sonst niemand auf diesem Kanal.</div>';
+        return;
+    }
+
+    listEl.innerHTML = RadioState.members.map((m) => {
+        const canCall = !m.isSelf && !m.inCall && !RadioState.call;
+        return `
+            <div class="funk-participant-row">
+                <span class="funk-participant-name">${escapeHtml(m.name)}${m.isSelf ? ' (Du)' : ''}</span>
+                ${!m.isSelf ? `<button class="funk-call-btn" title="Anrufen" ${canCall ? `onclick="Actions.callRadioUser(${m.src}, '${escapeHtml(m.name).replace(/'/g, "\\'")}')"` : 'disabled'}>${iconSvg('mic')}</button>` : ''}
+            </div>`;
+    }).join('');
+}
+
+async function fetchFunkParticipants() {
+    const res = await nuiCall('radioGetChannelMembers');
+    if (res && res.ok) {
+        RadioState.joined = res.joined;
+        RadioState.members = res.members || [];
+        renderFunkParticipants();
+        renderFunkToggleChip();
+        // Trägt den eigenen (Server-)Namen ins Einstellungsfeld nach, sobald
+        // er bekannt ist (z.B. direkt nach dem Beitreten) - nicht während
+        // der Nutzer selbst gerade tippt, um ihn dabei nicht zu stören.
+        const nameInput = document.getElementById('funk-name-input');
+        if (nameInput && document.activeElement !== nameInput) {
+            const me = RadioState.members.find((m) => m.isSelf);
+            if (me) nameInput.value = me.name;
+        }
+    }
+}
+
 function renderFunkConsole(root) {
     const range = radioChannelRange();
     const ch = RadioState.channel;
     const prevCh = ch - 1 >= range.min ? ch - 1 : null;
     const nextCh = ch + 1 <= range.max ? ch + 1 : null;
+    const myName = (RadioState.members.find((m) => m.isSelf) || {}).name || '';
 
     root.innerHTML = `
         <h1 class="view-title">Funk</h1>
-        <p class="view-subtitle">Digitale Funkkonsole - Kanal wählen, Lautstärke regeln.</p>
-        <div class="funk-console">
-            <div class="funk-status-row">
-                <span class="funk-chip" id="funk-conn-chip">${iconSvg('radio')}<span id="funk-conn-label">Verbindung wird geprüft…</span></span>
-                <span class="funk-chip funk-chip-tx" id="funk-tx-chip">${iconSvg('mic')}Senden</span>
-                <span class="funk-chip funk-chip-rx" id="funk-rx-chip">${iconSvg('soundwave')}Empfang</span>
-            </div>
-            <div class="funk-display">
-                <button class="funk-step" onclick="Actions.stepRadioChannel(-1)" aria-label="Kanal runter" ${prevCh === null ? 'disabled' : ''}>${iconSvg('chevron-left')}</button>
-                <button class="funk-dial-neighbor ${prevCh === null ? 'empty' : ''}" ${prevCh !== null ? `onclick="Actions.setRadioChannel(${prevCh})"` : 'disabled'}>${prevCh !== null ? prevCh : ''}</button>
-                <div class="funk-lcd">
-                    <div class="funk-lcd-label">Kanal</div>
-                    <div class="funk-lcd-value" id="funk-lcd-value">${ch}</div>
+        <p class="view-subtitle">Digitale Funkkonsole - Kanal wählen, Lautstärke regeln, mit anderen sprechen.</p>
+        <div class="funk-layout">
+            <div class="funk-console">
+                <div class="funk-status-row">
+                    <span class="funk-chip" id="funk-conn-chip">${iconSvg('radio')}<span id="funk-conn-label">Verbindung wird geprüft…</span></span>
+                    <span class="funk-chip funk-chip-tx" id="funk-tx-chip">${iconSvg('mic')}Senden</span>
+                    <span class="funk-chip funk-chip-rx" id="funk-rx-chip">${iconSvg('soundwave')}Empfang</span>
+                    <button class="funk-chip funk-chip-toggle" id="funk-toggle-chip" onclick="Actions.toggleRadioMembership()"></button>
                 </div>
-                <button class="funk-dial-neighbor ${nextCh === null ? 'empty' : ''}" ${nextCh !== null ? `onclick="Actions.setRadioChannel(${nextCh})"` : 'disabled'}>${nextCh !== null ? nextCh : ''}</button>
-                <button class="funk-step" onclick="Actions.stepRadioChannel(1)" aria-label="Kanal hoch" ${nextCh === null ? 'disabled' : ''}>${iconSvg('chevron-right')}</button>
+                <div id="funk-call-banner"></div>
+                <div class="funk-display">
+                    <button class="funk-step" onclick="Actions.stepRadioChannel(-1)" aria-label="Kanal runter" ${prevCh === null ? 'disabled' : ''}>${iconSvg('chevron-left')}</button>
+                    <button class="funk-dial-neighbor ${prevCh === null ? 'empty' : ''}" ${prevCh !== null ? `onclick="Actions.setRadioChannel(${prevCh})"` : 'disabled'}>${prevCh !== null ? prevCh : ''}</button>
+                    <div class="funk-lcd">
+                        <div class="funk-lcd-label">Kanal</div>
+                        <div class="funk-lcd-value" id="funk-lcd-value">${ch}</div>
+                    </div>
+                    <button class="funk-dial-neighbor ${nextCh === null ? 'empty' : ''}" ${nextCh !== null ? `onclick="Actions.setRadioChannel(${nextCh})"` : 'disabled'}>${nextCh !== null ? nextCh : ''}</button>
+                    <button class="funk-step" onclick="Actions.stepRadioChannel(1)" aria-label="Kanal hoch" ${nextCh === null ? 'disabled' : ''}>${iconSvg('chevron-right')}</button>
+                </div>
+                <div class="funk-volume">
+                    ${iconSvg('speaker')}
+                    <input type="range" class="funk-volume-slider" id="funk-volume-slider" min="0" max="100" value="${RadioState.volume}" oninput="Actions.setRadioVolume(this.value)">
+                    <div class="funk-volume-value" id="funk-volume-value">${RadioState.volume}%</div>
+                </div>
             </div>
-            <div class="funk-volume">
-                ${iconSvg('speaker')}
-                <input type="range" class="funk-volume-slider" id="funk-volume-slider" min="0" max="100" value="${RadioState.volume}" oninput="Actions.setRadioVolume(this.value)">
-                <div class="funk-volume-value" id="funk-volume-value">${RadioState.volume}%</div>
+            <div class="funk-participants">
+                <div class="funk-participants-header">Im Funk (<span id="funk-participants-count">0</span>)</div>
+                <div class="funk-participants-list" id="funk-participants-list"><div class="card-hint">Lädt…</div></div>
+            </div>
+        </div>
+        <div class="funk-settings">
+            <div class="funk-settings-header">Einstellungen</div>
+            <label class="funk-toggle-label">
+                <input type="checkbox" id="funk-sounds-toggle" ${RadioState.soundsEnabled ? 'checked' : ''} onchange="Actions.toggleRadioSounds(this.checked)">
+                Sounds abspielen (Kanalwechsel, eingehender Anruf)
+            </label>
+            <div class="funk-name-row">
+                <label for="funk-name-input">Name im Funk</label>
+                <div class="funk-name-edit">
+                    <input type="text" id="funk-name-input" maxlength="24" placeholder="Dein Anzeigename" value="${escapeHtml(myName)}">
+                    <button class="btn btn-sm btn-primary" onclick="Actions.saveRadioDisplayName()">Speichern</button>
+                </div>
             </div>
         </div>
         <p class="card-hint" style="margin-top:14px;">Sprechen läuft über die normale Funk-Taste von pma-voice, sobald ein Kanal eingestellt ist.</p>`;
 
     updateFunkConnChip();
+    renderFunkToggleChip();
+    renderFunkCallBanner();
+    renderFunkParticipants();
     const txChip = document.getElementById('funk-tx-chip');
     const rxChip = document.getElementById('funk-rx-chip');
     if (txChip) txChip.classList.toggle('active', RadioState.tx);
@@ -1108,16 +1300,18 @@ function renderFunkConsole(root) {
 VIEWS['funk'] = async (root) => {
     await renderFunkStatus();
     renderFunkConsole(root);
-    // Nur der Verbindungsstatus wird nachgeladen (pma-voice kann zur
-    // Laufzeit neu starten) - gezielter DOM-Patch statt vollem Re-Render,
-    // damit ein laufender Slider-Drag dabei nicht unterbrochen wird.
+    await fetchFunkParticipants();
+    // Verbindungsstatus + Teilnehmerliste laufen nach, solange die App
+    // offen ist - gezielte DOM-Patches statt vollem Re-Render, damit ein
+    // laufender Slider-Drag dabei nicht unterbrochen wird.
     activeViewInterval = setInterval(async () => {
         const status = await nuiCall('radioGetStatus');
         if (status && status.ok) {
             RadioState.connected = status.connected;
             updateFunkConnChip();
         }
-    }, 4000);
+        await fetchFunkParticipants();
+    }, FUNK_POLL_MS);
 };
 
 // ---------- FAHRER ----------
@@ -2264,7 +2458,8 @@ Actions.setRadioChannel = (ch) => {
     if (ch < range.min || ch > range.max) return;
     RadioState.channel = ch;
     nuiPost('radioSetChannel', { channel: ch });
-    if (State.currentView === 'funk') renderFunkConsole(document.getElementById('content'));
+    playRadioSound('channelSwitch');
+    if (State.currentView === 'funk') { renderFunkConsole(document.getElementById('content')); fetchFunkParticipants(); }
 };
 
 Actions.stepRadioChannel = (delta) => {
@@ -2280,6 +2475,73 @@ Actions.setRadioVolume = (vol) => {
     nuiPost('radioSetVolume', { volume: v });
     const label = document.getElementById('funk-volume-value');
     if (label) label.textContent = `${v}%`;
+};
+
+Actions.toggleRadioMembership = async () => {
+    if (RadioState.joined) {
+        await nuiCall('radioLeave');
+        RadioState.joined = false;
+        RadioState.members = [];
+        renderFunkToggleChip();
+        renderFunkParticipants();
+    } else {
+        const res = await nuiCall('radioJoin');
+        if (!res || !res.ok) { toast('Funk', translateError(res && res.error), 'error'); return; }
+        RadioState.joined = true;
+        renderFunkToggleChip();
+        await fetchFunkParticipants(); // holt die echte Teilnehmerliste inkl. eigenem Namen vom Server
+    }
+};
+
+Actions.toggleRadioSounds = (enabled) => {
+    RadioState.soundsEnabled = !!enabled;
+};
+
+Actions.saveRadioDisplayName = async () => {
+    const input = document.getElementById('funk-name-input');
+    if (!input) return;
+    const name = input.value.trim();
+    if (!name) { toast('Funk', 'Bitte einen Namen eingeben.', 'error'); return; }
+    const res = await nuiCall('radioSetDisplayName', { name });
+    if (!res || !res.ok) { toast('Funk', translateError(res && res.error), 'error'); return; }
+    toast('Funk', 'Name gespeichert.', 'success');
+    await fetchFunkParticipants();
+};
+
+Actions.callRadioUser = async (targetSrc, targetName) => {
+    if (RadioState.call) return; // schon in einem Anruf/am Klingeln
+    RadioState.call = { role: 'outgoing', otherName: targetName, targetSrc };
+    renderFunkCallBanner();
+    const res = await nuiCall('radioCallUser', { targetSrc });
+    if (!res || !res.ok) {
+        toast('Funk', translateError(res && res.error), 'error');
+        RadioState.call = null;
+        renderFunkCallBanner();
+    }
+};
+
+Actions.answerRadioCall = async () => {
+    const res = await nuiCall('radioAnswerCall');
+    if (res && res.ok) {
+        if (RadioState.call) RadioState.call.role = 'active';
+        renderFunkCallBanner();
+    } else {
+        toast('Funk', translateError(res && res.error), 'error');
+        RadioState.call = null;
+        renderFunkCallBanner();
+    }
+};
+
+Actions.declineRadioCall = async () => {
+    await nuiCall('radioDeclineCall');
+    RadioState.call = null;
+    renderFunkCallBanner();
+};
+
+Actions.hangupRadioCall = async () => {
+    await nuiCall('radioHangup');
+    RadioState.call = null;
+    renderFunkCallBanner();
 };
 
 Actions.markRead = async (id) => {

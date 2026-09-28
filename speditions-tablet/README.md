@@ -124,11 +124,12 @@ sondern ein klassisches, an iPad/iOS angelehntes Tablet-Menü:
    beides ein "bin ich gerade im Dienst"-Schalter mit Status-Punkt (grün =
    eingesteckt/im Dienst), kein eigentlicher Arbeitsbereich.
 7. In der Kategorie **Disposition**: die App **"Live Karte"** (Berechtigung
-   `live_map_view`) - siehe eigener Abschnitt "Live-Karte" weiter unten -
-   sowie die App **"Funk"** (für jeden angemeldeten Mitarbeiter, siehe
-   eigener Abschnitt "Funk" weiter unten), gestaltet als digitale
-   Funkkonsole statt als Kategorie-App im Dock, da sie eine eigene
-   Bedienoberfläche mit Kanalwahl und Lautstärkeregler braucht.
+   `live_map_view`) - siehe eigener Abschnitt "Live-Karte" weiter unten.
+   Die App **"Funk"** (für jeden angemeldeten Mitarbeiter, siehe eigener
+   Abschnitt "Funk" weiter unten) liegt dagegen weder im Dock noch in einer
+   Kategorie, sondern als eigene Kachel direkt auf dem Startbildschirm -
+   eine eigene Bedienoberfläche mit Kanalwahl, Lautstärkeregler,
+   Teilnehmerliste und Anrufen braucht Platz für sich.
 8. **Wallpaper + Logo inklusive**: Homescreen, Kategorie-Bildschirm sowie
    Lock- und Login-Screen zeigen ein Hintergrundbild
    (`html/img/wallpaper.jpg`) und das Firmenlogo (`html/img/logo.png`,
@@ -652,10 +653,13 @@ oben). Öffne den Reiter "Rollen", wähle Disponent/Geschäftsführung und hake
 
 ## Funk
 
-Die App **"Funk"** (Kategorie Disposition, für jeden angemeldeten
-Mitarbeiter sichtbar - kein eigenes Berechtigungs-Häkchen nötig) bindet an
-[pma-voice](https://github.com/AvarianKnight/pma-voice) an. Sie ist bewusst
-als digitale Funkkonsole gestaltet statt als Liste von zehn Kanal-Buttons:
+Die App **"Funk"** ist eine eigenständige Kachel direkt auf dem
+Startbildschirm (nicht in einer Kategorie - für jeden angemeldeten
+Mitarbeiter sichtbar, kein eigenes Berechtigungs-Häkchen nötig) und bindet
+an [pma-voice](https://github.com/AvarianKnight/pma-voice) an. Sie ist
+bewusst als digitale Funkkonsole/Leitstellen-Cockpit gestaltet statt als
+Liste von zehn Kanal-Buttons, mit Teilnehmerliste und Anrufen zwischen
+Funk-Teilnehmern.
 
 - **Großes LCD-Kanaldisplay** in der Mitte zeigt den aktuell eingestellten
   Kanal jederzeit eindeutig. Links/rechts daneben je ein antippbarer
@@ -667,25 +671,48 @@ als digitale Funkkonsole gestaltet statt als Liste von zehn Kanal-Buttons:
 - **Lautstärke-Regler**: echter Slider (kein +/- Tastenpaar) mit
   Prozentanzeige, direkt an `pma-voice`s `setRadioVolume` gekoppelt.
   Standardlautstärke beim Ressourcenstart `Config.Radio.defaultVolume`.
+- **Funk beitreten/verlassen**: eigener Schalter oben in der Konsole. Erst
+  nach dem Beitreten wird man für andere hörbar/sichtbar (Teilnehmerliste,
+  Anrufe) - `setVoiceProperty('radioEnabled', ...)` steht dabei auf `true`,
+  ohne Beitritt bleibt der Funk stumm. Kanal/Lautstärke lassen sich auch
+  vorher schon einstellen.
+- **Teilnehmerliste** (rechts neben der Konsole): zeigt live, wer gerade
+  auf demselben Kanal ist (Polling alle 3s, solange die App offen ist,
+  `server/sv_radio.lua`, RPC `radio:channelMembers`) - rein transient im
+  Arbeitsspeicher, keine Datenbank-Tabelle.
+- **Anrufe**: jeder Funk-Teilnehmer kann jeden anderen (der ebenfalls
+  beigetreten ist) direkt aus der Teilnehmerliste heraus anrufen - egal ob
+  Disponent→Fahrer oder Fahrer→Disponent, keine feste Rollen-Einschränkung.
+  Der Anruf läuft über einen von den normalen Funkkanälen komplett
+  getrennten, privaten pma-voice-Call-Kanal (`setCallChannel`) - das
+  normale Mithören auf dem eingestellten Kanal wird dadurch nicht gestört.
+  Klingelt `Config.Radio.callRingSeconds` (Standard 20s) lang niemand ran,
+  gilt der Anruf als verpasst. **Ein Anruf kommt nur an, solange die
+  Funk-App auf dem Tablet des Angerufenen tatsächlich geöffnet ist** - bei
+  geschlossenem Tablet oder auf einer anderen App/Kategorie verpufft ein
+  eingehender Anruf momentan wirkungslos.
+- **Eigener Name im Funk**: im Einstellungsbereich unter der Konsole lässt
+  sich ein eigener Anzeigename für die Teilnehmerliste hinterlegen (Standard:
+  Mitarbeitername) - rein transient, RPC `radio:setDisplayName`.
+- **Sounds**: Kanalwechsel, eigenes Senden (PTT) und ein Klingelton bei
+  eingehendem Anruf - über den Schalter "Sounds abspielen" im
+  Einstellungsbereich jederzeit stummschaltbar. **Diese Ressource liefert
+  standardmäßig KEINE Audiodateien mit** - lege sie selbst unter
+  `html/sounds/` ab (siehe `html/sounds/SOUNDS_HIER_ABLEGEN.txt` für die
+  genauen Dateinamen); ohne sie bleibt die App voll bedienbar, nur die
+  akustische Rückmeldung fehlt.
 - **Funkstatus auf einen Blick**: ein Chip zeigt, ob die Verbindung zu
   pma-voice aktiv ist ("Verbunden"/"Nicht verbunden", wird alle paar
   Sekunden nachgeprüft), zwei weitere blenden sich farbig ein, sobald man
   selbst sendet ("Senden", pulsierend rot) bzw. jemand auf dem Kanal zu
   hören ist ("Empfang", blau) - beides live über die pma-voice-eigenen
-  Events `pma-voice:radioActive`/`pma-voice:setTalkingOnRadio`, ohne
-  Namensauflösung (reine Sende-/Empfangsanzeige, kein Anrufsystem).
-- **Läuft komplett clientseitig** (`client/cl_radio.lua`, Exports
-  `setVoiceProperty('radioEnabled', true)`, `setRadioChannel`,
-  `setRadioVolume`) - pma-voice validiert Kanäle bereits selbst
-  serverseitig, ein Umweg über den Server wäre hier nur unnötige Latenz bei
-  jeder Bedienung. Push-to-Talk läuft über pma-voice's eigene
-  Standardtaste, sobald ein Kanal aktiv ist - dafür baut dieses Skript
-  nichts Eigenes.
-- **Kein Ein-/Ausschalten**: Bewusst simpler gehalten als das frühere
-  (mittlerweile entfernte) CB-Funk-Feature dieser Ressource (keine Anrufe,
-  kein Funkgerät-Item) - der Funk ist ab Ressourcenstart immer auf dem
-  Standardkanal/der Standardlautstärke aktiv, man wählt nur noch, auf
-  welchem der zehn Kanäle man gerade mithört und wie laut.
+  Events `pma-voice:radioActive`/`pma-voice:setTalkingOnRadio`.
+- **Architektur**: Kanal-/Lautstärkewechsel bei pma-voice selbst laufen
+  weiterhin primär clientseitig (`client/cl_radio.lua`, Exports
+  `setVoiceProperty`, `setRadioChannel`, `setRadioVolume`) - pma-voice
+  validiert Kanäle ohnehin selbst serverseitig. Beitreten/Verlassen, der
+  Kanalabgleich für die Teilnehmerliste sowie Anrufe laufen dagegen über
+  `server/sv_radio.lua`, da der Server wissen muss, wer gerade wo ist.
 - **Fehlerdiagnose "Funk geht nicht/kein Ton":** Ist `pma-voice` nicht
   gestartet (falscher Ressourcenname, Absturz, o.ä.), meldet
   `client/cl_radio.lua` das einmalig deutlich in der Client-Konsole (F8) mit
@@ -883,6 +910,10 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `server/sv_employees.lua` - Mitarbeiterverwaltung (Einstellen, Rolle/Status
   ändern, beliebige im Tablet angelegte Rollen zuweisbar).
 - `server/sv_notifications.lua` - Nachrichten Disponent/Fahrer.
+- `server/sv_radio.lua` - App "Funk": Präsenz (wer ist auf welchem Kanal),
+  Teilnehmerliste, Anrufe zwischen zwei Funk-Teilnehmern - siehe eigener
+  Abschnitt "Funk" oben. Rein transient im Arbeitsspeicher wie
+  `sv_tracking.lua`, keine Datenbank-Tabelle.
 - `server/sv_website_bridge.lua` - Optionaler Website-Sync (siehe eigener
   Abschnitt unten), komplett inaktiv solange `Config.Website.enabled = false`.
   Sowohl Erfolg als auch Fehlschlag werden seit v1.10.12 nur noch mit
@@ -899,7 +930,8 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `client/cl_orders.lua` - Bodenmarker an relevanten Standorten aus dem
   Reiter "Orte" (kein NPC), Be-/Entladen per Taste E mit Fortschrittsbalken.
 - `client/cl_radio.lua` - App "Funk", bindet an pma-voice an (Kanalwahl
-  1000-1009 + Lautstärke, `Config.Radio`) - siehe eigener Abschnitt "Funk" oben.
+  1000-1009 + Lautstärke, `Config.Radio`, Anrufe) - siehe eigener Abschnitt
+  "Funk" oben.
 - `html/` - NUI-Frontend (Sperrbildschirm, berechtigungsbasierte Reiter -
   `NAV_ITEMS`/`buildSidebar` in `js/app.js` -, Rollenverwaltung). Der Client
   führt dabei keine Geschäftslogik aus - jede Aktion wird serverseitig neu

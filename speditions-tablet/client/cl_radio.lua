@@ -1,29 +1,25 @@
 -- =========================================================
--- Client: Funk (bindet an pma-voice an)
+-- Client: Funk (bindet an pma-voice an, s. server/sv_radio.lua für
+-- Präsenz/Teilnehmerliste/Anrufe)
 --
--- Bewusst schlank gehalten - kein eigenes Ein-/Ausschalten, keine Anrufe
--- (das gab es hier früher schon einmal als "CB-Funk", lief aber unzuverlässig
--- und wurde komplett entfernt). Diese "Funk"-App im Tablet kann: zwischen
--- den zehn Kanälen aus Config.Radio umschalten, die Funklautstärke regeln,
--- und zeigt den echten pma-voice-Verbindungsstatus sowie ein Sende-/
--- Empfangsfeedback an - dafür reichen pma-voice's eigene Exports/Events
--- vollständig aus, ein Server-Umweg über die normale RPC-Bridge
--- (rpc()/call() in app.js) wäre hier nur unnötige Latenz bei jedem
--- Tastendruck, denn pma-voice validiert Kanäle ohnehin schon selbst
--- serverseitig. Sprechen (Push-to-Talk) läuft über pma-voice's eigene
--- Standardtaste, sobald ein Kanal aktiv ist - dafür baut dieses Skript
--- nichts Eigenes.
+-- Kanal/Lautstärke laufen weiterhin primär gegen pma-voice direkt (das
+-- validiert Kanäle ohnehin selbst serverseitig) - nur Beitreten/Verlassen,
+-- der Kanalabgleich für die Teilnehmerliste und Anrufe gehen über
+-- ServerCall zum Server. Sprechen (Push-to-Talk) läuft über pma-voice's
+-- eigene Standardtaste, sobald ein Kanal aktiv ist - dafür baut dieses
+-- Skript nichts Eigenes.
 -- =========================================================
 
 local channel = Config.Radio.defaultChannel
 local volume = Config.Radio.defaultVolume
+local joined = false
 local rxTalkers = {} -- ['local'] oder [serverId] = true, wer gerade auf dem Kanal spricht (nur für die Empfangsanzeige, keine Namen nötig)
 
 local function pmaVoiceReady()
     return GetResourceState('pma-voice') == 'started'
 end
 
--- Verhindert, dass dieselbe Warnung bei jedem Kanalwechsel erneut auftaucht,
+-- Verhindert, dass dieselbe Warnung bei jeder Aktion erneut auftaucht,
 -- solange pma-voice nicht läuft - nur einmal, bis applyState() wieder
 -- erfolgreich durchläuft.
 local warnedPmaVoiceMissing = false
@@ -41,8 +37,8 @@ local function safePmaVoiceCall(exportName, ...)
     return ok
 end
 
---- Überträgt Kanal + Lautstärke an pma-voice. Wird beim Ressourcenstart
---- (Standardwerte) und bei jeder Änderung über die NUI aufgerufen.
+--- Überträgt Kanal + Lautstärke + Ein/Aus-Zustand an pma-voice. Wird bei
+--- jeder Änderung über die NUI aufgerufen.
 local function applyState()
     if not pmaVoiceReady() then
         if not warnedPmaVoiceMissing then
@@ -58,13 +54,15 @@ local function applyState()
     -- (Push-to-Talk) überhaupt als Funkverkehr erkennt (isRadioEnabled() in
     -- pma-voice selbst) - auf vielen Servern normalerweise an ein
     -- Funkgerät-Item in einem Inventarsystem gekoppelt. Da dieses Tablet
-    -- absichtlich ohne Framework/Inventar auskommt, ist der Funk hier immer
-    -- aktiv, sobald ein Kanal eingestellt ist - ohne das würde pma-voice
-    -- jeden Sendeversuch stillschweigend ignorieren, obwohl der Kanal
-    -- korrekt gesetzt ist.
-    safePmaVoiceCall('setVoiceProperty', 'radioEnabled', true)
-    safePmaVoiceCall('setRadioChannel', channel)
-    safePmaVoiceCall('setRadioVolume', volume)
+    -- absichtlich ohne Framework/Inventar auskommt, übernimmt "beigetreten"
+    -- (joined) diese Rolle.
+    safePmaVoiceCall('setVoiceProperty', 'radioEnabled', joined)
+    if joined then
+        safePmaVoiceCall('setRadioChannel', channel)
+        safePmaVoiceCall('setRadioVolume', volume)
+    else
+        safePmaVoiceCall('setRadioChannel', 0)
+    end
 end
 
 --- Meldet sich der Server über pma-voice ab, hat der zuletzt gewählte Kanal
@@ -82,11 +80,8 @@ end)
 -- auf dem Funkkanal zu sprechen beginnt/aufhört (Push-to-Talk). Für ANDERE
 -- Spieler auf dem Kanal bietet pma-voice kein eigenes Export/Event an - wir
 -- hören daher zusätzlich das intern von pma-voice gefeuerte Event
--- 'pma-voice:setTalkingOnRadio' mit (FiveM-Events sind nicht
--- ressourcen-exklusiv, mehrere Ressourcen können denselben Eventnamen
--- unabhängig voneinander abonnieren). Bewusst OHNE Namensauflösung -
--- reine Sende-/Empfangsanzeige reicht für den Funk-Bildschirm, ein Server-
--- RPC pro Sprecher wäre hier unnötiger Aufwand.
+-- 'pma-voice:setTalkingOnRadio' mit. Bewusst OHNE Namensauflösung hier -
+-- die Teilnehmerliste selbst kommt über radio:channelMembers vom Server.
 -- ---------------------------------------------------------
 
 RegisterNetEvent('pma-voice:radioActive', function(radioTalking)
@@ -104,8 +99,28 @@ RegisterNetEvent('pma-voice:setTalkingOnRadio', function(src, enabled)
 end)
 
 -- ---------------------------------------------------------
--- NUI-Callbacks (rein clientseitig, kein Server-RPC)
+-- NUI-Callbacks: Beitreten/Verlassen/Kanal/Lautstärke laufen komplett
+-- clientseitig gegen pma-voice, melden den Kanal aber zusätzlich (best
+-- effort, per ServerCall) an den Server, damit die Teilnehmerliste stimmt.
 -- ---------------------------------------------------------
+
+RegisterNUICallback('radioJoin', function(_, cb)
+    ServerCall('radio:join', {}, function(res)
+        if res and res.ok then
+            joined = true
+            applyState()
+        end
+        cb(res or { ok = false })
+    end)
+end)
+
+RegisterNUICallback('radioLeave', function(_, cb)
+    ServerCall('radio:leave', {}, function(res)
+        joined = false
+        applyState()
+        cb(res or { ok = false })
+    end)
+end)
 
 RegisterNUICallback('radioSetChannel', function(data, cb)
     local ch = tonumber(data.channel)
@@ -113,6 +128,7 @@ RegisterNUICallback('radioSetChannel', function(data, cb)
         ch = math.max(Config.Radio.minChannel, math.min(Config.Radio.maxChannel, math.floor(ch)))
         channel = ch
         applyState()
+        if joined then ServerCall('radio:setChannel', { channel = ch }, function() end) end
     end
     cb({ ok = true, channel = channel })
 end)
@@ -126,20 +142,67 @@ RegisterNUICallback('radioSetVolume', function(data, cb)
     cb({ ok = true, volume = volume })
 end)
 
---- Liefert den aktuellen Zustand auf Anfrage der NUI (z.B. beim Öffnen der
---- Funk-App oder alle paar Sekunden, solange sie offen ist) - vor allem für
---- "connected", das sich zur Laufzeit ändern kann (pma-voice startet/stoppt
---- neu), während Kanal/Lautstärke von der NUI ohnehin schon optimistisch
---- mitgeführt werden.
-RegisterNUICallback('radioGetStatus', function(_, cb)
-    cb({ ok = true, connected = pmaVoiceReady(), channel = channel, volume = volume })
+RegisterNUICallback('radioSetDisplayName', function(data, cb)
+    ServerCall('radio:setDisplayName', { name = data.name }, function(res) cb(res or { ok = false }) end)
 end)
 
--- Direkt beim Ressourcenstart auf die Standardwerte einstellen, damit der
--- Funk auch dann schon aktiv ist, wenn das Tablet noch gar nicht geöffnet
--- wurde (z.B. während der Fahrt). Kurze Verzögerung, damit pma-voice beim
--- gemeinsamen Ressourcenstart Zeit hat, selbst hochzufahren.
-CreateThread(function()
-    Wait(2000)
-    applyState()
+RegisterNUICallback('radioGetChannelMembers', function(_, cb)
+    ServerCall('radio:channelMembers', {}, function(res) cb(res or { ok = false }) end)
+end)
+
+RegisterNUICallback('radioCallUser', function(data, cb)
+    ServerCall('radio:callUser', { targetSrc = data.targetSrc }, function(res) cb(res or { ok = false }) end)
+end)
+
+RegisterNUICallback('radioAnswerCall', function(_, cb)
+    ServerCall('radio:answerCall', {}, function(res)
+        if res and res.ok and pmaVoiceReady() then
+            exports['pma-voice']:setCallChannel(res.channel)
+        end
+        cb(res or { ok = false })
+    end)
+end)
+
+RegisterNUICallback('radioDeclineCall', function(_, cb)
+    ServerCall('radio:declineCall', {}, function(res) cb(res or { ok = false }) end)
+end)
+
+RegisterNUICallback('radioHangup', function(_, cb)
+    if pmaVoiceReady() then exports['pma-voice']:setCallChannel(0) end
+    ServerCall('radio:hangup', {}, function(res) cb(res or { ok = false }) end)
+end)
+
+RegisterNUICallback('radioGetStatus', function(_, cb)
+    cb({ ok = true, connected = pmaVoiceReady(), joined = joined, channel = channel, volume = volume })
+end)
+
+-- ---------------------------------------------------------
+-- Anruf-Netevents (unabhängig vom NUI-Fokus, aber nur sichtbar, solange
+-- die Funk-App tatsächlich offen ist - ohne offene Funk-App verpufft ein
+-- eingehender Anruf momentan wirkungslos, s. README).
+-- ---------------------------------------------------------
+
+RegisterNetEvent('speditions-tablet:client:radioIncomingCall', function(callerName)
+    SendNUIMessage({ type = 'radioIncomingCall', callerName = callerName })
+end)
+
+--- Wird an BEIDE Gesprächsseiten geschickt, sobald der Anruf angenommen
+--- wurde - die anrufende Seite tritt dem privaten Call-Kanal erst jetzt bei.
+RegisterNetEvent('speditions-tablet:client:radioJoinCall', function(callChannel)
+    if pmaVoiceReady() then exports['pma-voice']:setCallChannel(callChannel) end
+    SendNUIMessage({ type = 'radioCallAnswered' })
+end)
+
+RegisterNetEvent('speditions-tablet:client:radioLeaveCall', function(reason)
+    if pmaVoiceReady() then exports['pma-voice']:setCallChannel(0) end
+    SendNUIMessage({ type = 'radioCallEnded', reason = reason })
+end)
+
+-- Ressource endet -> pma-voice sauber zurücksetzen, unabhängig vom
+-- zuletzt bekannten joined-Zustand.
+AddEventHandler('onResourceStop', function(resourceName)
+    if resourceName == GetCurrentResourceName() and pmaVoiceReady() then
+        exports['pma-voice']:setRadioChannel(0)
+        exports['pma-voice']:setCallChannel(0)
+    end
 end)
