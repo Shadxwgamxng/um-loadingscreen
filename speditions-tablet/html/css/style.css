@@ -591,6 +591,12 @@ html, body {
     background: linear-gradient(90deg, rgba(59,130,246,0.22), transparent);
     transition: width 0.16s ease;
 }
+/* Ohne diese Regel gewinnt .hover-rails eigenes display:flex gegen die
+   .hidden-Klasse (gleiche Spezifität, .hover-rail stünde im Stylesheet
+   weiter unten) - #quickswitch-rail bliebe dann auf JEDER App sichtbar und
+   klickbar statt nur den 4 vorgesehenen, mit zwei sichtbaren Leisten
+   übereinander und versehentlichen Klicks auf "Disposition" als Folge. */
+.hover-rail.hidden { display: none; }
 .hover-rail:hover {
     width: 196px;
     background: var(--bg-2);
