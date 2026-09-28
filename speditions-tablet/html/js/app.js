@@ -1078,9 +1078,9 @@ VIEWS['driver-messages'] = async (root) => {
 // ---------- DISPONENT ----------
 
 // Wiederverwendbare Zeilen-Renderer für Fahrer/Auftragspool/aktive Aufträge -
-// werden sowohl von den einzelnen Ansichten unten als auch vom kombinierten
-// Disponenten-Cockpit (VIEWS['dispatch-board']) verwendet, damit keine
-// Zeilen-/Aktions-Logik doppelt gepflegt werden muss.
+// werden von den Sektionen der zusammengelegten App "Auftragsverwaltung"
+// (VIEWS['dispatch-orders']) sowie von VIEWS['dispatch-drivers'] verwendet,
+// damit keine Zeilen-/Aktions-Logik doppelt gepflegt werden muss.
 function driversTableRows(drivers) {
     return drivers.map((r) => `<tr>
         <td>${badge(DRIVER_STATUS_META[r.current_status])}</td>

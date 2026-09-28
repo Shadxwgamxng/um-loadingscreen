@@ -84,40 +84,54 @@ oder aktualisiert Passwort/Rolle, falls der Login-Name bereits existiert.
   externer Font/CDN) statt über Symbolzeichen, für ein einheitlicheres,
   seriöseres Erscheinungsbild.
 
-### Navigation: Startbildschirm + Apps (statt Seitenleiste)
+### Navigation: Startbildschirm, Dock + Apps (statt Seitenleiste)
 
 Seit v1.11.0 gibt es keine feste Seitenleiste mit allen Reitern mehr,
-sondern ein klassisches Tablet-Menü:
+sondern ein klassisches, an iPad/iOS angelehntes Tablet-Menü:
 
 1. Nach dem Anmelden landet man immer zuerst auf dem **Startbildschirm** mit
    den Kategorie-Kacheln, für die man mindestens eine Berechtigung hat:
    **Aufträge, Finanzen, Fuhrpark, Mitarbeiterverwaltung, Disposition,
    Geschäftsführung**.
 2. Ein Tipp auf eine Kategorie öffnet ein Kachel-Menü mit den einzelnen Apps
-   darin (frühere "Reiter", z.B. "Fahrerkarte" unter Fuhrpark).
+   darin. Mehrere eng verwandte frühere Einzel-Apps sind zu jeweils einer App
+   mit einer **Sektionen-Leiste rechts** zusammengelegt (Splitview-Prinzip,
+   z.B. wie die iPad-Einstellungen-App), statt für jede Kleinigkeit eine
+   eigene Kachel zu brauchen:
+   - **Meine Aufträge** (Fahrer): Aktuell / Historie
+   - **Auftragsverwaltung** (Disposition): Pool / Aktiv / Abgeschlossen
+   - **Finanzcenter** (Geschäftsführung): Übersicht / Umsatz / Finanzen /
+     Gehälter / Ein-Auszahlungen
+   - **Fuhrpark-Verwaltung**: Fahrzeuge / Anhänger
+   - **Mitarbeiter**: Mitarbeiter / Rollen
 3. Ein Tipp auf eine App öffnet sie wie gewohnt - Inhalte/Funktionen sind
    unverändert, nur der Weg dorthin hat sich geändert. Der Button
    "‹ Zurück" führt zur Kategorie zurück, der Button "Startbildschirm" oben
    rechts jederzeit direkt zum Startbildschirm.
-4. Welche Kategorien/Apps sichtbar sind, richtet sich weiterhin
+4. Welche Kategorien/Apps/Sektionen sichtbar sind, richtet sich weiterhin
    ausschließlich nach den Berechtigungen der eigenen Rolle (siehe
-   "Rollen & Berechtigungen" unten) - daran hat sich nichts geändert, nur die
-   Darstellung wurde von einer Liste zu einem Kachel-Menü.
+   "Rollen & Berechtigungen" unten) - jede Sektion einer zusammengelegten App
+   behält ihre bisherige Einzel-Berechtigung.
 5. Die frühere eigenständige "Fahrerakten"-App ist entfallen - ein
    "Fahrerakte"-Button erscheint jetzt direkt in der Zeile eines Fahrers in
    der App **Mitarbeiter** (Kategorie Mitarbeiterverwaltung).
-6. Neu in der Kategorie **Disposition**: die App **"Allgemeine Disposition"**
-   (Berechtigung `dispatch`) bündelt Auftragspool, aktive Aufträge und
-   Fahrerübersicht auf einer Seite als Cockpit für den laufenden
-   Disponenten-Alltag - die einzelnen Ansichten (Auftragspool, Aktive
-   Aufträge, Fahrerübersicht) bleiben als eigene Apps zusätzlich bestehen.
-7. Ebenfalls neu in der Kategorie **Disposition**: die App **"Live Karte"**
-   (Berechtigung `live_map_view`) - siehe eigener Abschnitt "Live-Karte"
-   weiter unten.
+6. **Dock**: Die Fahrerkarte (Fahrer) und der Dispositions-Dienst-Toggle
+   (Disposition, siehe unten) sind keine Kategorie-Apps mehr, sondern liegen
+   als eigene Icons in einem Dock unten auf dem Startbildschirm (analog zum
+   iPad-Dock) - beides ist ein "bin ich gerade im Dienst"-Schalter mit
+   Status-Punkt (grün = eingesteckt/im Dienst), kein eigentlicher
+   Arbeitsbereich.
+7. In der Kategorie **Disposition**: die App **"Live Karte"** (Berechtigung
+   `live_map_view`) - siehe eigener Abschnitt "Live-Karte" weiter unten.
+8. **Wallpaper**: Home- und Kategorie-Bildschirm zeigen optional ein eigenes
+   Hintergrundbild, das du selbst unter `html/img/wallpaper.jpg` ablegst
+   (siehe `html/img/WALLPAPER_HIER_ABLEGEN.txt`, empfohlenes Format ca.
+   2048×1330px, Seitenverhältnis 3:2) - ohne Datei bleibt der bisherige
+   dunkle Verlaufshintergrund sichtbar.
 
 Alle folgenden Abschnitte dieses READMEs sprechen aus historischen Gründen
-weiterhin von "Reitern" - gemeint ist damit jeweils die entsprechende App im
-neuen Kategorie-Menü.
+teils weiterhin von "Reitern" - gemeint ist damit jeweils die entsprechende
+App (bzw. Sektion einer zusammengelegten App) im Kategorie-Menü.
 
 ### Tablet nur per Item öffnen
 
@@ -171,9 +185,9 @@ ab. Siehe `Vehicles.ReportCondition` in `server/sv_vehicles.lua`.
 
 Ein bloß am Tablet angemeldeter Disponent/Geschäftsführung reicht **nicht**
 aus, um die Selbstzuweisung zu sperren - der Dispositions-Dienst muss dafür
-in der App **"Allgemeine Disposition"** (Kategorie Disposition) über den
+über das **Dock-Icon "Dispositions-Dienst"** auf dem Startbildschirm über den
 Button "Dienst beginnen" aktiv eingeschaltet sein (analog zur Fahrerkarte
-bei Fahrern). Solange niemand im Dienst ist, können Fahrer sich einen
+bei Fahrern, die ebenfalls im Dock liegt). Solange niemand im Dienst ist, können Fahrer sich einen
 offenen Auftrag im "Offener Auftragspool"-Bereich unter "Aufträge" selbst
 zuweisen ("Übernehmen"). Sobald mindestens ein Disponent "Dienst beginnen"
 gedrückt hat, wird der Button gesperrt und die normale Disposition greift
@@ -590,17 +604,19 @@ als Marker über einem selbst hinterlegten Kartenbild - alle 3 Sekunden
   Bild unter `html/img/map.jpg` ab (siehe
   `html/img/KARTENBILD_HIER_ABLEGEN.txt`) - ohne Datei zeigt die Karte einen
   Hinweistext statt eines kaputten Bildes.
-- **Kalibrierung**: Die mitgelieferten Standard-Kartengrenzen
-  (`Config.LiveMap.bounds`) passen mit hoher Wahrscheinlichkeit nicht zu
-  deinem konkreten Kartenausschnitt. Über den Button "Karte kalibrieren"
-  klickst du zweimal auf eine im Spiel eindeutig wiederfindbare Stelle,
-  läufst jeweils dorthin und bestätigst mit "Aktuelle Position übernehmen"
-  (oder trägst die Weltkoordinaten manuell ein) - daraus werden automatisch
-  die vier `Config.LiveMap.bounds`-Werte berechnet, per Live-Vorschau direkt
-  überprüfbar, und als fertiges Snippet zum Einfügen in `config.lua`
-  angezeigt. Nach dem Eintragen die Ressource neu starten, damit die Werte
-  dauerhaft gelten (und - sofern Website-Sync aktiv - auch die Website
-  automatisch dieselben Grenzen erhält, siehe unten).
+- **Kein Kalibrierungswerkzeug**: Die Fahrerposition kommt immer direkt und
+  serverseitig von GTA (`GetEntityCoords`) - es gibt bewusst kein
+  In-App-Werkzeug mehr, das das erst umständlich ermitteln muss. Passt dein
+  eigenes Kartenbild nicht exakt zu den mitgelieferten Standard-
+  Kartengrenzen `Config.LiveMap.bounds` (die Marker sitzen dann leicht
+  daneben), passe die vier Zahlen (`minX`/`maxX`/`minY`/`maxY`) direkt in
+  `config.lua` an: besuche im Spiel zwei dir bekannte, auf deinem Kartenbild
+  gut identifizierbare Orte, notiere ihre Weltkoordinaten (z.B. über den
+  Reiter "Orte") sowie die jeweilige Bildposition in Prozent, und löse damit
+  die vier Werte linear auf (siehe `worldToMapPercent` in `html/js/app.js`
+  für die exakte Formel). Nach dem Eintragen die Ressource neu starten (und
+  - sofern Website-Sync aktiv - die Website erhält die neuen Grenzen
+  automatisch mit, siehe unten).
 - **Serverseitig ermittelt**: Position, Fahrzeug und laufender Auftrag jedes
   getrackten Fahrers werden ausschließlich serverseitig ermittelt
   (`GetEntityCoords`/`GetVehiclePedIsIn`), nie vom Client gemeldet. Rein
