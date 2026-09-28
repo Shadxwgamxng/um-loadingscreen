@@ -133,10 +133,11 @@ sondern ein klassisches, an iPad/iOS angelehntes Tablet-Menü:
    `wallpaper.jpg` komplett, bleibt der dunkle Verlaufshintergrund sichtbar.
    Der Login-Bildschirm (Name + Passwort) ist dazu als transluzente
    Glas-Karte gestaltet.
-9. **Widget "Aktueller Auftrag"**: Fahrer sehen auf dem Startbildschirm
-   unter der Uhrzeit ein kompaktes Widget (Fracht, Strecke, Status) ihres
-   gerade aktiven Auftrags, sofern einer läuft - ein Tipp darauf öffnet
-   direkt die App "Meine Aufträge".
+9. **Widgets**: Fahrer sehen auf dem Startbildschirm drei kompakte Widgets,
+   die zur jeweiligen App verlinken - unter der Uhrzeit den "Aktuellen
+   Auftrag" (Fracht, Strecke, Status, sofern einer läuft), rechts oben die
+   "Fahrerkarte" (eingesteckt/nicht eingesteckt) und direkt darunter "Mein
+   Fahrzeug" (Name/Modell, Kennzeichen, Status, Tankstand).
 
 Alle folgenden Abschnitte dieses READMEs sprechen aus historischen Gründen
 teils weiterhin von "Reitern" - gemeint ist damit jeweils die entsprechende

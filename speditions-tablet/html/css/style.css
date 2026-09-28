@@ -366,7 +366,7 @@ html, body {
 /* Zweites Widget (Fahrerkarte) am rechten Bildschirmrand, auf Höhe der
    großen Uhr - unabhängig vom normalen Fluss positioniert, damit es das
    Kategorie-Grid links nicht beeinflusst. */
-.home-widget-right { position: absolute; top: 28px; right: 32px; }
+.home-widget-right { position: absolute; top: 28px; right: 32px; display: flex; flex-direction: column; gap: 14px; align-items: flex-end; }
 .widget {
     display: flex;
     flex-direction: column;

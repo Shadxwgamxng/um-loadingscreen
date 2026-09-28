@@ -430,7 +430,10 @@ function renderHome() {
             <div class="home-clock-date" id="home-clock-date"></div>
         </div>
         <div class="home-widgets" id="home-widgets"></div>
-        <div class="home-widget-right" id="home-widget-right"></div>
+        <div class="home-widget-right">
+            <div id="home-widget-drivercard"></div>
+            <div id="home-widget-vehicle"></div>
+        </div>
         <div class="home-tiles">
             ${visibleCategories(currentPermissions()).map((c) => `
                 <div class="category-tile" onclick="showCategory('${c.id}')">
@@ -443,6 +446,7 @@ function renderHome() {
     renderDock();
     renderHomeWidgets();
     renderDriverCardWidget();
+    renderVehicleWidget();
 }
 
 // Homescreen-Widget "Aktueller Auftrag" (Fahrer) - bewusst knapp gehalten
@@ -488,7 +492,7 @@ async function renderHomeWidgets() {
 // zeigt knapp, ob die Fahrerkarte gerade eingesteckt ist, ohne dass man
 // dafür erst die App öffnen muss. Tippen öffnet die volle Fahrerkarte.
 async function renderDriverCardWidget() {
-    const el = document.getElementById('home-widget-right');
+    const el = document.getElementById('home-widget-drivercard');
     if (!el) return;
     if (!currentPermissions().includes('driver_actions')) {
         el.innerHTML = '';
@@ -514,6 +518,41 @@ async function renderDriverCardWidget() {
            <div class="widget-status"><span class="dot dot-green"></span>Fahrt läuft</div>`
         : `<div class="widget-title">Nicht eingesteckt</div>
            <div class="widget-status"><span class="dot dot-gray"></span>Fahrerkarte einstecken, um Aufträge anzunehmen</div>`;
+}
+
+// Drittes Homescreen-Widget (Mein Fahrzeug), direkt unter dem Fahrerkarte-
+// Widget - zeigt das aktuell zugewiesene Firmenfahrzeug knapp zusammengefasst
+// (Name/Modell, Kennzeichen, Status, Tank). Tippen öffnet "Mein Fahrzeug".
+async function renderVehicleWidget() {
+    const el = document.getElementById('home-widget-vehicle');
+    if (!el) return;
+    if (!currentPermissions().includes('driver_actions')) {
+        el.innerHTML = '';
+        return;
+    }
+    el.innerHTML = `
+        <div class="widget" onclick="showView('driver-vehicle')">
+            <div class="widget-header">${iconSvg('car')}<span>Mein Fahrzeug</span></div>
+            <div id="widget-vehicle-body"><div class="widget-empty">Lädt…</div></div>
+        </div>`;
+
+    const res = await rpc('driver:vehicle');
+    const body = document.getElementById('widget-vehicle-body');
+    if (!body) return; // Homescreen inzwischen verlassen
+    if (!res || !res.ok) {
+        body.innerHTML = '<div class="widget-empty">Keine Daten verfügbar.</div>';
+        return;
+    }
+    const v = res.result.vehicle;
+    if (!v) {
+        body.innerHTML = '<div class="widget-empty">Kein Fahrzeug zugewiesen.</div>';
+        return;
+    }
+    const meta = VEHICLE_STATUS_META[v.status];
+    body.innerHTML = `
+        <div class="widget-title">${escapeHtml(v.name)}</div>
+        <div class="widget-sub">${escapeHtml(v.model)} · ${escapeHtml(v.plate)}</div>
+        <div class="widget-status"><span class="dot dot-${meta ? meta.dot : 'gray'}"></span>${escapeHtml(meta ? meta.label : v.status)} · Tank ${v.fuel}%</div>`;
 }
 
 // Dock (fixiert unten auf dem Home-Screen, analog iPad) - Fahrerkarte und
