@@ -1,17 +1,18 @@
 Tablet: eigenes Hintergrundbild (Wallpaper) ablegen
 ====================================================
 
-Diese Ressource liefert absichtlich KEIN eigenes Hintergrundbild mit, damit
-jeder Server sein eigenes Branding/Motiv verwenden kann.
-
-Um dem Tablet einen echten Wallpaper-Hintergrund zu geben (Home-Bildschirm
-und Kategorie-Ansicht), lege eine eigene Bilddatei genau hier ab:
+Diese Ressource liefert mittlerweile ein Standard-Wallpaper mit
+(html/img/wallpaper.jpg) - eigenes Branding von Baltic Freight Spedition
+GmbH. Möchtest du ein anderes Motiv verwenden, überschreibe einfach diese
+Datei mit deinem eigenen Bild:
 
     html/img/wallpaper.jpg
 
-Fertig - beim nächsten Öffnen des Tablets wird das Bild automatisch als
-Hintergrund geladen. Ohne Datei bleibt der bisherige dunkle Verlaufs-
-Hintergrund sichtbar (kein kaputtes Bild, keine Fehlermeldung).
+Fertig - beim nächsten Öffnen des Tablets wird das neue Bild automatisch
+als Hintergrund geladen (Home-Bildschirm, Kategorie-Ansicht sowie Lock-
+und Login-Screen). Löschst du die Datei komplett, bleibt automatisch der
+dunkle Verlaufs-Hintergrund sichtbar (kein kaputtes Bild, keine
+Fehlermeldung).
 
 Empfohlenes Format
 ------------------
@@ -20,5 +21,4 @@ Empfohlene Auflösung: 2048 x 1330 Pixel (oder ein anderes Bild mit
 ähnlichem Seitenverhältnis - es wird zentriert zugeschnitten, falls es
 nicht exakt passt). Unterstützte Formate: .jpg, .jpeg, .png, .webp.
 
-Diese Datei selbst hat keine Funktion und kann gelöscht werden, sobald
-wallpaper.jpg im Ordner liegt.
+Diese Datei selbst hat keine Funktion.

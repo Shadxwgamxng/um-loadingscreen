@@ -161,7 +161,7 @@ html, body {
 }
 .login-box label,
 .login-box input { width: 100%; }
-.login-logo { width: 56px; height: auto; margin-bottom: 14px; filter: drop-shadow(0 4px 14px rgba(59,130,246,0.3)); }
+.login-logo { width: 148px; height: auto; margin-bottom: 12px; filter: drop-shadow(0 4px 14px rgba(59,130,246,0.3)); }
 .login-title { font-size: 19px; font-weight: 700; text-align: center; color: #fff; }
 .login-subtitle { color: rgba(255,255,255,0.65); font-size: 12.5px; text-align: center; margin: 4px 0 20px; }
 .login-box input {
@@ -196,7 +196,7 @@ html, body {
 .lock-time { font-size: 54px; font-weight: 300; letter-spacing: 1px; margin-top: 12px; }
 .lock-date { color: var(--text-2); font-size: 13px; margin-top: 4px; text-transform: capitalize; }
 .lock-brand { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.lock-logo { width: 108px; height: auto; filter: drop-shadow(0 6px 18px rgba(59,130,246,0.25)); }
+.lock-logo { width: 210px; height: auto; filter: drop-shadow(0 6px 18px rgba(59,130,246,0.25)); }
 .lock-brand-name { font-size: 17px; font-weight: 700; letter-spacing: 1px; text-align: center; padding: 0 24px; }
 .lock-brand-rule {
     display: flex;
@@ -363,6 +363,10 @@ html, body {
    hineinpasst) - s. renderHomeWidgets() in app.js. Nur für Fahrer, direkt
    unter der großen Uhr, vor dem Kategorie-Grid. */
 .home-widgets { margin-bottom: 8px; }
+/* Zweites Widget (Fahrerkarte) am rechten Bildschirmrand, auf Höhe der
+   großen Uhr - unabhängig vom normalen Fluss positioniert, damit es das
+   Kategorie-Grid links nicht beeinflusst. */
+.home-widget-right { position: absolute; top: 28px; right: 32px; }
 .widget {
     display: flex;
     flex-direction: column;

@@ -123,13 +123,16 @@ sondern ein klassisches, an iPad/iOS angelehntes Tablet-Menü:
    Arbeitsbereich.
 7. In der Kategorie **Disposition**: die App **"Live Karte"** (Berechtigung
    `live_map_view`) - siehe eigener Abschnitt "Live-Karte" weiter unten.
-8. **Wallpaper**: Homescreen, Kategorie-Bildschirm sowie Lock- und Login-
-   Screen zeigen optional ein eigenes Hintergrundbild, das du selbst unter
-   `html/img/wallpaper.jpg` ablegst (siehe
-   `html/img/WALLPAPER_HIER_ABLEGEN.txt`, empfohlenes Format ca.
-   2048×1330px, Seitenverhältnis 3:2) - ohne Datei bleibt der bisherige
-   dunkle Verlaufshintergrund sichtbar. Der Login-Bildschirm (Name +
-   Passwort) ist dazu als transluzente Glas-Karte gestaltet.
+8. **Wallpaper + Logo inklusive**: Homescreen, Kategorie-Bildschirm sowie
+   Lock- und Login-Screen zeigen ein Hintergrundbild
+   (`html/img/wallpaper.jpg`) und das Firmenlogo (`html/img/logo.png`,
+   transparenter Hintergrund) - beides bereits mit Baltic-Freight-Branding
+   befüllt. Eigenes Motiv/Logo gewünscht? Einfach die jeweilige Datei
+   überschreiben (siehe `html/img/WALLPAPER_HIER_ABLEGEN.txt`, empfohlenes
+   Wallpaper-Format ca. 2048×1330px/Seitenverhältnis 3:2) - löschst du
+   `wallpaper.jpg` komplett, bleibt der dunkle Verlaufshintergrund sichtbar.
+   Der Login-Bildschirm (Name + Passwort) ist dazu als transluzente
+   Glas-Karte gestaltet.
 9. **Widget "Aktueller Auftrag"**: Fahrer sehen auf dem Startbildschirm
    unter der Uhrzeit ein kompaktes Widget (Fracht, Strecke, Status) ihres
    gerade aktiven Auftrags, sofern einer läuft - ein Tipp darauf öffnet
@@ -605,11 +608,11 @@ zeigt ausschließlich gerade eingestempelte Fahrer (`st_drivers.on_shift = 1`)
 als Marker über einem selbst hinterlegten Kartenbild - alle 3 Sekunden
 (`Config.LiveMap.trackingIntervalMs`) aktualisiert.
 
-- **Kein GTA-V-Kartenbild inklusive**: Rockstars Kartengrafik ist
-  urheberrechtlich geschützt und wird nicht mitgeliefert. Lege ein eigenes
-  Bild unter `html/img/map.jpg` ab (siehe
-  `html/img/KARTENBILD_HIER_ABLEGEN.txt`) - ohne Datei zeigt die Karte einen
-  Hinweistext statt eines kaputten Bildes.
+- **Standard-Kartenbild inklusive**: `html/img/map.jpg` liegt mit einer
+  GTA-V-Satellitenkarte bereits bei. Willst du ein anderes Kartenbild,
+  überschreibe einfach diese Datei (siehe
+  `html/img/KARTENBILD_HIER_ABLEGEN.txt`) - löschst du sie komplett, zeigt
+  die Karte stattdessen einen Hinweistext statt eines kaputten Bildes.
 - **Kein Kalibrierungswerkzeug**: Die Fahrerposition kommt immer direkt und
   serverseitig von GTA (`GetEntityCoords`) - es gibt bewusst kein
   In-App-Werkzeug mehr, das das erst umständlich ermitteln muss. Passt dein

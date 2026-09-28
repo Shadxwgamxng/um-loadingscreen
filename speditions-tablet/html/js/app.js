@@ -325,11 +325,11 @@ const CATEGORIES = [
 // entweder eine einzelne Berechtigung oder (bei zusammengelegten Apps mit
 // unterschiedlich berechtigten Sektionen) ein Array - sichtbar, wenn
 // mindestens eine davon vorhanden ist (siehe appHasPermission()).
-// Fahrerkarte bleibt vorerst hier (zieht mit dem Home-Dock in Schritt C um).
+// Fahrerkarte und Dispositions-Dienst liegen NICHT hier, sondern als
+// Dock-Icons auf dem Home-Screen (s. DOCK_ITEMS/renderDock()).
 const APPS = [
     // Aufträge
     { id: 'driver-orders', label: 'Meine Aufträge', perm: 'driver_actions', category: 'auftraege', icon: 'list' },
-    { id: 'dispatch-orders', label: 'Auftragsverwaltung', perm: 'dispatch', category: 'auftraege', icon: 'clipboard' },
     { id: 'gf-cargo-types', label: 'Frachtarten', perm: 'cargo_types_manage', category: 'auftraege', icon: 'box' },
     { id: 'gf-orders', label: 'Auftragsstatistik', perm: 'stats_view', category: 'auftraege', icon: 'chart' },
     // Finanzen
@@ -342,7 +342,11 @@ const APPS = [
     // Mitarbeiterverwaltung
     { id: 'gf-employees', label: 'Mitarbeiter', perm: ['employees_manage', 'roles_manage'], category: 'mitarbeiter', icon: 'idcard' },
     { id: 'dispatch-drivers', label: 'Fahrerübersicht', perm: 'dispatch', category: 'mitarbeiter', icon: 'people' },
-    // Disposition
+    // Disposition - Auftragsverwaltung liegt bewusst HIER (nicht unter
+    // "Aufträge"), damit Disponenten für ihren gesamten Arbeitsalltag
+    // (Aufträge disponieren, Nachrichten, Live-Karte) nicht zwischen
+    // Kategorien wechseln müssen.
+    { id: 'dispatch-orders', label: 'Auftragsverwaltung', perm: 'dispatch', category: 'disposition', icon: 'clipboard' },
     { id: 'driver-messages', label: 'Nachrichten', perm: 'driver_actions', category: 'disposition', icon: 'chat' },
     { id: 'dispatch-map', label: 'Live Karte', perm: 'live_map_view', category: 'disposition', icon: 'pin' },
     // Geschäftsführung
@@ -426,6 +430,7 @@ function renderHome() {
             <div class="home-clock-date" id="home-clock-date"></div>
         </div>
         <div class="home-widgets" id="home-widgets"></div>
+        <div class="home-widget-right" id="home-widget-right"></div>
         <div class="home-tiles">
             ${visibleCategories(currentPermissions()).map((c) => `
                 <div class="category-tile" onclick="showCategory('${c.id}')">
@@ -437,6 +442,7 @@ function renderHome() {
     updateClockElements();
     renderDock();
     renderHomeWidgets();
+    renderDriverCardWidget();
 }
 
 // Homescreen-Widget "Aktueller Auftrag" (Fahrer) - bewusst knapp gehalten
@@ -476,6 +482,38 @@ async function renderHomeWidgets() {
         <div class="widget-title">${escapeHtml(active.cargo)}</div>
         <div class="widget-sub">${escapeHtml(active.start_location)} → ${escapeHtml(active.end_location)}</div>
         <div class="widget-status"><span class="dot dot-${meta ? meta.dot : 'gray'}"></span>${escapeHtml(meta ? meta.label : active.status)}</div>`;
+}
+
+// Zweites Homescreen-Widget (Fahrerkarte), rechts auf dem Startbildschirm -
+// zeigt knapp, ob die Fahrerkarte gerade eingesteckt ist, ohne dass man
+// dafür erst die App öffnen muss. Tippen öffnet die volle Fahrerkarte.
+async function renderDriverCardWidget() {
+    const el = document.getElementById('home-widget-right');
+    if (!el) return;
+    if (!currentPermissions().includes('driver_actions')) {
+        el.innerHTML = '';
+        return;
+    }
+    el.innerHTML = `
+        <div class="widget" onclick="showView('driver-card')">
+            <div class="widget-header">${iconSvg('idcard')}<span>Fahrerkarte</span></div>
+            <div id="widget-drivercard-body"><div class="widget-empty">Lädt…</div></div>
+        </div>`;
+
+    const res = await rpc('driver:card');
+    const body = document.getElementById('widget-drivercard-body');
+    if (!body) return; // Homescreen inzwischen verlassen
+    if (!res || !res.ok) {
+        body.innerHTML = '<div class="widget-empty">Keine Daten verfügbar.</div>';
+        return;
+    }
+    const driver = res.result.driver;
+    body.innerHTML = driver && driver.onShift
+        ? `<div class="widget-title">Eingesteckt</div>
+           <div class="widget-sub">Seit ${formatDate(driver.shiftStartedAt, true)}</div>
+           <div class="widget-status"><span class="dot dot-green"></span>Fahrt läuft</div>`
+        : `<div class="widget-title">Nicht eingesteckt</div>
+           <div class="widget-status"><span class="dot dot-gray"></span>Fahrerkarte einstecken, um Aufträge anzunehmen</div>`;
 }
 
 // Dock (fixiert unten auf dem Home-Screen, analog iPad) - Fahrerkarte und
@@ -933,6 +971,17 @@ VIEWS['driver-card'] = async (root) => {
                 </div>
             </div>
             <div class="driver-card-section">
+                <h4>Fahrerkarte</h4>
+                <div class="stat-row">
+                    <span>Status</span>
+                    <span>${d.driver.onShift ? `Eingesteckt (seit ${formatDate(d.driver.shiftStartedAt, true)})` : 'Nicht eingesteckt'}</span>
+                </div>
+                <p class="card-hint">Vor der Annahme eines Auftrags musst du hier deine Fahrt starten, damit deine Lenk-/Ruhezeiten erfasst werden.</p>
+                ${d.driver.onShift
+                    ? `<button class="btn btn-sm btn-danger" onclick="Actions.endShift()">Fahrerkarte abziehen (Fahrt beenden)</button>`
+                    : `<button class="btn btn-sm btn-primary" onclick="Actions.openStartShiftModal()">Fahrerkarte einstecken (Fahrt starten)</button>`}
+            </div>
+            <div class="driver-card-section">
                 <h4>Statistik</h4>
                 <div class="stat-row"><span>Aufträge</span><span>${stats.total_orders}</span></div>
                 <div class="stat-row"><span>Kilometer</span><span>${Number(stats.total_km).toLocaleString('de-DE')} km</span></div>
@@ -943,17 +992,6 @@ VIEWS['driver-card'] = async (root) => {
             <div class="driver-card-section">
                 <h4>Fahrerberechtigungen</h4>
                 <div class="perm-list">${permsHtml}</div>
-            </div>
-            <div class="driver-card-section">
-                <h4>Fahrerkarte</h4>
-                <div class="stat-row">
-                    <span>Status</span>
-                    <span>${d.driver.onShift ? `Eingesteckt (seit ${formatDate(d.driver.shiftStartedAt, true)})` : 'Nicht eingesteckt'}</span>
-                </div>
-                <p class="card-hint">Vor der Annahme eines Auftrags musst du hier deine Fahrt starten, damit deine Lenk-/Ruhezeiten erfasst werden.</p>
-                ${d.driver.onShift
-                    ? `<button class="btn btn-sm btn-danger" onclick="Actions.endShift()">Fahrerkarte abziehen (Fahrt beenden)</button>`
-                    : `<button class="btn btn-sm btn-primary" onclick="Actions.openStartShiftModal()">Fahrerkarte einstecken (Fahrt starten)</button>`}
             </div>
             <div class="driver-card-section">
                 <h4>Lenk- &amp; Ruhezeiten</h4>
