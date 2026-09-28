@@ -520,28 +520,6 @@ html, body {
 }
 .dock-status-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
 
-/* Kanal-Badge am Funk-Dock-Icon statt eines simplen Status-Punkts - zeigt
-   den aktuell eingestellten Kanal direkt auf dem Homescreen an (s.
-   updateRadioDockBadge() in app.js), ohne die App extra öffnen zu müssen. */
-.dock-badge {
-    position: absolute;
-    bottom: -6px;
-    left: 50%;
-    transform: translateX(-50%);
-    min-width: 34px;
-    padding: 2px 6px;
-    border-radius: 9px;
-    background: var(--accent);
-    color: #fff;
-    font-size: 10.5px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    text-align: center;
-    line-height: 1.4;
-    border: 2px solid rgba(15, 23, 42, 0.9);
-    box-shadow: 0 0 6px rgba(59, 130, 246, 0.7);
-}
-
 /* ---------- App-Ansicht (Homescreen -> Kategorie -> App geöffnet) ---------- */
 
 .app-view {
@@ -618,40 +596,160 @@ html, body {
 .grid-3 { grid-template-columns: repeat(3, 1fr); }
 .grid-4 { grid-template-columns: repeat(4, 1fr); }
 
-/* ---------- Funk (App "Funk", VIEWS['funk']) ----------
-   Große Touch-Kacheln für die zehn Kanäle - schneller, eindeutiger
-   Kanalwechsel per Antippen, aktiver Kanal deutlich hervorgehoben. */
-.funk-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-    gap: 14px;
+/* ---------- Funk (App "Funk", Kategorie Disposition, VIEWS['funk']) ----------
+   Digitale Funkkonsole statt Kanal-Buttonliste: ein Leitstellen-/Bordcomputer-
+   artiges Panel mit Status-Chips, großem LCD-Kanaldisplay (Schrittpfeile +
+   antippbare Nachbarkanäle statt zehn gleichwertiger Kacheln) und einem
+   echten Lautstärke-Slider. */
+.funk-console {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 28px 30px 30px;
+    background: linear-gradient(165deg, var(--bg-2), var(--bg-1));
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.03) inset;
 }
-.funk-channel-btn {
-    display: flex;
-    flex-direction: column;
+
+.funk-status-row { display: flex; justify-content: center; gap: 10px; margin-bottom: 26px; flex-wrap: wrap; }
+.funk-chip {
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 20px 10px;
-    background: var(--bg-2);
-    border: 2px solid var(--border);
-    border-radius: var(--radius-lg);
+    gap: 6px;
+    padding: 6px 13px;
+    border-radius: 999px;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.funk-chip svg { width: 14px; height: 14px; }
+.funk-chip#funk-conn-chip.connected { color: var(--green); border-color: var(--green); }
+.funk-chip-tx.active {
+    color: #fff;
+    background: var(--red);
+    border-color: var(--red);
+    animation: funkPulse 1s ease-in-out infinite;
+}
+.funk-chip-rx.active { color: var(--accent-2); border-color: var(--accent-2); background: rgba(59,130,246,0.14); }
+@keyframes funkPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.55); }
+    50% { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+}
+
+.funk-display { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.funk-step {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
     color: var(--text-1);
     cursor: pointer;
-    user-select: none;
-    font-family: inherit;
-    transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.12s ease, color 0.12s ease, transform 0.12s ease;
 }
-.funk-channel-btn svg { width: 26px; height: 26px; }
-.funk-channel-btn:hover { border-color: var(--accent-2); color: var(--text-0); }
-.funk-channel-btn:active { transform: scale(0.96); }
-.funk-channel-btn.active {
-    background: linear-gradient(160deg, var(--accent), #1d4ed8);
-    border-color: var(--accent-2);
-    color: #fff;
-    box-shadow: 0 0 0 1px var(--accent-2), 0 8px 20px rgba(59, 130, 246, 0.35);
+.funk-step svg { width: 20px; height: 20px; }
+.funk-step:hover:not(:disabled) { border-color: var(--accent-2); color: var(--text-0); }
+.funk-step:active:not(:disabled) { transform: scale(0.92); }
+.funk-step:disabled { opacity: 0.25; cursor: default; }
+
+.funk-dial-neighbor {
+    flex: 0 0 auto;
+    width: 54px;
+    height: 68px;
+    background: none;
+    border: none;
+    color: var(--text-2);
+    font-size: 19px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.15s ease, color 0.15s ease;
 }
-.funk-channel-num { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.funk-dial-neighbor:hover:not(:disabled) { opacity: 0.85; color: var(--text-0); }
+.funk-dial-neighbor:disabled, .funk-dial-neighbor.empty { visibility: hidden; }
+
+.funk-lcd {
+    flex: 0 0 auto;
+    width: 180px;
+    padding: 14px 0 16px;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #05070c, #0a0f1a);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), inset 0 2px 14px rgba(0,0,0,0.6);
+    text-align: center;
+}
+.funk-lcd-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-2);
+    margin-bottom: 2px;
+}
+.funk-lcd-value {
+    font-size: 52px;
+    font-weight: 700;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.03em;
+    color: var(--accent-2);
+    text-shadow: 0 0 18px rgba(96,165,250,0.65);
+}
+
+.funk-volume {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 30px;
+    padding: 0 6px;
+}
+.funk-volume svg { width: 20px; height: 20px; color: var(--text-2); flex: 0 0 auto; }
+.funk-volume-slider {
+    flex: 1 1 auto;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--bg-3);
+    outline: none;
+}
+.funk-volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent-2);
+    border: 3px solid var(--bg-1);
+    box-shadow: 0 0 0 1px var(--accent-2), 0 2px 6px rgba(0,0,0,0.4);
+    cursor: pointer;
+}
+.funk-volume-slider::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent-2);
+    border: 3px solid var(--bg-1);
+    box-shadow: 0 0 0 1px var(--accent-2), 0 2px 6px rgba(0,0,0,0.4);
+    cursor: pointer;
+}
+.funk-volume-value {
+    flex: 0 0 auto;
+    width: 42px;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-1);
+}
 
 .card {
     background: var(--bg-2);

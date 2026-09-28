@@ -118,17 +118,17 @@ sondern ein klassisches, an iPad/iOS angelehntes Tablet-Menü:
 5. Die frühere eigenständige "Fahrerakten"-App ist entfallen - ein
    "Fahrerakte"-Button erscheint jetzt direkt in der Zeile eines Fahrers in
    der App **Mitarbeiter** (Kategorie Mitarbeiterverwaltung).
-6. **Dock**: Die Fahrerkarte (Fahrer), der Dispositions-Dienst-Toggle
-   (Disposition, siehe unten) und die App **"Funk"** (für jeden angemeldeten
-   Mitarbeiter, siehe eigener Abschnitt "Funk" weiter unten) liegen als
-   eigene Icons in einem Dock unten auf dem Startbildschirm (analog zum
-   iPad-Dock), statt als Kategorie-App: Fahrerkarte/Dienst zeigen einen
-   Status-Punkt (grün = eingesteckt/im Dienst), Funk stattdessen den
-   aktuell eingestellten Kanal als Zahlen-Badge - alle drei sind ein
-   "aktueller Zustand, den man ständig im Blick haben will"-Schalter, kein
-   eigentlicher Arbeitsbereich.
+6. **Dock**: Die Fahrerkarte (Fahrer) und der Dispositions-Dienst-Toggle
+   (Disposition, siehe unten) liegen als eigene Icons in einem Dock unten
+   auf dem Startbildschirm (analog zum iPad-Dock), statt als Kategorie-App -
+   beides ein "bin ich gerade im Dienst"-Schalter mit Status-Punkt (grün =
+   eingesteckt/im Dienst), kein eigentlicher Arbeitsbereich.
 7. In der Kategorie **Disposition**: die App **"Live Karte"** (Berechtigung
-   `live_map_view`) - siehe eigener Abschnitt "Live-Karte" weiter unten.
+   `live_map_view`) - siehe eigener Abschnitt "Live-Karte" weiter unten -
+   sowie die App **"Funk"** (für jeden angemeldeten Mitarbeiter, siehe
+   eigener Abschnitt "Funk" weiter unten), gestaltet als digitale
+   Funkkonsole statt als Kategorie-App im Dock, da sie eine eigene
+   Bedienoberfläche mit Kanalwahl und Lautstärkeregler braucht.
 8. **Wallpaper + Logo inklusive**: Homescreen, Kategorie-Bildschirm sowie
    Lock- und Login-Screen zeigen ein Hintergrundbild
    (`html/img/wallpaper.jpg`) und das Firmenlogo (`html/img/logo.png`,
@@ -652,31 +652,45 @@ oben). Öffne den Reiter "Rollen", wähle Disponent/Geschäftsführung und hake
 
 ## Funk
 
-Das Dock-Icon **"Funk"** (unten auf dem Startbildschirm, für jeden
-angemeldeten Mitarbeiter sichtbar - kein eigenes Berechtigungs-Häkchen nötig)
-bindet an [pma-voice](https://github.com/AvarianKnight/pma-voice) an und
-lässt sich zwischen zehn Ingame-Funkkanälen umschalten:
+Die App **"Funk"** (Kategorie Disposition, für jeden angemeldeten
+Mitarbeiter sichtbar - kein eigenes Berechtigungs-Häkchen nötig) bindet an
+[pma-voice](https://github.com/AvarianKnight/pma-voice) an. Sie ist bewusst
+als digitale Funkkonsole gestaltet statt als Liste von zehn Kanal-Buttons:
 
-- **Kanäle 1000-1009 (`Config.Radio`)**: Zehn große Kacheln,
-  einfach antippen zum Wechseln. Der aktuell eingestellte Kanal ist sowohl
-  in der App selbst hervorgehoben als auch direkt als Zahlen-Badge am
-  Dock-Icon sichtbar, ohne die App extra öffnen zu müssen. Andere Kanäle
-  gewünscht: `Config.Radio.minChannel`/`maxChannel`/`defaultChannel` in
-  `config.lua` anpassen.
+- **Großes LCD-Kanaldisplay** in der Mitte zeigt den aktuell eingestellten
+  Kanal jederzeit eindeutig. Links/rechts daneben je ein antippbarer
+  Nachbarkanal sowie ein Schrittpfeil (◂/▸) - Kanalwechsel bleibt so immer
+  ein einzelner, gezielter Tap statt einer Kachelwand. Kanäle 1000-1009
+  (`Config.Radio.minChannel`/`maxChannel`), Standardkanal beim
+  Ressourcenstart `Config.Radio.defaultChannel` - alle drei in `config.lua`
+  frei anpassbar.
+- **Lautstärke-Regler**: echter Slider (kein +/- Tastenpaar) mit
+  Prozentanzeige, direkt an `pma-voice`s `setRadioVolume` gekoppelt.
+  Standardlautstärke beim Ressourcenstart `Config.Radio.defaultVolume`.
+- **Funkstatus auf einen Blick**: ein Chip zeigt, ob die Verbindung zu
+  pma-voice aktiv ist ("Verbunden"/"Nicht verbunden", wird alle paar
+  Sekunden nachgeprüft), zwei weitere blenden sich farbig ein, sobald man
+  selbst sendet ("Senden", pulsierend rot) bzw. jemand auf dem Kanal zu
+  hören ist ("Empfang", blau) - beides live über die pma-voice-eigenen
+  Events `pma-voice:radioActive`/`pma-voice:setTalkingOnRadio`, ohne
+  Namensauflösung (reine Sende-/Empfangsanzeige, kein Anrufsystem).
 - **Läuft komplett clientseitig** (`client/cl_radio.lua`, Exports
-  `setVoiceProperty('radioEnabled', true)` + `setRadioChannel`) - pma-voice
-  validiert Kanäle bereits selbst serverseitig, ein Umweg über den Server
-  wäre hier nur unnötige Latenz beim Kanalwechsel. Push-to-Talk läuft über
-  pma-voice's eigene Standardtaste, sobald ein Kanal aktiv ist - dafür baut
-  dieses Skript nichts Eigenes.
+  `setVoiceProperty('radioEnabled', true)`, `setRadioChannel`,
+  `setRadioVolume`) - pma-voice validiert Kanäle bereits selbst
+  serverseitig, ein Umweg über den Server wäre hier nur unnötige Latenz bei
+  jeder Bedienung. Push-to-Talk läuft über pma-voice's eigene
+  Standardtaste, sobald ein Kanal aktiv ist - dafür baut dieses Skript
+  nichts Eigenes.
 - **Kein Ein-/Ausschalten**: Bewusst simpler gehalten als das frühere
-  (mittlerweile entfernte) CB-Funk-Feature dieser Ressource - der Funk ist
-  ab Ressourcenstart immer auf dem Standardkanal aktiv, man wählt nur noch,
-  auf welchem der zehn Kanäle man gerade mithört.
+  (mittlerweile entfernte) CB-Funk-Feature dieser Ressource (keine Anrufe,
+  kein Funkgerät-Item) - der Funk ist ab Ressourcenstart immer auf dem
+  Standardkanal/der Standardlautstärke aktiv, man wählt nur noch, auf
+  welchem der zehn Kanäle man gerade mithört und wie laut.
 - **Fehlerdiagnose "Funk geht nicht/kein Ton":** Ist `pma-voice` nicht
   gestartet (falscher Ressourcenname, Absturz, o.ä.), meldet
   `client/cl_radio.lua` das einmalig deutlich in der Client-Konsole (F8) mit
-  dem tatsächlichen `GetResourceState('pma-voice')`-Wert. Wird die Kanalwahl
+  dem tatsächlichen `GetResourceState('pma-voice')`-Wert - im Tablet zeigt
+  der Verbunden-Chip in diesem Fall "Nicht verbunden". Wird die Kanalwahl
   von pma-voice aktiv abgelehnt (Event `pma-voice:radioChangeRejected`,
   z.B. weil die Konsolenvariable `voice_enableRadios` auf `0` steht),
   erscheint zusätzlich ein In-Game-Warnhinweis. Prüfe in dem Fall
@@ -885,7 +899,7 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `client/cl_orders.lua` - Bodenmarker an relevanten Standorten aus dem
   Reiter "Orte" (kein NPC), Be-/Entladen per Taste E mit Fortschrittsbalken.
 - `client/cl_radio.lua` - App "Funk", bindet an pma-voice an (Kanalwahl
-  1000-1009, `Config.Radio`) - siehe eigener Abschnitt "Funk" oben.
+  1000-1009 + Lautstärke, `Config.Radio`) - siehe eigener Abschnitt "Funk" oben.
 - `html/` - NUI-Frontend (Sperrbildschirm, berechtigungsbasierte Reiter -
   `NAV_ITEMS`/`buildSidebar` in `js/app.js` -, Rollenverwaltung). Der Client
   führt dabei keine Geschäftslogik aus - jede Aktion wird serverseitig neu

@@ -35,6 +35,17 @@ function nuiPost(name, payload) {
     }).catch(() => {});
 }
 
+// Wie nuiPost(), liest aber die Antwort des Client-Lua-NUI-Callbacks
+// zurück (z.B. Funk-Statusabfrage) - für einen reinen "Aktion auslösen,
+// Antwort egal"-Aufruf bleibt nuiPost() die richtige Wahl.
+function nuiCall(name, payload) {
+    return fetch(`https://${getResourceName()}/${name}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+        body: JSON.stringify(payload || {}),
+    }).then((r) => r.json()).catch(() => null);
+}
+
 // call() zeigt bei einem Fehler bewusst schon einen Toast und wirft danach,
 // damit der aufrufende Code nicht weiterläuft - das erzeugt aber eine
 // "Uncaught (in promise)"-Meldung in der Konsole, obwohl der Fehler dem
@@ -349,6 +360,9 @@ const APPS = [
     { id: 'dispatch-orders', label: 'Auftragsverwaltung', perm: 'dispatch', category: 'disposition', icon: 'clipboard' },
     { id: 'driver-messages', label: 'Nachrichten', perm: 'driver_actions', category: 'disposition', icon: 'chat' },
     { id: 'dispatch-map', label: 'Live Karte', perm: 'live_map_view', category: 'disposition', icon: 'pin' },
+    // kein `perm` = für jeden angemeldeten Mitarbeiter sichtbar (s.
+    // appHasPermission()) - der Funk ist kein Disponenten-Vorrecht.
+    { id: 'funk', label: 'Funk', perm: null, category: 'disposition', icon: 'walkie' },
     // Geschäftsführung
     { id: 'gf-locations', label: 'Orte', perm: 'locations_manage', category: 'geschaeftsfuehrung', icon: 'pin' },
     { id: 'gf-log', label: 'Protokoll', perm: 'activity_log_view', category: 'geschaeftsfuehrung', icon: 'clipboard' },
@@ -386,9 +400,17 @@ const APP_ICON_PATHS = {
     terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3"/><path d="M12 15h5"/>',
     box: '<path d="m3 8 9-5 9 5-9 5-9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
     // Handfunkgerät (Antenne, Gehäuse, Lautsprecher, Grill) - bewusst anders
-    // als das "radio"-Icon (Funkwellen-Bögen, Kategorie "Disposition"/Dock-
-    // Icon "Dispositions-Dienst"), damit beide Dock-Icons unterscheidbar sind.
+    // als das "radio"-Icon (Funkwellen-Bögen, Kategorie "Disposition"), damit
+    // die App "Funk" nicht mit dem Kategorie-Icon verwechselt wird.
     walkie: '<path d="M9 3v3"/><rect x="7" y="6" width="10" height="15" rx="2"/><circle cx="12" cy="10.5" r="1.3"/><path d="M9.5 14.5h5"/><path d="M9.5 17.5h5"/>',
+    // Icon-Set für die Funk-Konsole (VIEWS['funk']): Mikrofon (Senden),
+    // Equalizer-Balken (Empfang), Lautsprecher (Lautstärke), Chevrons
+    // (Kanal-Schrittweiten-Buttons).
+    mic: '<path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M6 11a6 6 0 0 0 12 0"/><path d="M12 17v4"/><path d="M9 21h6"/>',
+    soundwave: '<rect x="4" y="10" width="2.4" height="4" rx="1.1"/><rect x="9" y="6" width="2.4" height="12" rx="1.1"/><rect x="14" y="3" width="2.4" height="18" rx="1.1"/><rect x="19" y="8" width="2.4" height="8" rx="1.1"/>',
+    speaker: '<path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8 8 0 0 1 0 12"/>',
+    'chevron-left': '<path d="M15 5l-7 7 7 7"/>',
+    'chevron-right': '<path d="M9 5l7 7-7 7"/>',
 };
 
 function iconSvg(key) {
@@ -560,23 +582,22 @@ async function renderVehicleWidget() {
         <div class="widget-status"><span class="dot dot-${meta ? meta.dot : 'gray'}"></span>${escapeHtml(meta ? meta.label : v.status)} · Tank ${v.fuel}%</div>`;
 }
 
-// Dock (fixiert unten auf dem Home-Screen, analog iPad) - Fahrerkarte,
-// Dispositions-Dienst und Funk liegen bewusst hier statt in einer Kategorie:
-// alle drei sind ein "aktueller Zustand, den man ständig im Blick haben
-// will"-Schalter, kein eigentlicher Arbeitsbereich. Sichtbar je nach
-// Berechtigung (kein `perm` = für jeden angemeldeten Mitarbeiter, s.
-// appHasPermission()) - Fahrerkarte/Dienst zeigen einen Status-Punkt (im
-// Dienst/eingesteckt = grün), Funk stattdessen den aktuell eingestellten
-// Kanal als Badge (rein clientseitig, s. currentRadioChannel/cl_radio.lua).
+// Dock (fixiert unten auf dem Home-Screen, analog iPad) - Fahrerkarte und
+// Dispositions-Dienst liegen bewusst hier statt in einer Kategorie: beides
+// ist ein "bin ich gerade im Dienst"-Schalter, kein eigentlicher
+// Arbeitsbereich. Sichtbar je nach Berechtigung, mit Status-Punkt
+// (im Dienst/eingesteckt = grün), der kurz nach dem Rendern nachgeladen wird.
+// Funk liegt NICHT hier, sondern als normale App in der Kategorie
+// Disposition (s. APPS) - eine eigene Bedienoberfläche wie ein Funkgerät
+// gehört ins Vollbild, nicht in ein kleines Dock-Icon.
 const DOCK_ITEMS = [
     { id: 'driver-card', label: 'Fahrerkarte', perm: 'driver_actions', icon: 'idcard', statusRpc: 'driver:card', statusPath: (r) => r && r.driver && r.driver.onShift },
     { id: 'dispatch-duty', label: 'Dispositions-Dienst', perm: 'dispatch', icon: 'radio', statusRpc: 'dispatch:dutyStatus', statusPath: (r) => r && r.onDuty },
-    { id: 'funk', label: 'Funk', perm: null, icon: 'walkie', badge: true },
 ];
 
 function renderDock() {
     const perms = currentPermissions();
-    const items = DOCK_ITEMS.filter((it) => !it.perm || perms.includes(it.perm));
+    const items = DOCK_ITEMS.filter((it) => perms.includes(it.perm));
     const dock = document.getElementById('dock');
     if (!dock) return;
     if (!items.length) {
@@ -591,14 +612,11 @@ function renderDock() {
         <div class="dock-item" title="${escapeHtml(it.label)}" onclick="showView('${it.id}')">
             <div class="tile-icon">
                 ${iconSvg(it.icon)}
-                ${it.badge
-                    ? `<span class="dock-badge" id="dock-badge-${it.id}"></span>`
-                    : `<span class="dock-status-dot" id="dock-status-${it.id}"></span>`}
+                <span class="dock-status-dot" id="dock-status-${it.id}"></span>
             </div>
         </div>
     `).join('');
     refreshDockStatus();
-    updateRadioDockBadge();
 }
 
 // Best-effort - wie refreshTimeclock() bewusst über das rohe rpc() statt
@@ -606,7 +624,6 @@ function renderDock() {
 // auslöst (reiner Status-Punkt, keine kritische Aktion).
 async function refreshDockStatus() {
     for (const it of DOCK_ITEMS) {
-        if (!it.statusRpc) continue; // z.B. Funk - Status kommt nicht vom Server, s. updateRadioDockBadge()
         const dot = document.getElementById(`dock-status-${it.id}`);
         if (!dot) continue;
         const res = await rpc(it.statusRpc);
@@ -615,45 +632,37 @@ async function refreshDockStatus() {
 }
 
 // ---------------------------------------------------------
-// Funk (Dock-Item + VIEWS['funk']) - bindet an pma-voice an
-// (client/cl_radio.lua). Läuft bewusst komplett clientseitig, ohne
-// Server-RPC: pma-voice validiert Kanäle bereits selbst serverseitig, und
-// beide Seiten starten unabhängig voneinander auf demselben Standardkanal
-// (Config.Radio.defaultChannel) - ein Abgleich beim Öffnen des Tablets ist
-// daher nicht nötig, solange der Kanal ausschließlich über diese App
-// gewechselt wird. currentRadioChannel ist damit die alleinige Quelle der
-// Wahrheit für die NUI-Anzeige (Dock-Badge + aktiver Kanal in der App).
+// Funk (App in Kategorie Disposition, VIEWS['funk'] weiter unten) - bindet
+// an pma-voice an (client/cl_radio.lua). Läuft bewusst komplett
+// clientseitig, ohne Server-RPC: pma-voice validiert Kanäle/Lautstärke
+// bereits selbst serverseitig, ein Umweg über die normale RPC-Bridge
+// (rpc()/call()) wäre hier nur unnötige Latenz bei jeder Bedienung.
+// RadioState ist die alleinige Quelle der Wahrheit für die NUI-Anzeige:
+// channel/volume werden bei jeder Aktion optimistisch gesetzt, "connected"
+// kommt per radioGetStatus-Abfrage direkt von cl_radio.lua - das einzige,
+// was sich zur Laufzeit unabhängig ändern kann (z.B. wenn pma-voice neu
+// startet), tx/rx kommen als Push von dort (pma-voice:radioActive/
+// setTalkingOnRadio).
+const RadioState = { channel: 1000, volume: 100, connected: false, tx: false, rx: false };
+
 function radioChannelRange() {
     const cfg = (State.config && State.config.radioChannels) || {};
-    return {
-        min: cfg.minChannel || 1000,
-        max: cfg.maxChannel || 1009,
-        default: cfg.defaultChannel || 1000,
-    };
+    return { min: cfg.minChannel || 1000, max: cfg.maxChannel || 1009 };
 }
 
-// Vorläufig auf 1000 (der ausgelieferte Standardwert) - bis die echte
-// Server-Konfiguration da ist, s. syncRadioChannelDefaultOnce(). Danach NIE
-// mehr automatisch überschrieben (auch nicht bei erneutem Login/Unlock),
-// damit ein bereits gewählter Kanal über mehrere Tablet-Öffnungen hinweg
-// erhalten bleibt, statt bei jedem Login auf den Standardkanal
-// zurückzuspringen.
-let currentRadioChannel = 1000;
-let radioChannelDefaultSynced = false;
-function syncRadioChannelDefaultOnce() {
-    if (radioChannelDefaultSynced) return;
-    radioChannelDefaultSynced = true;
-    currentRadioChannel = radioChannelRange().default;
+// Aktualisiert nur das Sende-/Empfangs-Chip, ohne die Ansicht neu zu
+// rendern - reine Push-Events aus cl_radio.lua, wirkungslos wenn die
+// Funk-App gerade gar nicht offen ist (Element existiert dann nicht).
+function onRadioTx(talking) {
+    RadioState.tx = talking;
+    const el = document.getElementById('funk-tx-chip');
+    if (el) el.classList.toggle('active', talking);
 }
-
-function updateRadioDockBadge() {
-    const badge = document.getElementById('dock-badge-funk');
-    if (badge) badge.textContent = String(currentRadioChannel);
+function onRadioRx(talking) {
+    RadioState.rx = talking;
+    const el = document.getElementById('funk-rx-chip');
+    if (el) el.classList.toggle('active', talking);
 }
-
-// VIEWS['funk'] steht weiter unten bei den übrigen VIEW RENDERERS (nach
-// `const VIEWS = {};`), nicht hier - sonst TDZ-Fehler beim Scriptstart
-// (Zugriff auf VIEWS vor dessen Deklaration).
 
 function showHome() {
     if (activeViewInterval) { clearInterval(activeViewInterval); activeViewInterval = null; }
@@ -740,6 +749,8 @@ window.addEventListener('message', (event) => {
     if (data.type === 'open') handleOpen(data.companyName);
     else if (data.type === 'close') handleClose();
     else if (data.type === 'push') handlePush(data.event, data.data);
+    else if (data.type === 'radioTx') onRadioTx(!!data.talking);
+    else if (data.type === 'radioRx') onRadioRx(!!data.talking);
 });
 
 document.addEventListener('keydown', (e) => {
@@ -812,7 +823,6 @@ async function unlockTablet() {
         State.employee = data.employee;
         State.role = data.employee.role;
         State.config = data;
-        syncRadioChannelDefaultOnce();
         boot(data);
     } else {
         showLoginScreen();
@@ -955,7 +965,6 @@ async function refreshAfterRolesChanged() {
         State.employee = data.employee;
         State.role = data.employee.role;
         State.config = data;
-        syncRadioChannelDefaultOnce();
         document.getElementById('employee-role').textContent = data.roleLabels[data.employee.role] || data.employee.role;
         if (State.currentScreen === 'home') renderHome();
         else if (State.currentScreen === 'category') showCategory(State.currentCategory);
@@ -1033,24 +1042,82 @@ function jumpToSection(appId, key) {
 }
 
 // ---------- FUNK ----------
+// Digitale Funkkonsole statt einer Liste von Kanal-Buttons: großes
+// LCD-Kanaldisplay in der Mitte, links/rechts ein Nachbarkanal (antippbar)
+// sowie ein Schrittpfeil je Seite - Kanalwechsel bleibt so ein einzelner,
+// eindeutiger Tap, ohne dass zehn gleichwertige Kacheln nebeneinander
+// stehen. Lautstärke über einen echten Slider (kein +/- Button-Paar).
 
-VIEWS['funk'] = async (root) => {
+async function renderFunkStatus() {
+    const status = await nuiCall('radioGetStatus');
+    if (status && status.ok) {
+        RadioState.channel = status.channel;
+        RadioState.volume = status.volume;
+        RadioState.connected = status.connected;
+    }
+}
+
+function updateFunkConnChip() {
+    const chip = document.getElementById('funk-conn-chip');
+    const label = document.getElementById('funk-conn-label');
+    if (!chip || !label) return;
+    chip.classList.toggle('connected', RadioState.connected);
+    label.textContent = RadioState.connected ? 'Verbunden' : 'Nicht verbunden';
+}
+
+function renderFunkConsole(root) {
     const range = radioChannelRange();
-    const channels = [];
-    for (let ch = range.min; ch <= range.max; ch++) channels.push(ch);
+    const ch = RadioState.channel;
+    const prevCh = ch - 1 >= range.min ? ch - 1 : null;
+    const nextCh = ch + 1 <= range.max ? ch + 1 : null;
 
     root.innerHTML = `
         <h1 class="view-title">Funk</h1>
-        <p class="view-subtitle">Aktueller Kanal: <strong id="funk-active-channel">${currentRadioChannel}</strong> - zum Wechseln einfach antippen.</p>
-        <div class="funk-grid">
-            ${channels.map((ch) => `
-                <button class="funk-channel-btn ${ch === currentRadioChannel ? 'active' : ''}" id="funk-ch-${ch}" onclick="Actions.setRadioChannel(${ch})">
-                    ${iconSvg('walkie')}
-                    <span class="funk-channel-num">${ch}</span>
-                </button>
-            `).join('')}
+        <p class="view-subtitle">Digitale Funkkonsole - Kanal wählen, Lautstärke regeln.</p>
+        <div class="funk-console">
+            <div class="funk-status-row">
+                <span class="funk-chip" id="funk-conn-chip">${iconSvg('radio')}<span id="funk-conn-label">Verbindung wird geprüft…</span></span>
+                <span class="funk-chip funk-chip-tx" id="funk-tx-chip">${iconSvg('mic')}Senden</span>
+                <span class="funk-chip funk-chip-rx" id="funk-rx-chip">${iconSvg('soundwave')}Empfang</span>
+            </div>
+            <div class="funk-display">
+                <button class="funk-step" onclick="Actions.stepRadioChannel(-1)" aria-label="Kanal runter" ${prevCh === null ? 'disabled' : ''}>${iconSvg('chevron-left')}</button>
+                <button class="funk-dial-neighbor ${prevCh === null ? 'empty' : ''}" ${prevCh !== null ? `onclick="Actions.setRadioChannel(${prevCh})"` : 'disabled'}>${prevCh !== null ? prevCh : ''}</button>
+                <div class="funk-lcd">
+                    <div class="funk-lcd-label">Kanal</div>
+                    <div class="funk-lcd-value" id="funk-lcd-value">${ch}</div>
+                </div>
+                <button class="funk-dial-neighbor ${nextCh === null ? 'empty' : ''}" ${nextCh !== null ? `onclick="Actions.setRadioChannel(${nextCh})"` : 'disabled'}>${nextCh !== null ? nextCh : ''}</button>
+                <button class="funk-step" onclick="Actions.stepRadioChannel(1)" aria-label="Kanal hoch" ${nextCh === null ? 'disabled' : ''}>${iconSvg('chevron-right')}</button>
+            </div>
+            <div class="funk-volume">
+                ${iconSvg('speaker')}
+                <input type="range" class="funk-volume-slider" id="funk-volume-slider" min="0" max="100" value="${RadioState.volume}" oninput="Actions.setRadioVolume(this.value)">
+                <div class="funk-volume-value" id="funk-volume-value">${RadioState.volume}%</div>
+            </div>
         </div>
-        <p class="card-hint" style="margin-top:18px;">Sprechen läuft über die normale Funk-Taste von pma-voice, sobald ein Kanal eingestellt ist.</p>`;
+        <p class="card-hint" style="margin-top:14px;">Sprechen läuft über die normale Funk-Taste von pma-voice, sobald ein Kanal eingestellt ist.</p>`;
+
+    updateFunkConnChip();
+    const txChip = document.getElementById('funk-tx-chip');
+    const rxChip = document.getElementById('funk-rx-chip');
+    if (txChip) txChip.classList.toggle('active', RadioState.tx);
+    if (rxChip) rxChip.classList.toggle('active', RadioState.rx);
+}
+
+VIEWS['funk'] = async (root) => {
+    await renderFunkStatus();
+    renderFunkConsole(root);
+    // Nur der Verbindungsstatus wird nachgeladen (pma-voice kann zur
+    // Laufzeit neu starten) - gezielter DOM-Patch statt vollem Re-Render,
+    // damit ein laufender Slider-Drag dabei nicht unterbrochen wird.
+    activeViewInterval = setInterval(async () => {
+        const status = await nuiCall('radioGetStatus');
+        if (status && status.ok) {
+            RadioState.connected = status.connected;
+            updateFunkConnChip();
+        }
+    }, 4000);
 };
 
 // ---------- FAHRER ----------
@@ -2026,7 +2093,6 @@ Actions.login = async () => {
     State.employee = data.employee;
     State.role = data.employee.role;
     State.config = data;
-    syncRadioChannelDefaultOnce();
     hideAllScreens();
     document.getElementById('boot-screen').classList.remove('hidden');
     boot(data);
@@ -2190,14 +2256,30 @@ Actions.endShift = async () => {
 // client/cl_radio.lua weitergereicht, das ihn bei pma-voice einstellt.
 // Kein Server-Roundtrip nötig, daher auch keine Fehlerbehandlung über
 // call()/toast() - optimistisches, sofortiges UI-Update reicht (schneller
-// Kanalwechsel per Touch war explizit gewünscht).
+// Kanalwechsel per Touch war explizit gewünscht). Voller Re-Render der
+// Konsole (Nachbarkanäle/LCD-Wert ändern sich), kein Slider-Interaktion
+// also unproblematisch.
 Actions.setRadioChannel = (ch) => {
     const range = radioChannelRange();
     if (ch < range.min || ch > range.max) return;
-    currentRadioChannel = ch;
+    RadioState.channel = ch;
     nuiPost('radioSetChannel', { channel: ch });
-    updateRadioDockBadge();
-    if (State.currentView === 'funk') showView('funk');
+    if (State.currentView === 'funk') renderFunkConsole(document.getElementById('content'));
+};
+
+Actions.stepRadioChannel = (delta) => {
+    Actions.setRadioChannel(RadioState.channel + delta);
+};
+
+// Slider-Drag darf NICHT die Konsole neu rendern (würde den Slider mitten
+// im Ziehen zerstören) - nur der Prozent-Text wird direkt aktualisiert,
+// der <input type="range"> verwaltet seinen Wert selbst.
+Actions.setRadioVolume = (vol) => {
+    const v = Math.max(0, Math.min(100, Math.round(Number(vol))));
+    RadioState.volume = v;
+    nuiPost('radioSetVolume', { volume: v });
+    const label = document.getElementById('funk-volume-value');
+    if (label) label.textContent = `${v}%`;
 };
 
 Actions.markRead = async (id) => {

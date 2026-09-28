@@ -141,16 +141,17 @@ Config.LiveMap = {
 }
 
 -- Funk: Ingame-Funkkanäle, an die sich das Tablet über pma-voice anbindet
--- (client/cl_radio.lua, App "Funk" im Tablet). Läuft komplett clientseitig -
--- pma-voice validiert Kanäle bereits selbst serverseitig, ein RPC-Umweg über
--- den Server wäre hier nur unnötige Latenz beim Kanalwechsel. Andere
--- Kanalnummern gewünscht (z.B. 1-9 statt 1000-1009): einfach hier anpassen,
--- min/max/defaultChannel werden 1:1 im Tablet übernommen (Kanal-Kacheln,
--- Standardkanal beim Ressourcenstart).
+-- (client/cl_radio.lua, App "Funk" im Tablet, Kategorie Disposition). Läuft
+-- komplett clientseitig - pma-voice validiert Kanäle bereits selbst
+-- serverseitig, ein RPC-Umweg über den Server wäre hier nur unnötige Latenz
+-- beim Kanalwechsel/Lautstärkeregeln. Andere Kanalnummern gewünscht (z.B. 1-9
+-- statt 1000-1009): einfach hier anpassen, min/max/defaultChannel werden 1:1
+-- im Tablet übernommen (Kanal-Wähler, Standardkanal beim Ressourcenstart).
 Config.Radio = {
     minChannel = 1000,
     maxChannel = 1009,
     defaultChannel = 1000,
+    defaultVolume = 100, -- 0-100, s. pma-voice setRadioVolume
 }
 
 -- =========================================================
