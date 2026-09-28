@@ -119,13 +119,18 @@ end)
 -- effort, per ServerCall) an den Server, damit die Teilnehmerliste stimmt.
 -- ---------------------------------------------------------
 
+-- TEMPORÄRE DIAGNOSE-AUSGABEN (radioJoin) - s. server/sv_radio.lua,
+-- nach erfolgreicher Diagnose wieder entfernen.
 RegisterNUICallback('radioJoin', function(_, cb)
+    print('[FUNK-DEBUG] NUI-Callback radioJoin ausgelöst, rufe ServerCall(radio:join) auf')
     ServerCall('radio:join', {}, function(res)
+        print(('[FUNK-DEBUG] ServerCall(radio:join) Antwort erhalten: %s'):format(json.encode(res or 'NIL')))
         if res and res.ok then
             joined = true
             applyState()
         end
         cb(res or { ok = false })
+        print('[FUNK-DEBUG] cb() an NUI zurückgerufen')
     end)
 end)
 

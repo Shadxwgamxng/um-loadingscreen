@@ -25,6 +25,12 @@ end
 RegisterNetEvent('speditions-tablet:server:rpc', function(action, payload, reqId)
     local src = source
 
+    -- TEMPORÄRE DIAGNOSE-AUSGABE (Funk-Beitreten-Bug) - nach erfolgreicher
+    -- Diagnose wieder entfernen, s. server/sv_radio.lua.
+    if action == 'radio:join' then
+        print(('[FUNK-DEBUG] RPC-Dispatcher: radio:join-Event von source %s angekommen, reqId=%s'):format(src, reqId))
+    end
+
     local handler = Handlers[action]
     if not handler then
         Utils.DebugPrint('Unbekannte RPC-Action:', action)

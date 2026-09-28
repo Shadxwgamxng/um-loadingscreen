@@ -46,12 +46,20 @@ local function endCall(callId, reason)
     TriggerClientEvent('speditions-tablet:client:radioLeaveCall', call.targetSrc, reason)
 end
 
+-- TEMPORÄRE DIAGNOSE-AUSGABEN (radio:join) - bewusst auffällig mit
+-- [FUNK-DEBUG]-Präfix, damit sich der genaue Punkt, an dem "Funk
+-- beitreten" hängen bleibt, live in der Server-Konsole nachvollziehen
+-- lässt. Nach erfolgreicher Diagnose wieder entfernen.
 RPC.Register('radio:join', function(src)
+    print(('[FUNK-DEBUG] radio:join gestartet (source %s)'):format(src))
     local emp = Employees.RequireRole(src)
+    print(('[FUNK-DEBUG] radio:join: RequireRole ok, emp.id=%s emp.name=%s'):format(tostring(emp.id), tostring(emp.name)))
     presence[src] = presence[src] or {}
     presence[src].channel = RadioConfig.defaultChannel
     presence[src].displayName = presence[src].displayName or emp.name
+    print('[FUNK-DEBUG] radio:join: presence gesetzt, rufe Logs.Write auf')
     Logs.Write(emp.id, 'radio_join', ('%s hat den Funk betreten.'):format(emp.name))
+    print('[FUNK-DEBUG] radio:join: Logs.Write aufgerufen (non-blocking), gebe Ergebnis zurück')
     return { ok = true, displayName = presence[src].displayName }
 end)
 
