@@ -200,13 +200,15 @@ end)
 
 --- Hält ein laufendes Gespräch - beide Seiten trennen währenddessen ihre
 --- pma-voice-Verbindung zum privaten Call-Kanal (s. cl_radio.lua), damit
---- niemand ins Leere spricht/hört. Kann von beiden Seiten ausgelöst und
---- von beiden Seiten wieder fortgesetzt werden.
+--- niemand ins Leere spricht/hört. Fortsetzen darf NUR die Seite, die auch
+--- gehalten hat (call.heldBy) - die wartende Gegenseite kann das Gespräch
+--- nicht selbst wieder aufnehmen, nur auflegen.
 RPC.Register('radio:holdCall', function(src)
     local callId = srcToCall[src]
     local call = callId and calls[callId]
     if not call or call.state ~= 'active' then error('radio_no_active_call') end
     call.state = 'hold'
+    call.heldBy = src
     local otherSrc = call.callerSrc == src and call.targetSrc or call.callerSrc
     TriggerClientEvent('speditions-tablet:client:radioCallHold', otherSrc)
     return { ok = true }
@@ -216,7 +218,9 @@ RPC.Register('radio:resumeCall', function(src)
     local callId = srcToCall[src]
     local call = callId and calls[callId]
     if not call or call.state ~= 'hold' then error('radio_call_not_on_hold') end
+    if call.heldBy ~= src then error('radio_call_hold_not_yours') end
     call.state = 'active'
+    call.heldBy = nil
     local otherSrc = call.callerSrc == src and call.targetSrc or call.callerSrc
     TriggerClientEvent('speditions-tablet:client:radioCallResumed', otherSrc)
     return { ok = true }

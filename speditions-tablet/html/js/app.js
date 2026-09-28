@@ -71,6 +71,7 @@ const ERROR_MESSAGES = {
     radio_no_incoming_call: 'Es gibt gerade keinen eingehenden Anruf.',
     radio_no_active_call: 'Es gibt gerade kein laufendes Gespräch.',
     radio_call_not_on_hold: 'Das Gespräch wird gerade nicht gehalten.',
+    radio_call_hold_not_yours: 'Nur die Person, die das Gespräch gehalten hat, kann es fortsetzen.',
     radio_call_channels_full: 'Gerade laufen zu viele Gespräche gleichzeitig - versuch es kurz später nochmal.',
     insufficient_player_cash: 'Du hast nicht genug Bargeld dabei, um diesen Betrag einzuzahlen.',
     employee_inactive: 'Dieses Mitarbeiterkonto ist deaktiviert.',
@@ -753,7 +754,7 @@ function onRadioCallEnded(reason) {
 // (Actions.holdRadioCall()/resumeRadioCall() lösen das lokal direkt aus,
 // ohne auf dieses Event zu warten - s. dort).
 function onRadioCallHold() {
-    if (RadioState.call) RadioState.call.onHold = true;
+    if (RadioState.call) { RadioState.call.onHold = true; RadioState.call.heldByMe = false; }
     playRadioSound('holdingLine');
     renderFunkCallBanner();
 }
@@ -1207,12 +1208,15 @@ function renderFunkCallBanner() {
                 </div>
             </div>`;
     } else if (call.onHold) {
+        // Nur wer selbst "Halten" gedrückt hat, darf auch fortsetzen - die
+        // wartende Gegenseite bekommt keinen Fortsetzen-Button (macht sonst
+        // keinen Sinn: sie hat das Gespräch nicht pausiert).
         el.innerHTML = `
             <div class="funk-call-banner hold">
                 <span>${iconSvg('mic')}Gehalten: Gespräch mit <strong>${escapeHtml(call.otherName)}</strong></span>
                 <div class="funk-call-actions">
                     <button class="btn btn-sm btn-danger" onclick="Actions.hangupRadioCall()">Auflegen</button>
-                    <button class="btn btn-sm btn-primary" onclick="Actions.resumeRadioCall()">Fortsetzen</button>
+                    ${call.heldByMe ? '<button class="btn btn-sm btn-primary" onclick="Actions.resumeRadioCall()">Fortsetzen</button>' : ''}
                 </div>
             </div>`;
     } else {
@@ -2595,17 +2599,19 @@ Actions.hangupRadioCall = async () => {
 Actions.holdRadioCall = async () => {
     if (!RadioState.call || RadioState.call.role !== 'active' || RadioState.call.onHold) return;
     RadioState.call.onHold = true;
+    RadioState.call.heldByMe = true;
     renderFunkCallBanner();
     const res = await nuiCall('radioHoldCall');
     if (!res || !res.ok) {
         toast('Funk', translateError(res && res.error), 'error');
         RadioState.call.onHold = false;
+        RadioState.call.heldByMe = false;
         renderFunkCallBanner();
     }
 };
 
 Actions.resumeRadioCall = async () => {
-    if (!RadioState.call || !RadioState.call.onHold) return;
+    if (!RadioState.call || !RadioState.call.onHold || !RadioState.call.heldByMe) return;
     RadioState.call.onHold = false;
     renderFunkCallBanner();
     const res = await nuiCall('radioResumeCall');
