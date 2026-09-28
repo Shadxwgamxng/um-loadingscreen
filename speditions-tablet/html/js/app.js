@@ -385,6 +385,10 @@ const APP_ICON_PATHS = {
     clipboard: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="M9 11h6"/><path d="M9 15h6"/>',
     terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3"/><path d="M12 15h5"/>',
     box: '<path d="m3 8 9-5 9 5-9 5-9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
+    // Handfunkgerät (Antenne, Gehäuse, Lautsprecher, Grill) - bewusst anders
+    // als das "radio"-Icon (Funkwellen-Bögen, Kategorie "Disposition"/Dock-
+    // Icon "Dispositions-Dienst"), damit beide Dock-Icons unterscheidbar sind.
+    walkie: '<path d="M9 3v3"/><rect x="7" y="6" width="10" height="15" rx="2"/><circle cx="12" cy="10.5" r="1.3"/><path d="M9.5 14.5h5"/><path d="M9.5 17.5h5"/>',
 };
 
 function iconSvg(key) {
@@ -393,6 +397,7 @@ function iconSvg(key) {
 }
 
 function appHasPermission(item, perms) {
+    if (!item.perm) return true; // kein perm-Feld = für jeden angemeldeten Mitarbeiter sichtbar (z.B. Funk)
     return Array.isArray(item.perm) ? item.perm.some((p) => perms.includes(p)) : perms.includes(item.perm);
 }
 
@@ -555,19 +560,23 @@ async function renderVehicleWidget() {
         <div class="widget-status"><span class="dot dot-${meta ? meta.dot : 'gray'}"></span>${escapeHtml(meta ? meta.label : v.status)} · Tank ${v.fuel}%</div>`;
 }
 
-// Dock (fixiert unten auf dem Home-Screen, analog iPad) - Fahrerkarte und
-// Dispositions-Dienst liegen bewusst hier statt in einer Kategorie: beides
-// ist ein "bin ich gerade im Dienst"-Schalter, kein eigentlicher
-// Arbeitsbereich. Sichtbar je nach Berechtigung, mit Status-Punkt
-// (im Dienst/eingesteckt = grün), der kurz nach dem Rendern nachgeladen wird.
+// Dock (fixiert unten auf dem Home-Screen, analog iPad) - Fahrerkarte,
+// Dispositions-Dienst und Funk liegen bewusst hier statt in einer Kategorie:
+// alle drei sind ein "aktueller Zustand, den man ständig im Blick haben
+// will"-Schalter, kein eigentlicher Arbeitsbereich. Sichtbar je nach
+// Berechtigung (kein `perm` = für jeden angemeldeten Mitarbeiter, s.
+// appHasPermission()) - Fahrerkarte/Dienst zeigen einen Status-Punkt (im
+// Dienst/eingesteckt = grün), Funk stattdessen den aktuell eingestellten
+// Kanal als Badge (rein clientseitig, s. currentRadioChannel/cl_radio.lua).
 const DOCK_ITEMS = [
     { id: 'driver-card', label: 'Fahrerkarte', perm: 'driver_actions', icon: 'idcard', statusRpc: 'driver:card', statusPath: (r) => r && r.driver && r.driver.onShift },
     { id: 'dispatch-duty', label: 'Dispositions-Dienst', perm: 'dispatch', icon: 'radio', statusRpc: 'dispatch:dutyStatus', statusPath: (r) => r && r.onDuty },
+    { id: 'funk', label: 'Funk', perm: null, icon: 'walkie', badge: true },
 ];
 
 function renderDock() {
     const perms = currentPermissions();
-    const items = DOCK_ITEMS.filter((it) => perms.includes(it.perm));
+    const items = DOCK_ITEMS.filter((it) => !it.perm || perms.includes(it.perm));
     const dock = document.getElementById('dock');
     if (!dock) return;
     if (!items.length) {
@@ -582,11 +591,14 @@ function renderDock() {
         <div class="dock-item" title="${escapeHtml(it.label)}" onclick="showView('${it.id}')">
             <div class="tile-icon">
                 ${iconSvg(it.icon)}
-                <span class="dock-status-dot" id="dock-status-${it.id}"></span>
+                ${it.badge
+                    ? `<span class="dock-badge" id="dock-badge-${it.id}"></span>`
+                    : `<span class="dock-status-dot" id="dock-status-${it.id}"></span>`}
             </div>
         </div>
     `).join('');
     refreshDockStatus();
+    updateRadioDockBadge();
 }
 
 // Best-effort - wie refreshTimeclock() bewusst über das rohe rpc() statt
@@ -594,12 +606,54 @@ function renderDock() {
 // auslöst (reiner Status-Punkt, keine kritische Aktion).
 async function refreshDockStatus() {
     for (const it of DOCK_ITEMS) {
+        if (!it.statusRpc) continue; // z.B. Funk - Status kommt nicht vom Server, s. updateRadioDockBadge()
         const dot = document.getElementById(`dock-status-${it.id}`);
         if (!dot) continue;
         const res = await rpc(it.statusRpc);
         if (res && res.ok) dot.classList.toggle('on', !!it.statusPath(res.result));
     }
 }
+
+// ---------------------------------------------------------
+// Funk (Dock-Item + VIEWS['funk']) - bindet an pma-voice an
+// (client/cl_radio.lua). Läuft bewusst komplett clientseitig, ohne
+// Server-RPC: pma-voice validiert Kanäle bereits selbst serverseitig, und
+// beide Seiten starten unabhängig voneinander auf demselben Standardkanal
+// (Config.Radio.defaultChannel) - ein Abgleich beim Öffnen des Tablets ist
+// daher nicht nötig, solange der Kanal ausschließlich über diese App
+// gewechselt wird. currentRadioChannel ist damit die alleinige Quelle der
+// Wahrheit für die NUI-Anzeige (Dock-Badge + aktiver Kanal in der App).
+function radioChannelRange() {
+    const cfg = (State.config && State.config.radioChannels) || {};
+    return {
+        min: cfg.minChannel || 1000,
+        max: cfg.maxChannel || 1009,
+        default: cfg.defaultChannel || 1000,
+    };
+}
+
+// Vorläufig auf 1000 (der ausgelieferte Standardwert) - bis die echte
+// Server-Konfiguration da ist, s. syncRadioChannelDefaultOnce(). Danach NIE
+// mehr automatisch überschrieben (auch nicht bei erneutem Login/Unlock),
+// damit ein bereits gewählter Kanal über mehrere Tablet-Öffnungen hinweg
+// erhalten bleibt, statt bei jedem Login auf den Standardkanal
+// zurückzuspringen.
+let currentRadioChannel = 1000;
+let radioChannelDefaultSynced = false;
+function syncRadioChannelDefaultOnce() {
+    if (radioChannelDefaultSynced) return;
+    radioChannelDefaultSynced = true;
+    currentRadioChannel = radioChannelRange().default;
+}
+
+function updateRadioDockBadge() {
+    const badge = document.getElementById('dock-badge-funk');
+    if (badge) badge.textContent = String(currentRadioChannel);
+}
+
+// VIEWS['funk'] steht weiter unten bei den übrigen VIEW RENDERERS (nach
+// `const VIEWS = {};`), nicht hier - sonst TDZ-Fehler beim Scriptstart
+// (Zugriff auf VIEWS vor dessen Deklaration).
 
 function showHome() {
     if (activeViewInterval) { clearInterval(activeViewInterval); activeViewInterval = null; }
@@ -758,6 +812,7 @@ async function unlockTablet() {
         State.employee = data.employee;
         State.role = data.employee.role;
         State.config = data;
+        syncRadioChannelDefaultOnce();
         boot(data);
     } else {
         showLoginScreen();
@@ -900,6 +955,7 @@ async function refreshAfterRolesChanged() {
         State.employee = data.employee;
         State.role = data.employee.role;
         State.config = data;
+        syncRadioChannelDefaultOnce();
         document.getElementById('employee-role').textContent = data.roleLabels[data.employee.role] || data.employee.role;
         if (State.currentScreen === 'home') renderHome();
         else if (State.currentScreen === 'category') showCategory(State.currentCategory);
@@ -975,6 +1031,27 @@ function jumpToSection(appId, key) {
     sectionedAppActiveKey[appId] = key;
     showView(appId);
 }
+
+// ---------- FUNK ----------
+
+VIEWS['funk'] = async (root) => {
+    const range = radioChannelRange();
+    const channels = [];
+    for (let ch = range.min; ch <= range.max; ch++) channels.push(ch);
+
+    root.innerHTML = `
+        <h1 class="view-title">Funk</h1>
+        <p class="view-subtitle">Aktueller Kanal: <strong id="funk-active-channel">${currentRadioChannel}</strong> - zum Wechseln einfach antippen.</p>
+        <div class="funk-grid">
+            ${channels.map((ch) => `
+                <button class="funk-channel-btn ${ch === currentRadioChannel ? 'active' : ''}" id="funk-ch-${ch}" onclick="Actions.setRadioChannel(${ch})">
+                    ${iconSvg('walkie')}
+                    <span class="funk-channel-num">${ch}</span>
+                </button>
+            `).join('')}
+        </div>
+        <p class="card-hint" style="margin-top:18px;">Sprechen läuft über die normale Funk-Taste von pma-voice, sobald ein Kanal eingestellt ist.</p>`;
+};
 
 // ---------- FAHRER ----------
 
@@ -1949,6 +2026,7 @@ Actions.login = async () => {
     State.employee = data.employee;
     State.role = data.employee.role;
     State.config = data;
+    syncRadioChannelDefaultOnce();
     hideAllScreens();
     document.getElementById('boot-screen').classList.remove('hidden');
     boot(data);
@@ -2106,6 +2184,20 @@ Actions.endShift = async () => {
     await call('driver:endShift');
     toast('Fahrerkarte abgezogen', 'Deine Fahrt wurde beendet.', 'info');
     showView('driver-card');
+};
+
+// Rein clientseitig (nuiPost statt call()/rpc()) - der Kanal wird direkt an
+// client/cl_radio.lua weitergereicht, das ihn bei pma-voice einstellt.
+// Kein Server-Roundtrip nötig, daher auch keine Fehlerbehandlung über
+// call()/toast() - optimistisches, sofortiges UI-Update reicht (schneller
+// Kanalwechsel per Touch war explizit gewünscht).
+Actions.setRadioChannel = (ch) => {
+    const range = radioChannelRange();
+    if (ch < range.min || ch > range.max) return;
+    currentRadioChannel = ch;
+    nuiPost('radioSetChannel', { channel: ch });
+    updateRadioDockBadge();
+    if (State.currentView === 'funk') showView('funk');
 };
 
 Actions.markRead = async (id) => {
