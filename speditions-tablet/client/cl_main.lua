@@ -42,6 +42,22 @@ local function removeTabletProp()
     tabletPropEntity = nil
 end
 
+--- Spielt die konfigurierte Emote ab (siehe Config.TabletEmote in config.lua)
+--- - führt exakt den Befehl aus, der auch im Chat funktionieren würde,
+--- über ein separat installiertes Emote-Skript. Existiert der Befehl nicht
+--- (kein Emote-Skript installiert/falscher Name), passiert nichts.
+local function playTabletEmote()
+    local cfg = Config.TabletEmote
+    if not (cfg and cfg.enabled and cfg.command) then return end
+    ExecuteCommand(cfg.command)
+end
+
+local function stopTabletEmote()
+    local cfg = Config.TabletEmote
+    if not (cfg and cfg.enabled and cfg.stopCommand) then return end
+    ExecuteCommand(cfg.stopCommand)
+end
+
 --- Ruft eine RPC-Action serverseitig auf - identischer Weg wie die NUI, aber
 --- direkt aus Client-Lua nutzbar (z.B. für den Lenkzeit-Tracker, der auch
 --- laufen muss, wenn das Tablet gar nicht geöffnet ist).
@@ -59,6 +75,7 @@ local function openTablet()
     SetNuiFocus(true, true)
     SendNUIMessage({ type = 'open', companyName = Config.CompanyName })
     attachTabletProp()
+    playTabletEmote()
 end
 
 local function closeTablet()
@@ -67,6 +84,7 @@ local function closeTablet()
     SetNuiFocus(false, false)
     SendNUIMessage({ type = 'close' })
     removeTabletProp()
+    stopTabletEmote()
 end
 
 local itemRequired = Config.RequireItem and Config.RequireItem.enabled
@@ -133,6 +151,7 @@ AddEventHandler('onResourceStop', function(resourceName)
     if resourceName ~= GetCurrentResourceName() then return end
     SetNuiFocus(false, false)
     removeTabletProp()
+    if tabletOpen then stopTabletEmote() end
 end)
 
 -- ---------------------------------------------------------

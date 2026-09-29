@@ -77,10 +77,23 @@ oder aktualisiert Passwort/Rolle, falls der Login-Name bereits existiert.
   ```lua
   exports['speditions-tablet']:OpenTablet()
   ```
-- Solange das Tablet geöffnet ist, hält der Spieler es sichtbar in der Hand
-  (`Config.TabletProp`, Standard-Modell `prop_cs_tablet`) - rein optisch,
-  ohne Bewegungseinschränkung. Modell/Position/Rotation sind über
-  `Config.TabletProp` in `config.lua` anpassbar.
+- Beim Öffnen spielt der Charakter die konfigurierte Emote ab
+  (`Config.TabletEmote`, Standard `/e Tablet2`) - er interagiert damit
+  sichtbar mit dem Tablet, statt es nur unbewegt zu halten. Setzt ein
+  separat installiertes Emote-Skript voraus, das den `/e <name>`-Befehl
+  registriert (z.B. rpemotes oder ein vergleichbares Emote-Menü) - dieses
+  Resource selbst bringt keine Animationen mit; ist keins installiert oder
+  der Name falsch, passiert einfach nichts (kein Fehler). Beim Schließen
+  wird `Config.TabletEmote.stopCommand` ausgeführt (Standard `/e c`, bei
+  vielen Emote-Skripten der Cancel-Befehl), um die Emote sauber zu
+  beenden - je nach installiertem Skript in `config.lua` anpassen.
+- Zusätzlich (bzw. alternativ, falls die Emote kein eigenes Prop mitbringt)
+  kann der Spieler das Tablet sichtbar in der Hand halten
+  (`Config.TabletProp`, Standard-Modell `prop_cs_tablet`, standardmäßig
+  deaktiviert solange `Config.TabletEmote.enabled = true` ist, sonst gäbe
+  es zwei Tablets gleichzeitig) - rein optisch, ohne Bewegungseinschränkung.
+  Modell/Position/Rotation sind über `Config.TabletProp` in `config.lua`
+  anpassbar.
 - Die Oberfläche verwendet bewusst **keine Emojis** - App-Icons,
   Warnhinweise (z.B. Gefahrgut) und Statusanzeigen (z.B. Fahrerberechtigungen)
   kommen ausschließlich über Text, Farbe und einfache Liniensymbole (kein
@@ -968,6 +981,8 @@ Alle Stellschrauben befinden sich in `config.lua`:
   `Config.DefaultRolePermissions` - nur einmalige Erstbefüllung der drei
   mitgelieferten Basisrollen, danach ist `st_roles` die Quelle der Wahrheit
 - `Config.RequireItem` - Tablet nur per Item öffnen
+- `Config.TabletEmote` - Emote beim Öffnen/Schließen (`/e Tablet2` per Standard, benötigt ein separat installiertes Emote-Skript)
+- `Config.TabletProp` - statisches Tablet-Prop in der Hand (Alternative/Ergänzung zur Emote, siehe "Bedienung" oben)
 - `Config.MoneyBridge` - Framework-Anbindung für Bargeld bei Aus-/Einzahlung
 - `Config.NotificationSound` - Klingelton bei nativen In-Game-Hinweisen
 - `Config.DefaultHourlyWage` - Stundenlohn je Rolle, nur einmalige Erstbefüllung von `st_wage_rates`

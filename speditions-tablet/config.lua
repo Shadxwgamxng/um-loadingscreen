@@ -14,13 +14,37 @@ Config.CompanyName = 'Baltic Freight Spedition GmbH'
 Config.OpenCommand = 'tablet'
 Config.OpenKey = 'F6' -- Keybind wird clientseitig via RegisterCommand + Keymapping gesetzt
 
+-- Emote, die beim Öffnen/Schließen des Tablets abgespielt wird, damit der
+-- Charakter sichtbar mit dem Tablet interagiert (z.B. tippt), statt es nur
+-- unbewegt in der Hand zu halten. Setzt ein separat installiertes
+-- Emote-Skript voraus, das den `/e <name>`-Befehl registriert (z.B.
+-- rpemotes oder ein vergleichbares Emote-Menü) - dieses Resource bringt
+-- selbst keine Animationen mit. Ist Config.TabletEmote.enabled = true,
+-- ersetzt die Emote das statische Prop unten (Config.TabletProp), da die
+-- meisten "Tablet"-Emotes bereits ihr eigenes Tablet-Prop mitbringen -
+-- sonst gäbe es zwei Tablets gleichzeitig in der Hand.
+-- `command` wird 1:1 wie im Chat per ExecuteCommand ausgeführt (ohne
+-- führenden Slash). `stopCommand` wird beim Schließen ausgeführt, um die
+-- Emote sauber zu beenden - 'e c' ist bei vielen `/e`-Emote-Skripten der
+-- Cancel-Befehl, ggf. an dein installiertes Skript anpassen. Ist weder das
+-- passende Skript installiert noch der Emote-/Stop-Name korrekt, passiert
+-- einfach nichts (kein Fehler) - Config.TabletProp bleibt dann die
+-- einzige sichtbare Reaktion, sofern dort enabled = true gesetzt ist.
+Config.TabletEmote = {
+    enabled = true,
+    command = 'e Tablet2',
+    stopCommand = 'e c',
+}
+
 -- Prop, das dem Spieler in die Hand gelegt wird, solange das Tablet
 -- geöffnet ist (client/cl_main.lua) - rein optisch, ohne Bewegungs-
 -- einschränkung. offset/rotation ggf. nachjustieren (X = seitlich,
 -- Y = vor/zurück, Z = hoch/runter, rotation in Grad); bone ist der
--- Ped-Knochen, an den angehängt wird (28422 = SKEL_L_Hand).
+-- Ped-Knochen, an den angehängt wird (28422 = SKEL_L_Hand). Standardmäßig
+-- deaktiviert, solange Config.TabletEmote.enabled = true ist (siehe oben) -
+-- bringt deine "Tablet2"-Emote kein eigenes Prop mit, hier auf true setzen.
 Config.TabletProp = {
-    enabled = true,
+    enabled = false,
     model = 'prop_cs_tablet',
     bone = 28422,
     offset = { x = 0.03, y = 0.02, z = -0.02 },
