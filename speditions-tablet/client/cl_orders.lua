@@ -99,17 +99,38 @@ local function drawProgressBar(label, pct, secondsLeft)
     EndTextCommandDisplayText(x, y - 0.012)
 end
 
+--- Baut die Nutzlast, die bei jedem 'speditions-tablet:client:loadUnload*'-
+--- Event mitgeschickt wird - externe Skripte (z.B. ein Gabelstapler-Script,
+--- das dort eine Palette + Stapler spawnt) bekommen damit alles, was sie für
+--- eine positions-/richtungsgenaue Platzierung brauchen, ohne selbst gegen
+--- st_locations/die Auftragstabellen fragen zu müssen.
+local function buildLoadUnloadPayload(order, phase, locationName, markerCoords, heading)
+    return {
+        orderId = order.id,
+        phase = phase, -- 'pickup' (Beladen am Startort) oder 'dropoff' (Entladen am Zielort)
+        locationName = locationName,
+        coords = markerCoords, -- vector3, exakt die Position des Bodenmarkers/der Interaktion
+        heading = heading or 0.0,
+    }
+end
+
 --- Der eigentliche Be-/Entlade-Ablauf (läuft geschützt in Orders.startLoadUnload
 --- per pcall, damit ein unerwarteter Fehler NIE den Fahrer dauerhaft in
 --- "busy" hängen lässt).
-local function runLoadUnload(order, phase, markerCoords)
+local function runLoadUnload(order, phase, locationName, markerCoords, heading)
     local playerPed = PlayerPedId()
     local duration = (Config.LoadUnloadSeconds or 150) * 1000
     local startedAt = GetGameTimer()
     local cancelled = false
+    local payload = buildLoadUnloadPayload(order, phase, locationName, markerCoords, heading)
 
     ClearPedTasksImmediately(playerPed)
     TaskStartScenarioInPlace(playerPed, 'WORLD_HUMAN_CLIPBOARD', 0, true)
+
+    -- Hook für externe Skripte (z.B. Gabelstapler-Script): genau in diesem
+    -- Moment beginnt das Be-/Entladen sichtbar am Bodenmarker - hier ist der
+    -- richtige Zeitpunkt, um dort eine Palette + Gabelstapler zu spawnen.
+    TriggerEvent('speditions-tablet:client:loadUnloadStart', payload)
 
     while GetGameTimer() - startedAt < duration do
         Wait(0)
@@ -138,9 +159,18 @@ local function runLoadUnload(order, phase, markerCoords)
     ClearPedTasksImmediately(playerPed)
 
     if cancelled then
+        -- Hook für externe Skripte: Be-/Entladen wurde abgebrochen - hier
+        -- sollte das Gabelstapler-Script die gespawnte Palette/den Stapler
+        -- wieder entfernen.
+        TriggerEvent('speditions-tablet:client:loadUnloadCancelled', payload)
         TriggerEvent('speditions-tablet:client:notify', 'Vorgang abgebrochen - zu weit vom Standort entfernt.', 'error')
         return
     end
+
+    -- Hook für externe Skripte: Be-/Entladen wurde regulär beendet (Balken
+    -- voll) - Zeitpunkt, um die gespawnte Palette/den Stapler wieder
+    -- aufzuräumen.
+    TriggerEvent('speditions-tablet:client:loadUnloadFinished', payload)
 
     if phase == 'pickup' then
         -- "beladen" ist der durchgehende Status waehrend der Fahrt zum
@@ -165,15 +195,24 @@ end
 --- freigegeben wird - auch wenn irgendwo ein unerwarteter Fehler auftritt
 --- (sonst würde der Fahrer bei einem Bug dauerhaft "hängen" bleiben, ohne
 --- dass je wieder ein Marker/Fortschrittsbalken erscheint).
-local function startLoadUnload(order, phase, markerCoords)
+local function startLoadUnload(order, phase, locationName, markerCoords, heading)
     busy = true
-    local ok, err = pcall(runLoadUnload, order, phase, markerCoords)
+    local ok, err = pcall(runLoadUnload, order, phase, locationName, markerCoords, heading)
     busy = false
     if not ok then
         print(('^1[speditions-tablet]^7 Fehler beim Be-/Entladen: %s'):format(tostring(err)))
         TriggerEvent('speditions-tablet:client:notify', 'Beim Be-/Entladen ist ein Fehler aufgetreten - bitte erneut versuchen.', 'error')
+        -- Hook für externe Skripte: auch bei einem unerwarteten Fehler muss
+        -- eine ggf. schon gespawnte Palette/der Stapler wieder aufgeräumt
+        -- werden - sonst bleiben sie dauerhaft an der Position stehen.
+        TriggerEvent('speditions-tablet:client:loadUnloadCancelled', buildLoadUnloadPayload(order, phase, locationName, markerCoords, heading))
     end
 end
+
+--- Für externe Skripte, die den Zustand statt (oder zusätzlich zu) der
+--- Events abfragen wollen - z.B. beim eigenen Ressourcen(neu)start, um zu
+--- wissen, ob gerade ein Be-/Entladen läuft.
+exports('IsLoadUnloadActive', function() return busy end)
 
 CreateThread(function()
     while true do
@@ -223,7 +262,7 @@ CreateThread(function()
                             EndTextCommandDisplayHelp(0, false, true, -1)
 
                             if IsControlJustPressed(0, INTERACT_CONTROL) then
-                                startLoadUnload(order, phase, markerCoords)
+                                startLoadUnload(order, phase, loc.name, markerCoords, loc.coords.w)
                             end
                         end
                     end

@@ -605,6 +605,50 @@ konkrete Meldung an, statt nur des rohen Fehlercodes.
   min); der Auftragsstatus wechselt danach automatisch weiter (s.o.).
   Entfernt sich der Fahrer während des Vorgangs mehr als 5m vom Marker,
   bricht der Vorgang ab.
+- **Integration für externe Skripte (z.B. ein Gabelstapler-Script)**: Der
+  Be-/Entlade-Ablauf (`client/cl_orders.lua`) feuert bei jedem Schritt ein
+  Client-Event, in das ein anderes Resource sich per `AddEventHandler`
+  einklinken kann - z.B. um genau am Bodenmarker eine Palette + einen
+  Gabelstapler zu spawnen und beim Ende wieder zu entfernen:
+  - `speditions-tablet:client:loadUnloadStart` - Taste E wurde gedrückt,
+    der Fortschrittsbalken startet gerade
+  - `speditions-tablet:client:loadUnloadFinished` - Balken ist voll
+    gelaufen, der Vorgang war erfolgreich
+  - `speditions-tablet:client:loadUnloadCancelled` - abgebrochen (zu weit
+    weggelaufen, oder ein unerwarteter Fehler)
+
+  Alle drei liefern dieselbe Tabelle als Argument:
+  ```lua
+  {
+      orderId = 123,
+      phase = 'pickup', -- oder 'dropoff'
+      locationName = 'Lagerhalle Nord', -- Name aus dem Reiter "Orte"
+      coords = vector3(x, y, z), -- exakt die Position des Bodenmarkers/der Interaktion
+      heading = 180.0, -- hinterlegter Heading-Wert des Orts
+  }
+  ```
+  Beispiel im Gabelstapler-Script:
+  ```lua
+  AddEventHandler('speditions-tablet:client:loadUnloadStart', function(data)
+      -- Palette + Stapler bei data.coords/data.heading spawnen
+  end)
+  AddEventHandler('speditions-tablet:client:loadUnloadFinished', function(data)
+      -- wieder aufräumen
+  end)
+  AddEventHandler('speditions-tablet:client:loadUnloadCancelled', function(data)
+      -- ebenfalls aufräumen (Vorgang kam nicht regulär zum Ende)
+  end)
+  ```
+  Zusätzlich lässt sich der aktuelle Zustand abfragen, z.B. beim eigenen
+  Ressourcenstart:
+  ```lua
+  local active = exports['speditions-tablet']:IsLoadUnloadActive()
+  ```
+  `coords`/`heading` stammen 1:1 aus dem im Reiter "Orte" hinterlegten
+  Standort (`st_locations`, dort per "Aktuelle Position übernehmen" oder
+  manuell gepflegt) - das ist exakt die Stelle, an der auch der blaue
+  Bodenmarker/die "E"-Interaktion erscheint, also der richtige Punkt für
+  die Platzierung von Palette und Stapler.
 - **Fahrerkarte einstecken vor Auftragsannahme, inkl. Fahrzeug-/Anhänger-
   Selbstauswahl**: Ein Fahrer muss im Reiter "Fahrerkarte" zuerst seine Fahrt
   starten ("Fahrerkarte einstecken"), bevor er einen Auftrag annehmen kann
