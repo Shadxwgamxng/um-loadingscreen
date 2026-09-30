@@ -1,0 +1,31 @@
+Funk: eigene Sounds ablegen
+============================
+
+Diese Ressource liefert die Funk-Sounds mittlerweile mit aus - die fünf
+Dateien liegen bereits in diesem Ordner (html/sounds/):
+
+    channel_switch.mp3   - kurzer Ton beim Kanalwechsel
+    ptt_end.mp3           - kurzer Ton, wenn du aufhörst zu senden
+    call_number.mp3        - Rufton, während du jemanden anrufst (bricht ab,
+                            sobald die Person abnimmt)
+    incoming_call.mp3      - Klingelton bei eingehendem Anruf (läuft in
+                            einer Schleife, bricht ab sobald du annimmst
+                            oder ablehnst)
+    holding_line.mp3       - läuft in einer Schleife, solange ein Gespräch
+                            gehalten wird (bricht ab, sobald es fortgesetzt
+                            wird)
+
+Eigene Sounds gewünscht? Einfach die jeweilige Datei mit deiner eigenen
+gleichnamigen Datei überschreiben - beim nächsten Öffnen des Tablets wird
+automatisch die neue Version geladen. Andere Dateiformate (z.B. .m4a,
+.ogg, .wav) funktionieren ebenso, wenn du zusätzlich die src-Pfade in
+html/index.html (die fünf <audio>-Tags am Ende der Datei) entsprechend
+anpasst.
+
+Über den Schalter "Sounds abspielen" im Einstellungsbereich der Funk-App
+lassen sich alle fünf jederzeit stummschalten, ohne die Dateien zu
+entfernen. Löschst du eine Datei komplett, bleibt die App voll bedienbar -
+der zugehörige Sound spielt dann einfach nicht ab (play().catch() fängt
+das stillschweigend ab).
+
+Diese Datei selbst hat keine Funktion.

@@ -1,0 +1,291 @@
+-- =========================================================
+-- Client: Be-/Entladepunkte
+--
+-- An jedem relevanten Standort (Beladepunkt eines "in Anfahrt"-Auftrags,
+-- oder Zielort eines "beladen"-Auftrags) markiert ein Bodenkreis die
+-- Interaktionsstelle - Taste E dort startet das Be-/Entladen (Zeitfenster +
+-- Fortschrittsbalken, siehe Config.LoadUnloadSeconds). Danach läuft der
+-- Auftragsstatus automatisch weiter (anfahrt -> beladen, bzw. beladen ->
+-- entladen -> abgeschlossen) - keine manuellen Tablet-Buttons mehr dafür
+-- nötig. Bewusst KEIN NPC (Pedestrian-KI war zu unzuverlässig/buggy) -
+-- stattdessen ein reiner Bodenmarker ohne Entity.
+-- =========================================================
+
+local INTERACT_CONTROL = 51 -- INPUT_CONTEXT ("E")
+local MARKER_TYPE = 1 -- Cylinder
+local CANCEL_GRACE_MS = 1500 -- Schonfrist, bevor die Abstandsprüfung greift (Szenario-Einstiegsanimation kann den Ped kurz verschieben)
+
+local myHasDriverActions = false
+local myOrders = {}
+local busy = false
+local locations = {}
+local locationsLoaded = false
+
+local function inTable(list, value)
+    if type(list) ~= 'table' then return false end
+    for _, v in ipairs(list) do
+        if v == value then return true end
+    end
+    return false
+end
+
+local function refreshMyOrders()
+    ServerCall('driver:myOrders', nil, function(res)
+        myOrders = (res and res.ok and res.result and res.result.orders) or {}
+    end)
+end
+
+--- Orte kommen seit der Umstellung auf st_locations (Reiter "Orte") nicht
+--- mehr aus der statischen Config.Locations, sondern werden vom Server
+--- geladen und bei Änderungen (Ort angelegt/bearbeitet/gelöscht) automatisch
+--- aktualisiert (siehe 'locations:changed'-Broadcast unten).
+--- WICHTIG: 'locations:list' verlangt eine aktive Tablet-Anmeldung
+--- (Employees.RequireRole) - beim allerersten Aufruf direkt nach
+--- Ressourcenstart ist noch niemand angemeldet, der Aufruf schlägt also so
+--- gut wie immer fehl. locationsLoaded sorgt dafür, dass der Poll-Loop
+--- unten es alle 3s erneut versucht, bis es einmal geklappt hat - sonst
+--- blieb `locations` für die gesamte Spielsitzung leer und damit jeder
+--- Bodenmarker/Wegpunkt komplett aus, sobald der Fahrer sich erst NACH
+--- diesem einen fehlgeschlagenen Versuch einloggt (der Normalfall).
+local function refreshLocations()
+    ServerCall('locations:list', nil, function(res)
+        if res and res.ok and res.result then
+            locations = res.result.locations or {}
+            locationsLoaded = true
+        end
+    end)
+end
+
+CreateThread(function()
+    refreshLocations()
+end)
+
+RegisterNetEvent('speditions-tablet:client:push', function(event, _data)
+    if event == 'locations:changed' then
+        refreshLocations()
+    end
+end)
+
+--- Baut einmal pro Marker-Tick eine Standortname -> {Auftrag, Phase}-Tabelle
+--- aus myOrders. Der Marker-Loop unten prüft das pro Ressourcen-Tick gegen
+--- JEDEN Ort (bei GF-weise frei erweiterbarer Ortsliste potenziell viele) -
+--- eine vorab gebaute Lookup-Tabelle macht das zu einem O(1)-Zugriff pro Ort
+--- statt bei jedem Ort erneut die komplette (kurze, aber trotzdem bei jedem
+--- der ggf. vielen Orte wiederholte) Auftragsliste zu durchsuchen.
+local function buildRelevantOrderIndex()
+    local index = {}
+    for _, o in ipairs(myOrders) do
+        if o.status == 'anfahrt' then
+            index[o.start_location] = { o, 'pickup' }
+        elseif o.status == 'beladen' then
+            index[o.end_location] = { o, 'dropoff' }
+        end
+    end
+    return index
+end
+
+local function drawProgressBar(label, pct, secondsLeft)
+    local x, y, w, h = 0.5, 0.88, 0.3, 0.045
+    DrawRect(x, y, w, h, 0, 0, 0, 180)
+    DrawRect(x - (w / 2) + (w * (pct / 100) / 2), y, w * (pct / 100), h, 59, 130, 246, 230)
+
+    SetTextFont(4)
+    SetTextScale(0.4, 0.4)
+    SetTextColour(255, 255, 255, 255)
+    SetTextCentre(true)
+    SetTextOutline()
+    BeginTextCommandDisplayText('STRING')
+    AddTextComponentSubstringPlayerName(('%s (%d%%) - noch %ds'):format(label, pct, secondsLeft))
+    EndTextCommandDisplayText(x, y - 0.012)
+end
+
+--- Punkt seitlich (rechtwinklig zum Heading) von `coords` versetzt, in Metern
+--- über Config.TabletForkliftOffset - Standardformel für "Punkt relativ zu
+--- Heading" in FiveM (rad = heading in Radiant, Blickrichtung = (-sin, cos)),
+--- hier um 90° gedreht für die Seitwärtsrichtung statt vorwärts.
+local function sideOffsetCoords(coords, heading, distance)
+    local rad = math.rad((heading or 0.0) + 90.0)
+    return vector3(
+        coords.x + distance * -math.sin(rad),
+        coords.y + distance * math.cos(rad),
+        coords.z
+    )
+end
+
+--- Baut die Nutzlast, die bei jedem 'speditions-tablet:client:loadUnload*'-
+--- Event mitgeschickt wird - externe Skripte (z.B. ein Gabelstapler-Script,
+--- das dort eine Palette + Stapler spawnt) bekommen damit alles, was sie für
+--- eine positions-/richtungsgenaue Platzierung brauchen, ohne selbst gegen
+--- st_locations/die Auftragstabellen fragen zu müssen.
+local function buildLoadUnloadPayload(order, phase, locationName, markerCoords, heading)
+    return {
+        orderId = order.id,
+        phase = phase, -- 'pickup' (Beladen am Startort) oder 'dropoff' (Entladen am Zielort)
+        locationName = locationName,
+        coords = markerCoords, -- vector3, exakt die Position des Bodenmarkers/der Interaktion (für die Palette)
+        heading = heading or 0.0,
+        -- Um Config.TabletForkliftOffset (Standard 2m) seitlich versetzter Punkt
+        -- für den Stapler selbst, damit er nicht mit Fahrer/Palette kollidiert.
+        forkliftCoords = sideOffsetCoords(markerCoords, heading, Config.TabletForkliftOffset or 2.0),
+    }
+end
+
+--- Der eigentliche Be-/Entlade-Ablauf (läuft geschützt in Orders.startLoadUnload
+--- per pcall, damit ein unerwarteter Fehler NIE den Fahrer dauerhaft in
+--- "busy" hängen lässt).
+local function runLoadUnload(order, phase, locationName, markerCoords, heading)
+    local playerPed = PlayerPedId()
+    local duration = (Config.LoadUnloadSeconds or 150) * 1000
+    local startedAt = GetGameTimer()
+    local cancelled = false
+    local payload = buildLoadUnloadPayload(order, phase, locationName, markerCoords, heading)
+
+    ClearPedTasksImmediately(playerPed)
+    TaskStartScenarioInPlace(playerPed, 'WORLD_HUMAN_CLIPBOARD', 0, true)
+
+    -- Hook für externe Skripte (z.B. Gabelstapler-Script): genau in diesem
+    -- Moment beginnt das Be-/Entladen sichtbar am Bodenmarker - hier ist der
+    -- richtige Zeitpunkt, um dort eine Palette + Gabelstapler zu spawnen.
+    TriggerEvent('speditions-tablet:client:loadUnloadStart', payload)
+
+    while GetGameTimer() - startedAt < duration do
+        Wait(0)
+        DisableControlAction(0, 30, true) -- Bewegen
+        DisableControlAction(0, 31, true)
+        DisableControlAction(0, 21, true) -- Sprinten
+        DisableControlAction(0, 22, true) -- Springen
+        DisableControlAction(0, 23, true) -- Fahrzeug betreten
+        DisableControlAction(0, 75, true) -- Fahrzeug verlassen
+
+        local elapsed = GetGameTimer() - startedAt
+
+        -- Erst nach der Schonfrist prüfen, ob der Spieler zu weit weg ist -
+        -- die Szenario-Einstiegsanimation kann den Ped im allerersten Moment
+        -- kurz verschieben, was sonst einen sofortigen Fehlabbruch auslöst.
+        if elapsed > CANCEL_GRACE_MS and #(GetEntityCoords(playerPed) - markerCoords) > 5.0 then
+            cancelled = true
+            break
+        end
+
+        local pct = math.floor((elapsed / duration) * 100)
+        local secondsLeft = math.max(0, math.ceil((duration - elapsed) / 1000))
+        drawProgressBar(phase == 'pickup' and 'Wird beladen' or 'Wird entladen', pct, secondsLeft)
+    end
+
+    ClearPedTasksImmediately(playerPed)
+
+    if cancelled then
+        -- Hook für externe Skripte: Be-/Entladen wurde abgebrochen - hier
+        -- sollte das Gabelstapler-Script die gespawnte Palette/den Stapler
+        -- wieder entfernen.
+        TriggerEvent('speditions-tablet:client:loadUnloadCancelled', payload)
+        TriggerEvent('speditions-tablet:client:notify', 'Vorgang abgebrochen - zu weit vom Standort entfernt.', 'error')
+        return
+    end
+
+    -- Hook für externe Skripte: Be-/Entladen wurde regulär beendet (Balken
+    -- voll) - Zeitpunkt, um die gespawnte Palette/den Stapler wieder
+    -- aufzuräumen.
+    TriggerEvent('speditions-tablet:client:loadUnloadFinished', payload)
+
+    if phase == 'pickup' then
+        -- "beladen" ist der durchgehende Status waehrend der Fahrt zum
+        -- Zielort - kein zweiter Zwischenschritt mehr noetig.
+        ServerCall('driver:updateCargoStatus', { orderId = order.id, status = 'beladen' }, function()
+            refreshMyOrders()
+        end)
+    else
+        ServerCall('driver:updateCargoStatus', { orderId = order.id, status = 'entladen' }, function(res)
+            if res and res.ok then
+                ServerCall('driver:completeOrder', { orderId = order.id }, function()
+                    refreshMyOrders()
+                end)
+            else
+                refreshMyOrders()
+            end
+        end)
+    end
+end
+
+--- Startet das Be-/Entladen und garantiert dabei, dass "busy" IMMER wieder
+--- freigegeben wird - auch wenn irgendwo ein unerwarteter Fehler auftritt
+--- (sonst würde der Fahrer bei einem Bug dauerhaft "hängen" bleiben, ohne
+--- dass je wieder ein Marker/Fortschrittsbalken erscheint).
+local function startLoadUnload(order, phase, locationName, markerCoords, heading)
+    busy = true
+    local ok, err = pcall(runLoadUnload, order, phase, locationName, markerCoords, heading)
+    busy = false
+    if not ok then
+        print(('^1[speditions-tablet]^7 Fehler beim Be-/Entladen: %s'):format(tostring(err)))
+        TriggerEvent('speditions-tablet:client:notify', 'Beim Be-/Entladen ist ein Fehler aufgetreten - bitte erneut versuchen.', 'error')
+        -- Hook für externe Skripte: auch bei einem unerwarteten Fehler muss
+        -- eine ggf. schon gespawnte Palette/der Stapler wieder aufgeräumt
+        -- werden - sonst bleiben sie dauerhaft an der Position stehen.
+        TriggerEvent('speditions-tablet:client:loadUnloadCancelled', buildLoadUnloadPayload(order, phase, locationName, markerCoords, heading))
+    end
+end
+
+--- Für externe Skripte, die den Zustand statt (oder zusätzlich zu) der
+--- Events abfragen wollen - z.B. beim eigenen Ressourcen(neu)start, um zu
+--- wissen, ob gerade ein Be-/Entladen läuft.
+exports('IsLoadUnloadActive', function() return busy end)
+
+CreateThread(function()
+    while true do
+        Wait(3000)
+        ServerCall('session:whoami', nil, function(res)
+            myHasDriverActions = (res and res.ok and res.result and res.result.loggedIn)
+                and inTable(res.result.permissions, 'driver_actions') or false
+        end)
+        if myHasDriverActions then
+            refreshMyOrders()
+            if not locationsLoaded then refreshLocations() end
+        else
+            myOrders = {}
+        end
+    end
+end)
+
+-- Marker-/Interaktions-Loop: zeichnet an Standorten, die gerade zu einem
+-- aktiven Auftrag gehören, bei Nähe einen Bodenkreis, zeigt "Drücke E" bei
+-- noch engerer Nähe und startet bei Tastendruck das Be-/Entladen.
+CreateThread(function()
+    while true do
+        local sleep = 1000
+
+        if myHasDriverActions and not busy and #myOrders > 0 then
+            local playerCoords = GetEntityCoords(PlayerPedId())
+            local relevantOrders = buildRelevantOrderIndex()
+
+            for _, loc in ipairs(locations) do
+                local relevant = relevantOrders[loc.name]
+                if relevant then
+                    local order, phase = relevant[1], relevant[2]
+                    local markerCoords = vector3(loc.coords.x, loc.coords.y, loc.coords.z)
+                    local dist = #(playerCoords - markerCoords)
+
+                    if dist <= (Config.LocationMarkerRadius or 60.0) then
+                        sleep = 0
+                        DrawMarker(
+                            MARKER_TYPE, loc.coords.x, loc.coords.y, loc.coords.z - 1.0,
+                            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.5, 1.5, 1.0,
+                            30, 144, 255, 140, false, true, 2, false, nil, nil, false
+                        )
+
+                        if dist <= (Config.LocationInteractRadius or 2.5) then
+                            BeginTextCommandDisplayHelp('STRING')
+                            AddTextComponentSubstringPlayerName(('~INPUT_CONTEXT~ %s'):format(phase == 'pickup' and 'Fracht abholen' or 'Fracht abliefern'))
+                            EndTextCommandDisplayHelp(0, false, true, -1)
+
+                            if IsControlJustPressed(0, INTERACT_CONTROL) then
+                                startLoadUnload(order, phase, loc.name, markerCoords, loc.coords.w)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        Wait(sleep)
+    end
+end)

@@ -1,0 +1,22 @@
+Live-Karte: eigenes Kartenbild ablegen
+=======================================
+
+Diese Ressource liefert mittlerweile ein Standard-Kartenbild mit
+(html/img/map.jpg, eine GTA-V-Satellitenkarte). Möchtest du ein anderes
+Kartenbild verwenden (z.B. einen anderen Kartenstil oder einen eigenen
+Ausschnitt), überschreibe einfach diese Datei mit deinem eigenen Bild:
+
+    html/img/map.jpg
+
+Fertig - beim nächsten Öffnen der Live-Karte (App "Live Karte" im Tablet,
+Kategorie Disposition) wird das neue Bild automatisch geladen. Löschst du
+die Datei komplett, zeigt die Live-Karte stattdessen einen Hinweistext
+statt eines leeren/kaputten Bildes.
+
+Passt dein Kartenausschnitt nicht exakt zu den hinterlegten
+Weltkoordinaten-Grenzen (die Marker sitzen dann leicht daneben): die vier
+Zahlen (`minX`/`maxX`/`minY`/`maxY`) stehen in config.lua unter
+Config.LiveMap.bounds und lassen sich dort direkt von Hand anpassen -
+siehe README, Abschnitt "Live-Karte".
+
+Diese Datei selbst hat keine Funktion.

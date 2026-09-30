@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Speditions-Tablet</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+    <div id="app" class="hidden">
+        <div class="tablet-frame">
+            <div class="bezel-top"><span class="camera-dot"></span></div>
+            <div class="tablet-screen">
+
+                <img id="wallpaper-img" class="wallpaper-img" src="img/wallpaper.jpg" alt="" onerror="this.classList.add('wallpaper-missing')" />
+
+                <div id="lock-screen" class="lock-screen">
+                    <div class="lock-time" id="lock-time"></div>
+                    <div class="lock-date" id="lock-date"></div>
+                    <div class="lock-brand">
+                        <img class="lock-logo" src="img/logo.png" alt="" />
+                        <div class="lock-brand-name" id="lock-company-name">Speditions-Tablet</div>
+                        <div class="lock-brand-rule"><span></span>DIGITALE SPEDITIONSZENTRALE<span></span></div>
+                    </div>
+                    <div class="lock-hint">Zum Entsperren tippen oder eine Taste drücken</div>
+                </div>
+
+                <div id="boot-screen" class="boot-screen hidden">
+                    <div class="boot-logo" id="boot-logo">SPEDITIONS-TABLET</div>
+                    <div class="boot-spinner"></div>
+                </div>
+
+                <div id="login-screen" class="login-screen hidden">
+                    <div class="login-box">
+                        <img class="login-logo" src="img/logo.png" alt="" />
+                        <div class="login-title">Anmelden</div>
+                        <div class="login-subtitle">Melde dich mit deinem Mitarbeiterkonto am Tablet an.</div>
+                        <label>Name</label>
+                        <input id="login-username" type="text" autocomplete="off" />
+                        <label>Passwort</label>
+                        <input id="login-password" type="password" autocomplete="off" />
+                        <div id="login-error" class="login-error hidden"></div>
+                        <button id="login-submit" class="btn btn-primary" style="width:100%;margin-top:14px;">Anmelden</button>
+                    </div>
+                </div>
+
+                <div id="main-ui" class="main-ui hidden">
+                    <header class="topbar">
+                        <div class="topbar-left">
+                            <span class="brand" id="topbar-brand">Speditions-Tablet</span>
+                            <span class="brand-sub">Speditions-Tablet</span>
+                        </div>
+                        <div class="topbar-right">
+                            <button id="timeclock-btn" class="timeclock-chip" title="Ein-/Ausstempeln">
+                                <span id="timeclock-dot" class="timeclock-dot"></span>
+                                <span id="timeclock-label">Stempeluhr</span>
+                            </button>
+                            <div class="employee-chip" id="employee-chip" title="Konto (Passwort ändern / Abmelden)">
+                                <span id="employee-name" class="employee-name"></span>
+                                <span id="employee-role" class="role-badge"></span>
+                            </div>
+                            <div id="clock" class="clock"></div>
+                            <button id="close-btn" class="close-btn" title="Schließen">&#10005;</button>
+                        </div>
+                    </header>
+
+                    <div class="body-wrap">
+                        <div id="home-grid" class="home-grid hidden"></div>
+                        <div id="category-grid" class="category-grid hidden"></div>
+                        <div id="app-view" class="app-view hidden">
+                            <div class="app-topbar">
+                                <button id="app-back-btn" class="app-back-btn" onclick="showBackFromApp()">&#8249; Zurück</button>
+                                <span id="app-topbar-title" class="app-topbar-title"></span>
+                            </div>
+                            <!-- Überlagert (nicht im Layoutfluss) die linke Kante von #content - erscheint
+                                 nur beim Hinüberhovern, s. .hover-rail in style.css / renderQuickswitchRail() in app.js. -->
+                            <div id="quickswitch-rail" class="hover-rail hidden"></div>
+                            <main id="content" class="content"></main>
+                        </div>
+                    </div>
+
+                    <div id="dock" class="dock hidden"></div>
+
+                    <!-- Ersetzt den früheren "Startbildschirm"-Button oben: dezente, iOS-
+                         bekannte Leiste unten - anklicken führt von überall direkt zum
+                         Startbildschirm, s. .home-indicator in style.css. -->
+                    <div id="home-indicator" class="home-indicator" title="Startbildschirm" onclick="showHome()">
+                        <span class="home-indicator-bar"></span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-stack" class="toast-stack"></div>
+    <div id="modal-root" class="modal-root hidden"></div>
+
+    <!-- Funk-Sounds (App "Funk", playRadioSound()/stopRadioSound() in
+         js/app.js) - preload="auto" lädt sie vorab, damit sie beim Auslösen
+         sofort starten; ein fehlendes/leeres src wird von play().catch() in
+         playRadioSound() stillschweigend abgefangen (falls die Dateien mal
+         entfernt werden, siehe html/sounds/SOUNDS_HIER_ABLEGEN.txt). Die
+         drei Endlos-Sounds (loop) laufen, bis der jeweils passende Zustand
+         endet (Anruf angenommen/abgelehnt/beendet, Halten aufgehoben). -->
+    <audio id="snd-radio-channelSwitch" src="sounds/channel_switch.mp3" preload="auto"></audio>
+    <audio id="snd-radio-pttEnd" src="sounds/ptt_end.mp3" preload="auto"></audio>
+    <audio id="snd-radio-callNumber" src="sounds/call_number.mp3" preload="auto" loop></audio>
+    <audio id="snd-radio-incomingCall" src="sounds/incoming_call.mp3" preload="auto" loop></audio>
+    <audio id="snd-radio-holdingLine" src="sounds/holding_line.mp3" preload="auto" loop></audio>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

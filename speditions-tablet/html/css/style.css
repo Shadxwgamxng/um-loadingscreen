@@ -1,0 +1,1394 @@
+:root {
+    --bg-0: #0b1220;
+    --bg-1: #0f172a;
+    --bg-2: #141f38;
+    --bg-3: #1b2a4a;
+    --border: #263452;
+    --text-0: #f3f6fb;
+    --text-1: #b7c3dc;
+    --text-2: #7c8bab;
+    --accent: #3b82f6;
+    --accent-2: #60a5fa;
+    --green: #22c55e;
+    --blue: #3b82f6;
+    --yellow: #eab308;
+    --red: #ef4444;
+    --gray: #6b7280;
+    --radius: 10px;
+    --radius-lg: 16px;
+    font-size: 15px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    color: var(--text-0);
+    overflow: hidden;
+}
+
+#app.hidden { display: none; }
+
+#app {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(2, 6, 16, 0.55);
+}
+
+.tablet-frame {
+    width: min(1180px, 92vw);
+    height: min(760px, 88vh);
+    background: linear-gradient(160deg, #0a0f1c, #060a13);
+    border-radius: 28px;
+    padding: 18px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03) inset;
+    position: relative;
+}
+
+.bezel-top {
+    position: absolute;
+    top: 3px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.camera-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #1c2740;
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.03);
+}
+
+.tablet-screen {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: var(--bg-1);
+    border-radius: 18px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 0 1px var(--border);
+}
+
+/* Eigenes Wallpaper, vom Betreiber selbst unter html/img/wallpaper.jpg
+   hinterlegt (siehe html/img/WALLPAPER_HIER_ABLEGEN.txt) - ohne Datei bleibt
+   der Verlaufshintergrund von .tablet-screen als Fallback sichtbar (gleiche
+   Onerror-Technik wie beim Live-Karten-Bild). */
+.wallpaper-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+}
+.wallpaper-img.wallpaper-missing { display: none; }
+
+/* ---------- Boot screen ---------- */
+
+.boot-screen {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    background: var(--bg-1);
+    z-index: 5;
+}
+.boot-screen.hidden { display: none; }
+
+.boot-logo {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: var(--text-1);
+}
+.boot-spinner {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    border: 3px solid var(--bg-3);
+    border-top-color: var(--accent);
+    animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- Login screen ---------- */
+
+.login-screen {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Liegt über dem Wallpaper (.wallpaper-img, z-index:0) - Verlauf ist
+       bewusst nur ein Scrim (kein Volltonhintergrund) statt eines
+       Volltonhintergrunds, damit das Bild durchscheint; ohne Wallpaper
+       greift automatisch derselbe dunkle Verlauf wie bisher. */
+    background:
+        radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.16), transparent 55%),
+        linear-gradient(175deg, rgba(6,10,19,0.72), rgba(6,10,19,0.88) 70%);
+}
+.login-screen.hidden { display: none; }
+.login-box {
+    width: min(320px, 84%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(255,255,255,0.08);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 26px;
+    padding: 30px 26px 26px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+}
+.login-box label,
+.login-box input { width: 100%; }
+.login-logo { width: 148px; height: auto; margin-bottom: 12px; filter: drop-shadow(0 4px 14px rgba(59,130,246,0.3)); }
+.login-title { font-size: 19px; font-weight: 700; text-align: center; color: #fff; }
+.login-subtitle { color: rgba(255,255,255,0.65); font-size: 12.5px; text-align: center; margin: 4px 0 20px; }
+.login-box input {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.16);
+    color: #fff;
+}
+.login-box input:focus { border-color: var(--accent-2); }
+.login-box label { color: rgba(255,255,255,0.6); }
+.login-error { color: #fca5a5; font-size: 12.5px; text-align: center; margin-top: 10px; }
+.login-error.hidden { display: none; }
+
+/* ---------- Lock screen ---------- */
+
+.lock-screen {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 40px 0 56px;
+    /* Scrim über dem Wallpaper statt Volltonhintergrund, s. .login-screen. */
+    background:
+        radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.18), transparent 55%),
+        linear-gradient(175deg, rgba(8,14,26,0.68), rgba(4,7,13,0.85) 70%);
+    cursor: pointer;
+    user-select: none;
+}
+.lock-screen.hidden { display: none; }
+.lock-time { font-size: 54px; font-weight: 300; letter-spacing: 1px; margin-top: 12px; }
+.lock-date { color: var(--text-2); font-size: 13px; margin-top: 4px; text-transform: capitalize; }
+.lock-brand { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.lock-logo { width: 210px; height: auto; filter: drop-shadow(0 6px 18px rgba(59,130,246,0.25)); }
+.lock-brand-name { font-size: 17px; font-weight: 700; letter-spacing: 1px; text-align: center; padding: 0 24px; }
+.lock-brand-rule {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-2);
+    font-size: 10px;
+    letter-spacing: 2px;
+}
+.lock-brand-rule span { display: block; width: 26px; height: 1px; background: var(--border); }
+.lock-hint {
+    color: var(--text-2);
+    font-size: 12px;
+    letter-spacing: 0.4px;
+    animation: lock-pulse 2.2s ease-in-out infinite;
+}
+@keyframes lock-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .lock-hint { animation: none; } }
+
+/* ---------- Main UI ---------- */
+
+.main-ui { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; }
+.main-ui.hidden { display: none; }
+
+.topbar {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    background: rgba(20, 31, 56, 0.72);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex: 0 0 auto;
+}
+.topbar-left { display: flex; align-items: baseline; gap: 10px; }
+.brand { font-weight: 700; font-size: 16px; letter-spacing: 0.5px; }
+.brand-sub { color: var(--text-2); font-size: 12px; }
+
+.topbar-right { display: flex; align-items: center; gap: 14px; }
+.employee-chip { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.employee-chip:hover { opacity: 0.85; }
+.employee-name { font-weight: 600; font-size: 13px; }
+.role-badge {
+    font-size: 11px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: var(--bg-3);
+    color: var(--accent-2);
+    border: 1px solid var(--border);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.clock { font-variant-numeric: tabular-nums; color: var(--text-2); font-size: 13px; }
+.timeclock-chip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: var(--text-1);
+    padding: 5px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+}
+.timeclock-chip:hover { border-color: var(--accent-2); }
+.timeclock-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--text-2);
+    flex-shrink: 0;
+}
+.timeclock-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.close-btn {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: var(--text-1);
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+}
+.close-btn:hover { background: var(--red); color: white; border-color: var(--red); }
+
+.body-wrap { display: flex; flex: 1 1 auto; min-height: 0; }
+.body-wrap > .hidden { display: none; }
+
+/* Ersetzt den früheren "Startbildschirm"-Button oben in der Topbar - eine
+   dezente, vom iPhone/iPad bekannte Leiste unten, jederzeit sichtbar
+   (nicht erst per Hover), führt per Klick direkt zum Startbildschirm.
+   Eigene große Klickfläche über der eigentlichen (schmalen) Leiste, damit
+   das Ziel auch ungenau getroffen werden kann. */
+.home-indicator {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 7;
+    height: 26px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 8px;
+    cursor: pointer;
+}
+.home-indicator-bar {
+    width: 120px;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.35);
+    transition: background 0.15s ease, width 0.15s ease;
+}
+.home-indicator:hover .home-indicator-bar { background: rgba(255,255,255,0.7); width: 132px; }
+
+/* ---------- Homescreen (Kategorien) + Kategorie-Grid (Apps) ----------
+   Liegen transparent auf dem Wallpaper (siehe .wallpaper-img) - iPad-Optik:
+   Icon-Kacheln ohne Karten-Rahmen, Label mit Schlagschatten für Lesbarkeit
+   auf beliebigem Hintergrundbild. */
+
+.home-grid, .category-grid {
+    position: relative;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    background: transparent;
+    padding: 28px 32px 40px;
+}
+
+.category-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 22px;
+}
+.category-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.55);
+}
+
+.app-back-btn {
+    background: rgba(255,255,255,0.12);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.16);
+    color: #fff;
+    padding: 6px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-family: inherit;
+}
+.app-back-btn:hover { border-color: var(--accent-2); }
+
+/* Große Uhrzeit/Datum oben links auf dem Homescreen (iPadOS-Optik) -
+   updateClockElements() in app.js hält beide Felder aktuell. */
+.home-clock { padding: 4px 4px 26px; }
+.home-clock-time {
+    font-size: 52px;
+    font-weight: 300;
+    color: #fff;
+    line-height: 1;
+    letter-spacing: -0.5px;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+.home-clock-date {
+    margin-top: 6px;
+    font-size: 15px;
+    color: rgba(255,255,255,0.88);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.55);
+    text-transform: capitalize;
+}
+
+/* Homescreen-Widget "Aktueller Auftrag" (iOS-Widget-Optik: kompakte
+   Glaskarte, feste Größe, Inhalt bewusst knapp gehalten, damit er
+   hineinpasst) - s. renderHomeWidgets() in app.js. Nur für Fahrer, direkt
+   unter der großen Uhr, vor dem Kategorie-Grid. */
+.home-widgets { margin-bottom: 8px; }
+/* Zweites Widget (Fahrerkarte) am rechten Bildschirmrand, auf Höhe der
+   großen Uhr - unabhängig vom normalen Fluss positioniert, damit es das
+   Kategorie-Grid links nicht beeinflusst. */
+.home-widget-right { position: absolute; top: 28px; right: 32px; display: flex; flex-direction: column; gap: 14px; align-items: flex-end; }
+.widget {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    width: 264px;
+    min-height: 118px;
+    padding: 14px 16px;
+    border-radius: 22px;
+    background: rgba(255,255,255,0.10);
+    backdrop-filter: blur(26px);
+    -webkit-backdrop-filter: blur(26px);
+    border: 1px solid rgba(255,255,255,0.16);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.35);
+    cursor: pointer;
+    color: #fff;
+    transition: transform 0.12s ease;
+}
+.widget:hover { transform: scale(1.02); }
+.widget:active { transform: scale(0.98); }
+.widget-header {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255,255,255,0.62);
+}
+.widget-header svg { width: 13px; height: 13px; }
+.widget-title {
+    font-size: 14.5px;
+    font-weight: 700;
+    margin-top: 10px;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.widget-sub {
+    font-size: 12px;
+    color: rgba(255,255,255,0.75);
+    margin-top: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.widget-status { margin-top: 8px; font-size: 12px; color: rgba(255,255,255,0.85); }
+.widget-empty { font-size: 12.5px; color: rgba(255,255,255,0.6); margin-top: 12px; }
+
+.app-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    align-content: start;
+    gap: 22px 14px;
+}
+
+/* Feste 4-Spalten statt auto-fill (anders als .app-grid): die Home-Kacheln
+   sollen immer links, untereinander in maximal 4er-Reihen bleiben und nie
+   bis unter die rechts fest positionierten Widgets (.home-widget-right)
+   reichen, unabhängig von der Bildschirmbreite. */
+.home-tiles {
+    display: grid;
+    grid-template-columns: repeat(4, 96px);
+    max-width: fit-content;
+    align-content: start;
+    gap: 22px 14px;
+}
+
+.category-tile, .app-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 4px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    user-select: none;
+    text-align: center;
+    transition: transform 0.12s ease;
+}
+.category-tile:hover, .app-tile:hover { transform: scale(1.05); }
+.category-tile:active, .app-tile:active { transform: scale(0.95); }
+
+.tile-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 17px;
+    background: linear-gradient(160deg, var(--bg-3), var(--bg-2));
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.07) inset;
+}
+.tile-icon svg { width: 28px; height: 28px; }
+.app-tile-icon {
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+}
+.tile-label {
+    font-size: 12.5px;
+    color: rgba(255,255,255,0.92);
+    line-height: 1.25;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+}
+
+/* Kategorie-Akzentfarben - je Kategorie ein eigener Icon-Farbverlauf
+   (analog iOS-App-Icons), als Klasse auf .tile-icon gesetzt
+   (categoryIconSvg()/showCategory() in app.js). */
+.cat-auftraege { background: linear-gradient(160deg, #3b82f6, #1d4ed8); }
+.cat-finanzen { background: linear-gradient(160deg, #22c55e, #15803d); }
+.cat-fuhrpark { background: linear-gradient(160deg, #f97316, #c2410c); }
+.cat-mitarbeiter { background: linear-gradient(160deg, #a855f7, #7e22ce); }
+/* .cat-disposition (rot) ist jetzt die eigenständige Home-Kachel "Disposition"
+   (frühere Kategorie "Disposition" heißt "Kommunikation", eigene Farbe s.u.),
+   damit die beiden Kacheln trotz verwandtem Thema klar unterscheidbar bleiben. */
+.cat-disposition { background: linear-gradient(160deg, #ef4444, #b91c1c); }
+.cat-kommunikation { background: linear-gradient(160deg, #6366f1, #4338ca); }
+.cat-geschaeftsfuehrung { background: linear-gradient(160deg, #64748b, #334155); }
+.cat-funk { background: linear-gradient(160deg, #06b6d4, #0e7490); }
+
+/* ---------- Dock (Home-Screen) ----------
+   Fixiert unten auf dem Home-Screen (analog iPad-Dock) - aktuell für
+   Fahrerkarte + Dispositions-Dienst, s. Actions/renderDock() in app.js. */
+
+.dock {
+    position: absolute;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 14px 22px;
+    background: rgba(255,255,255,0.14);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 28px;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+    z-index: 2;
+}
+.dock.hidden { display: none; }
+/* Icon-only wie das echte iPad-Dock - keine Beschriftung darunter (Name
+   steht als title-Attribut/Tooltip zur Verfügung, s. renderDock()). */
+.dock-item {
+    position: relative;
+    display: flex;
+    cursor: pointer;
+    user-select: none;
+}
+.dock-item .tile-icon { position: relative; width: 58px; height: 58px; border-radius: 16px; }
+.dock-item .tile-icon svg { width: 26px; height: 26px; }
+.dock-status-dot {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: var(--gray);
+    border: 2px solid rgba(15, 23, 42, 0.9);
+}
+.dock-status-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+/* ---------- App-Ansicht (Homescreen -> Kategorie -> App geöffnet) ---------- */
+
+.app-view {
+    position: relative;
+    z-index: 1;
+    background: var(--bg-1);
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* ---------- Hover-Leiste (wiederverwendet für zwei Zwecke) ----------
+   1) #quickswitch-rail (direktes Kind von .app-view): schnelles Wechseln
+      zwischen den zusammengehörigen Disponenten-Apps (Disposition/Live-
+      Karte/Nachrichten/Funk), s. renderQuickswitchRail() in app.js.
+   2) Die Sektionen-Leiste zusammengelegter Apps (früher eine dauerhaft
+      sichtbare Leiste rechts, jetzt wie alle anderen Leisten eine Hover-
+      Leiste links), s. renderSectionedApp() in app.js - z.B. "Finanzcenter",
+      "Fuhrpark-Verwaltung", "Mitarbeiter", "Meine Aufträge".
+   Beide liegen über dem Inhalt (nicht im Layoutfluss, position:absolute
+   relativ zum nächsten position:relative-Elternelement), sind im
+   eingeklappten Zustand nur ein schmaler Rand-Hinweis und klappen beim
+   Hinüberhovern zur vollen Liste auf. */
+.hover-rail {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 6;
+    width: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 18px 0;
+    gap: 3px;
+    background: linear-gradient(90deg, rgba(59,130,246,0.22), transparent);
+    transition: width 0.16s ease;
+}
+/* Ohne diese Regel gewinnt .hover-rails eigenes display:flex gegen die
+   .hidden-Klasse (gleiche Spezifität, .hover-rail stünde im Stylesheet
+   weiter unten) - #quickswitch-rail bliebe dann auf JEDER App sichtbar und
+   klickbar statt nur den 4 vorgesehenen, mit zwei sichtbaren Leisten
+   übereinander und versehentlichen Klicks auf "Disposition" als Folge. */
+.hover-rail.hidden { display: none; }
+/* Klappt bewusst NICHT per reinem CSS :hover auf (das fing jeden
+   Mausdurchgang über den linken Rand ab, auch wenn man nur unterwegs zu
+   einem Button war, der dahinter liegt, z.B. der Funk-Konsole - Klick
+   landete dann auf dem falschen, jetzt aufgeklappten Leisten-Eintrag,
+   meist "Disposition" als erstem Eintrag). Stattdessen setzt app.js
+   (setupHoverRailIntent) die Klasse `.expanded` erst nach einer kurzen
+   Verweildauer - ein bloßes Durchqueren löst das nicht mehr aus. */
+.hover-rail.expanded {
+    width: 196px;
+    background: var(--bg-2);
+    border-right: 1px solid var(--border);
+    box-shadow: 8px 0 28px rgba(0,0,0,0.4);
+}
+.hover-rail-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 15px;
+    white-space: nowrap;
+    color: var(--text-1);
+    cursor: pointer;
+    border-radius: 0 var(--radius) var(--radius) 0;
+}
+.hover-rail-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+.hover-rail-item:hover { background: var(--bg-3); color: var(--text-0); }
+.hover-rail-item.active { background: var(--accent); color: #fff; font-weight: 600; }
+
+.app-topbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 26px;
+    background: var(--bg-2);
+    border-bottom: 1px solid var(--border);
+    flex: 0 0 auto;
+}
+.app-topbar-title { font-size: 13.5px; color: var(--text-2); }
+
+.content {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 22px 26px 40px;
+}
+
+.view-title {
+    font-size: 19px;
+    font-weight: 700;
+    margin: 0 0 4px;
+}
+.view-subtitle {
+    color: var(--text-2);
+    font-size: 13px;
+    margin: 0 0 20px;
+}
+
+/* ---------- Cards / Grids ---------- */
+
+.grid { display: grid; gap: 16px; }
+.grid-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-4 { grid-template-columns: repeat(4, 1fr); }
+
+/* ---------- Disposition (eigenständige App, VIEWS['disposition']) ----------
+   Vereinte 3-Spalten-Arbeitsfläche (offene Aufträge / Fuhrpark / zugewiesene
+   Aufträge) statt der früheren getrennten Apps "Auftragsverwaltung"/
+   "Fahrerübersicht" - Zuweisung per Drag & Drop einer Auftragskarte auf eine
+   Fuhrpark-Karte (oder per Klick-Fallback-Button), s. renderDisposition() in
+   app.js. Folgt der gleichen Panel-/Trennlinien-Sprache wie .app-topbar. */
+
+.dispo-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 12px 26px;
+    background: var(--bg-2);
+    border-bottom: 1px solid var(--border);
+    flex: 0 0 auto;
+}
+.dispo-header-title { font-size: 15px; font-weight: 700; }
+.dispo-header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dispo-header-links { display: flex; gap: 8px; flex-wrap: wrap; }
+.dispo-link-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    color: var(--text-1);
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+}
+.dispo-link-btn:hover { border-color: var(--accent-2); color: var(--text-0); }
+.dispo-link-btn svg { width: 14px; height: 14px; }
+.dispo-duty {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    border-radius: 999px;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--text-1);
+}
+.dispo-duty .dot { margin-right: 0; }
+
+.dispo-board {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.dispo-col {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--border);
+}
+.dispo-col:first-child { border-left: none; }
+.dispo-col-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 13px 16px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text-1);
+    border-bottom: 1px solid var(--border);
+    flex: 0 0 auto;
+    background: var(--bg-2);
+}
+.dispo-col-count {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-2);
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 2px 9px;
+}
+.dispo-col-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.dispo-card {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    transition: outline-color 0.12s ease, opacity 0.12s ease, transform 0.12s ease;
+}
+.dispo-card.dispo-draggable { cursor: grab; touch-action: none; }
+.dispo-card.dispo-draggable:active { cursor: grabbing; }
+.dispo-card.dispo-dragging { opacity: 0.35; }
+
+/* Ghost-Element beim Ziehen (s. dispoPointerMove() in app.js) - folgt dem
+   Cursor per pointermove statt eines nativen Drag-Bilds (FiveMs NUI-CEF
+   unterstützt natives HTML5-Drag&Drop nicht zuverlässig). */
+.dispo-drag-ghost {
+    position: fixed;
+    z-index: 999;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.45);
+}
+.dispo-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dispo-card-id { font-size: 11px; color: var(--text-2); font-weight: 600; }
+.dispo-card-route { font-size: 13px; font-weight: 600; color: var(--text-0); margin-top: 7px; line-height: 1.35; }
+.dispo-card-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; align-items: center; }
+.dispo-card-value { font-size: 12.5px; color: var(--text-1); font-weight: 700; }
+.dispo-card-sub { font-size: 12px; color: var(--text-2); margin-top: 4px; }
+.dispo-card-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Fuhrpark-Karte (Fahrer + Fahrzeug) - zugleich das Drop-Ziel für Karten aus
+   Spalte 1/3. .dispo-drop-valid hebt ein gültiges Ziel während des Ziehens
+   grün hervor, .dispo-drop-invalid dimmt ein ungültiges sichtbar ab. */
+.dispo-fleet-card { outline: 2px solid transparent; outline-offset: 2px; }
+.dispo-fleet-card.dispo-drop-valid { outline-color: var(--green); background: rgba(34,197,94,0.08); }
+.dispo-fleet-card.dispo-drop-invalid { opacity: 0.4; }
+.dispo-fleet-name { font-size: 13.5px; font-weight: 700; color: var(--text-0); }
+.dispo-fleet-vehicle { font-size: 12px; color: var(--text-2); margin-top: 2px; }
+.dispo-fleet-order {
+    margin-top: 9px;
+    padding-top: 9px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-1);
+}
+
+/* ---------- Funk (eigenständige App, VIEWS['funk']) ----------
+   Digitale Funkkonsole statt Kanal-Buttonliste: ein Leitstellen-/Bordcomputer-
+   artiges Panel mit Status-Chips, großem LCD-Kanaldisplay (Schrittpfeile +
+   antippbare Nachbarkanäle statt zehn gleichwertiger Kacheln), echtem
+   Lautstärke-Slider, Teilnehmerliste daneben und einem Einstellungsbereich
+   darunter. */
+.funk-layout {
+    display: flex;
+    align-items: flex-start;
+    gap: 22px;
+    flex-wrap: wrap;
+}
+
+.funk-console {
+    flex: 0 0 auto;
+    width: 520px;
+    max-width: 100%;
+    padding: 28px 30px 30px;
+    background: linear-gradient(165deg, var(--bg-2), var(--bg-1));
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.03) inset;
+}
+
+.funk-participants {
+    flex: 1 1 260px;
+    min-width: 240px;
+    max-width: 360px;
+    padding: 18px 18px 20px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+}
+.funk-participants-header {
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-2);
+    margin-bottom: 12px;
+}
+.funk-participants-list { display: flex; flex-direction: column; gap: 6px; }
+.funk-participant-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: var(--bg-3);
+}
+.funk-participant-name { font-size: 13px; color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.funk-call-btn {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    color: var(--green);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 8px;
+}
+.funk-call-btn svg { width: 14px; height: 14px; }
+.funk-call-btn:hover:not(:disabled) { border-color: var(--green); background: rgba(34,197,94,0.14); }
+.funk-call-btn:disabled { opacity: 0.3; cursor: default; color: var(--text-2); }
+
+/* Anruf-Banner - eingeblendet zwischen Status-Zeile und Kanal-Display,
+   solange RadioState.call gesetzt ist (eingehend/ausgehend/aktiv). */
+.funk-call-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    margin-bottom: 18px;
+    border-radius: 14px;
+    background: rgba(239,68,68,0.14);
+    border: 1px solid var(--red);
+    color: var(--text-0);
+    font-size: 13px;
+}
+.funk-call-banner.active { background: rgba(34,197,94,0.14); border-color: var(--green); }
+.funk-call-banner.hold { background: rgba(234,179,8,0.14); border-color: var(--yellow); }
+.funk-call-banner svg { width: 15px; height: 15px; margin-right: 6px; vertical-align: -2px; }
+.funk-call-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+
+/* Einstellungen (Sounds ein/aus, Name im Funk) - eigener Bereich unter der
+   Konsole/Teilnehmerliste. */
+.funk-settings {
+    margin-top: 20px;
+    padding: 18px 20px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+}
+.funk-settings-header {
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-2);
+    margin-bottom: 14px;
+}
+.funk-toggle-label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-1); cursor: pointer; }
+.funk-toggle-label input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+.funk-name-row { margin-top: 16px; }
+.funk-name-row label { display: block; font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+.funk-name-edit { display: flex; gap: 8px; max-width: 340px; }
+.funk-name-edit input { flex: 1 1 auto; }
+
+.funk-status-row { display: flex; justify-content: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+.funk-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 13px;
+    border-radius: 999px;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.funk-chip svg { width: 14px; height: 14px; }
+.funk-chip#funk-conn-chip.connected { color: var(--green); border-color: var(--green); }
+.funk-chip-tx.active {
+    color: #fff;
+    background: var(--red);
+    border-color: var(--red);
+    animation: funkPulse 1s ease-in-out infinite;
+}
+.funk-chip-rx.active { color: var(--accent-2); border-color: var(--accent-2); background: rgba(59,130,246,0.14); }
+@keyframes funkPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.55); }
+    50% { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+}
+
+/* Beitreten/Verlassen-Schalter (weißer Kasten im Mockup) - eigener,
+   klickbarer Chip statt Status-Anzeige: einladend grün, solange man noch
+   nicht im Funk ist, neutral (mit rotem Hover) danach. */
+.funk-chip-toggle { cursor: pointer; font-family: inherit; }
+.funk-chip-toggle:not(.joined) { color: var(--green); border-color: var(--green); }
+.funk-chip-toggle:not(.joined):hover { background: rgba(34,197,94,0.14); }
+.funk-chip-toggle.joined:hover { color: var(--red); border-color: var(--red); }
+
+.funk-display { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.funk-step {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    color: var(--text-1);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.12s ease, color 0.12s ease, transform 0.12s ease;
+}
+.funk-step svg { width: 20px; height: 20px; }
+.funk-step:hover:not(:disabled) { border-color: var(--accent-2); color: var(--text-0); }
+.funk-step:active:not(:disabled) { transform: scale(0.92); }
+.funk-step:disabled { opacity: 0.25; cursor: default; }
+
+.funk-dial-neighbor {
+    flex: 0 0 auto;
+    width: 54px;
+    height: 68px;
+    background: none;
+    border: none;
+    color: var(--text-2);
+    font-size: 19px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.15s ease, color 0.15s ease;
+}
+.funk-dial-neighbor:hover:not(:disabled) { opacity: 0.85; color: var(--text-0); }
+.funk-dial-neighbor:disabled, .funk-dial-neighbor.empty { visibility: hidden; }
+
+.funk-lcd {
+    flex: 0 0 auto;
+    width: 180px;
+    padding: 14px 0 16px;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #05070c, #0a0f1a);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), inset 0 2px 14px rgba(0,0,0,0.6);
+    text-align: center;
+}
+.funk-lcd-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-2);
+    margin-bottom: 2px;
+}
+.funk-lcd-value {
+    font-size: 52px;
+    font-weight: 700;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.03em;
+    color: var(--accent-2);
+    text-shadow: 0 0 18px rgba(96,165,250,0.65);
+}
+
+.funk-volume {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 30px;
+    padding: 0 6px;
+}
+.funk-volume svg { width: 20px; height: 20px; color: var(--text-2); flex: 0 0 auto; }
+.funk-volume-slider {
+    flex: 1 1 auto;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--bg-3);
+    outline: none;
+}
+.funk-volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent-2);
+    border: 3px solid var(--bg-1);
+    box-shadow: 0 0 0 1px var(--accent-2), 0 2px 6px rgba(0,0,0,0.4);
+    cursor: pointer;
+}
+.funk-volume-slider::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent-2);
+    border: 3px solid var(--bg-1);
+    box-shadow: 0 0 0 1px var(--accent-2), 0 2px 6px rgba(0,0,0,0.4);
+    cursor: pointer;
+}
+.funk-volume-value {
+    flex: 0 0 auto;
+    width: 42px;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-1);
+}
+
+.card {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+}
+.card-title {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-2);
+    margin: 0 0 8px;
+}
+.card-value {
+    font-size: 26px;
+    font-weight: 700;
+}
+.card-value.small { font-size: 19px; }
+.card-hint { color: var(--text-2); font-size: 12px; margin-top: 4px; }
+
+.section {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+    margin-bottom: 18px;
+}
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+.section-header h3 { margin: 0; font-size: 14.5px; }
+
+/* ---------- Gehälter ---------- */
+
+.wage-rate-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.wage-rate-row { display: flex; align-items: center; gap: 8px; }
+.wage-rate-row label { flex: 0 0 auto; margin: 0; min-width: 90px; font-size: 13px; }
+.wage-rate-row input { flex: 1; min-width: 70px; }
+
+/* ---------- Driver card (Fahrerkarte) ---------- */
+
+.driver-card {
+    max-width: 420px;
+    background: linear-gradient(155deg, #16233f, #0e1729);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+.driver-card-head {
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--border);
+    text-align: center;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--text-1);
+    font-size: 12px;
+}
+.driver-card-body { padding: 18px 20px; }
+.driver-card-name { font-size: 18px; font-weight: 700; }
+.driver-card-id { color: var(--text-2); font-size: 12px; margin-top: 2px; }
+.driver-card-status { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; }
+.driver-card-section {
+    border-top: 1px solid var(--border);
+    padding: 14px 20px;
+}
+.driver-card-section h4 {
+    margin: 0 0 10px;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-2);
+}
+.stat-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+.stat-row span:last-child { font-weight: 600; }
+.perm-list { display: flex; flex-direction: column; gap: 6px; }
+.perm-item { font-size: 13px; display: flex; align-items: center; gap: 8px; color: var(--text-2); }
+.perm-item.granted { color: var(--text-0); }
+.perm-item .mark { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+.perm-item.denied .mark { background: var(--gray); }
+
+/* ---------- Tables ---------- */
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th {
+    text-align: left;
+    color: var(--text-2);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+}
+tbody td {
+    padding: 10px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-1);
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: rgba(255,255,255,0.02); }
+.empty-row td { text-align: center; color: var(--text-2); padding: 24px; }
+
+.lieferschein-row td { padding: 0 10px 14px; border-bottom: 1px solid var(--border); }
+.lieferschein-row:last-child td { border-bottom: none; }
+.lieferschein {
+    background: var(--bg-3);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-lg);
+    padding: 12px 14px;
+}
+.lieferschein-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+.lieferschein-title { font-size: 12px; font-weight: 700; color: var(--text-1); }
+.lieferschein-meta { font-size: 10.5px; color: var(--text-2); }
+.lieferschein-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+.lieferschein-grid > div { display: flex; flex-direction: column; gap: 2px; }
+.lieferschein-grid span { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-2); }
+.lieferschein-grid strong { font-size: 13px; color: var(--text-0); }
+.lieferschein-grid small { font-size: 9.5px; color: var(--text-2); }
+
+/* ---------- Badges / status dots ---------- */
+
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.dot-green { background: var(--green); }
+.dot-blue { background: var(--blue); }
+.dot-yellow { background: var(--yellow); }
+.dot-red { background: var(--red); }
+.dot-gray { background: var(--gray); }
+
+.pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    color: var(--text-1);
+    white-space: nowrap;
+}
+/* Gefahrgut-Kennzeichnung u.ä. - Farbe statt Symbol als Warnhinweis (siehe
+   README, Abschnitt "Emoji-freie Oberfläche"). */
+.pill-warning {
+    border-color: var(--yellow);
+    color: var(--yellow);
+}
+
+.meter-row { margin: 10px 0; }
+.meter-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-2); margin-bottom: 5px; }
+.meter-label b { color: var(--text-0); font-weight: 600; }
+.meter-track { height: 8px; border-radius: 4px; background: var(--bg-3); overflow: hidden; }
+.meter-fill { display: block; height: 100%; border-radius: 4px; background: var(--green); }
+.meter-fill.warn { background: var(--yellow); }
+.meter-fill.over { background: var(--red); }
+
+/* ---------- Buttons / forms ---------- */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg-3);
+    color: var(--text-0);
+    font-size: 13px;
+    cursor: pointer;
+    font-weight: 600;
+}
+.btn:hover { border-color: var(--accent-2); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary { background: var(--accent); border-color: var(--accent); }
+.btn-primary:hover { background: var(--accent-2); }
+.btn-danger { background: var(--red); border-color: var(--red); }
+.btn-danger:hover { background: #f87171; }
+.btn-ghost { background: transparent; }
+.btn-sm { padding: 6px 11px; font-size: 12px; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+label { display: block; font-size: 12px; color: var(--text-2); margin: 12px 0 5px; }
+label:first-child { margin-top: 0; }
+input, select, textarea {
+    width: 100%;
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 11px;
+    color: var(--text-0);
+    font-size: 13px;
+    font-family: inherit;
+}
+textarea { resize: vertical; min-height: 70px; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+
+/* ---------- Toasts ---------- */
+
+.toast-stack {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 100;
+}
+.toast {
+    min-width: 260px;
+    max-width: 340px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 10px;
+    padding: 12px 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    animation: toast-in 0.2s ease-out;
+}
+.toast.success { border-left-color: var(--green); }
+.toast.error { border-left-color: var(--red); }
+.toast-title { font-weight: 700; font-size: 13px; margin-bottom: 2px; }
+.toast-msg { font-size: 12.5px; color: var(--text-1); }
+@keyframes toast-in { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
+/* ---------- Modal ---------- */
+
+.modal-root.hidden { display: none; }
+.modal-root {
+    position: fixed;
+    inset: 0;
+    background: rgba(2,6,16,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+}
+.modal-box {
+    width: min(440px, 90vw);
+    max-height: 84vh;
+    overflow-y: auto;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 22px 24px;
+}
+.modal-title { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
+.modal-subtitle { color: var(--text-2); font-size: 12.5px; margin: 0 0 16px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+.finance-hero {
+    text-align: center;
+    padding: 20px 0 10px;
+}
+.finance-hero .label { color: var(--text-2); font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; }
+.finance-hero .value { font-size: 40px; font-weight: 800; margin-top: 6px; }
+
+.scroll-x { overflow-x: auto; }
+
+/* ---------- Live-Karte ---------- */
+
+.live-map-wrap {
+    position: relative;
+    background: var(--bg-0);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+.live-map-img { display: block; width: 100%; height: auto; }
+/* Ein-Klick-Sync (Actions.armLiveMapSync in app.js) - Fadenkreuz-Cursor
+   zeigt an, dass der nächste Klick auf die Karte die eigene Position
+   synchronisiert, statt wirkungslos zu verpuffen. */
+.live-map-img.live-map-sync-active { cursor: crosshair; }
+.live-map-img-fallback-hint {
+    display: none;
+    padding: 40px 20px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-2);
+}
+.live-map-img-fallback-hint code { color: var(--text-1); }
+.live-map-wrap.live-map-img-missing .live-map-img { display: none; }
+.live-map-wrap.live-map-img-missing .live-map-img-fallback-hint { display: block; }
+.live-map-wrap.live-map-img-missing .live-map-markers { position: static; height: 0; }
+.live-map-markers { position: absolute; inset: 0; pointer-events: none; }
+.live-map-marker {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+.live-map-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #3b82f6;
+    border: 2px solid #0b1220;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+}
+.live-map-marker-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: #fff;
+    background: rgba(11, 18, 32, 0.75);
+    padding: 1px 5px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+.live-map-driver-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.live-map-driver-row:last-child { border-bottom: none; }
+.live-map-driver-name { font-weight: 600; }
+.live-map-driver-order { color: var(--text-2); font-size: 12px; margin-top: 2px; }
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border); }
