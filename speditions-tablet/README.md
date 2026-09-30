@@ -623,14 +623,15 @@ konkrete Meldung an, statt nur des rohen Fehlercodes.
       orderId = 123,
       phase = 'pickup', -- oder 'dropoff'
       locationName = 'Lagerhalle Nord', -- Name aus dem Reiter "Orte"
-      coords = vector3(x, y, z), -- exakt die Position des Bodenmarkers/der Interaktion
+      coords = vector3(x, y, z), -- exakt die Position des Bodenmarkers/der Interaktion (für die Palette)
       heading = 180.0, -- hinterlegter Heading-Wert des Orts
+      forkliftCoords = vector3(x, y, z), -- um Config.TabletForkliftOffset seitlich versetzt (für den Stapler)
   }
   ```
   Beispiel im Gabelstapler-Script:
   ```lua
   AddEventHandler('speditions-tablet:client:loadUnloadStart', function(data)
-      -- Palette + Stapler bei data.coords/data.heading spawnen
+      -- Palette bei data.coords/data.heading spawnen, Stapler bei data.forkliftCoords/data.heading
   end)
   AddEventHandler('speditions-tablet:client:loadUnloadFinished', function(data)
       -- wieder aufräumen
@@ -648,7 +649,11 @@ konkrete Meldung an, statt nur des rohen Fehlercodes.
   Standort (`st_locations`, dort per "Aktuelle Position übernehmen" oder
   manuell gepflegt) - das ist exakt die Stelle, an der auch der blaue
   Bodenmarker/die "E"-Interaktion erscheint, also der richtige Punkt für
-  die Platzierung von Palette und Stapler.
+  die Platzierung der Palette. `forkliftCoords` ist derselbe Punkt, aber um
+  `Config.TabletForkliftOffset` (Standard 2m) rechtwinklig zum Heading
+  versetzt, damit der Stapler nicht mit dem Fahrer/der Palette kollidiert -
+  landet er auf der falschen Seite, einfach den Wert in `config.lua` negativ
+  setzen (z.B. `-2.0`), das dreht den Versatz auf die andere Seite.
 - **Fahrerkarte einstecken vor Auftragsannahme, inkl. Fahrzeug-/Anhänger-
   Selbstauswahl**: Ein Fahrer muss im Reiter "Fahrerkarte" zuerst seine Fahrt
   starten ("Fahrerkarte einstecken"), bevor er einen Auftrag annehmen kann
@@ -1027,6 +1032,7 @@ Alle Stellschrauben befinden sich in `config.lua`:
 - `Config.RequireItem` - Tablet nur per Item öffnen
 - `Config.TabletEmote` - Emote beim Öffnen/Schließen (`/e Tablet2` per Standard, benötigt ein separat installiertes Emote-Skript)
 - `Config.TabletProp` - statisches Tablet-Prop in der Hand (Alternative/Ergänzung zur Emote, siehe "Bedienung" oben)
+- `Config.TabletForkliftOffset` - seitlicher Versatz (Meter) der `forkliftCoords` im Be-/Entladen-Event für externe Skripte (siehe "Bedienung" oben)
 - `Config.MoneyBridge` - Framework-Anbindung für Bargeld bei Aus-/Einzahlung
 - `Config.NotificationSound` - Klingelton bei nativen In-Game-Hinweisen
 - `Config.DefaultHourlyWage` - Stundenlohn je Rolle, nur einmalige Erstbefüllung von `st_wage_rates`

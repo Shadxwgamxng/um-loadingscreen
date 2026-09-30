@@ -99,6 +99,19 @@ local function drawProgressBar(label, pct, secondsLeft)
     EndTextCommandDisplayText(x, y - 0.012)
 end
 
+--- Punkt seitlich (rechtwinklig zum Heading) von `coords` versetzt, in Metern
+--- über Config.TabletForkliftOffset - Standardformel für "Punkt relativ zu
+--- Heading" in FiveM (rad = heading in Radiant, Blickrichtung = (-sin, cos)),
+--- hier um 90° gedreht für die Seitwärtsrichtung statt vorwärts.
+local function sideOffsetCoords(coords, heading, distance)
+    local rad = math.rad((heading or 0.0) + 90.0)
+    return vector3(
+        coords.x + distance * -math.sin(rad),
+        coords.y + distance * math.cos(rad),
+        coords.z
+    )
+end
+
 --- Baut die Nutzlast, die bei jedem 'speditions-tablet:client:loadUnload*'-
 --- Event mitgeschickt wird - externe Skripte (z.B. ein Gabelstapler-Script,
 --- das dort eine Palette + Stapler spawnt) bekommen damit alles, was sie für
@@ -109,8 +122,11 @@ local function buildLoadUnloadPayload(order, phase, locationName, markerCoords, 
         orderId = order.id,
         phase = phase, -- 'pickup' (Beladen am Startort) oder 'dropoff' (Entladen am Zielort)
         locationName = locationName,
-        coords = markerCoords, -- vector3, exakt die Position des Bodenmarkers/der Interaktion
+        coords = markerCoords, -- vector3, exakt die Position des Bodenmarkers/der Interaktion (für die Palette)
         heading = heading or 0.0,
+        -- Um Config.TabletForkliftOffset (Standard 2m) seitlich versetzter Punkt
+        -- für den Stapler selbst, damit er nicht mit Fahrer/Palette kollidiert.
+        forkliftCoords = sideOffsetCoords(markerCoords, heading, Config.TabletForkliftOffset or 2.0),
     }
 end
 

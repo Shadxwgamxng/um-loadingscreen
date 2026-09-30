@@ -51,6 +51,12 @@ Config.TabletProp = {
     rotation = { x = 0.0, y = 0.0, z = 0.0 },
 }
 
+-- Seitlicher Versatz (in Metern) für die 'forkliftCoords'-Koordinate im
+-- Be-/Entladen-Event-Payload (client/cl_orders.lua) - der Punkt, an dem ein
+-- externes Gabelstapler-Script den Stapler selbst spawnen sollte, damit er
+-- nicht mit dem Fahrer/der Palette am Bodenmarker (coords) zusammenstößt.
+Config.TabletForkliftOffset = 2.0
+
 -- Wenn aktiviert, öffnet sich das Tablet NICHT mehr per Command/Keybind,
 -- sondern ausschließlich, wenn das konfigurierte Item benutzt wird
 -- (automatisch per ESX.RegisterUsableItem bzw.
